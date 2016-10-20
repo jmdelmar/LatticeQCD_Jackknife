@@ -5,6 +5,7 @@ Contents:
 
 1. jk.cpp: library of functions need for calculating the effective mass
 2. calcEM.cpp: compile for program to calculate effective mass
+3. 2pt_func.dat: sample data of two-point functions for 64 timesteps and 50 configurations
 
 Input for calcEM.exe:
 
