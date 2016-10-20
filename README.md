@@ -4,8 +4,9 @@ Calculates the jackknife average of two-point functions and calculates the effec
 Contents:
 
 1. jk.cpp: library of functions need for calculating the effective mass
-2. calcEM.cpp: compile for program to calculate effective mass
-3. 2pt_func.dat: sample data of two-point functions for 64 timesteps and 50 configurations
+2. calcEM.cpp: program to calculate effective mass
+3. calcMassFit.cpp: program to calculate fit for effective masses once calcEM has been run (see file for inputs)
+4. 2pt_func.dat: sample data of two-point functions for 64 timesteps and 50 configurations
 
 Input for calcEM.exe:
 
