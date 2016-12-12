@@ -1,4 +1,4 @@
-/* Extracts the 5th column from a given data file and organizes it by
+ /* Extracts the 5th column from a given data file and organizes it by
 timesteps in rows and configurations in columns, calculates the JK averages
 for each timestep and bin, the effective mass for each timestep and bin,
 the average and error of the effective mass for each timestep, and writes
