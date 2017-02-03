@@ -1,15 +1,16 @@
-# 2PtFunc_JK
-Calculates the jackknife average of two-point functions and calculates the effective mass from them.
+# LatticeQCD_Jackknife
+Calculates several physical quantities using jackknife averaging from Lattice QCD simulation data which has been processd by QuaHoG.
 
-Contents:
+Libraries:
 
-1. jk.cpp: library of functions need for calculating the effective mass
-2. calcEM.cpp: program to calculate effective mass
-3. calcMassFit.cpp: program to calculate fit for effective masses once calcEM has been run (see file for inputs)
-4. 2pt_func.dat: sample data of two-point functions for 64 timesteps and 50 configurations
+1. jk.cpp/.h: library of functions used for calculating jackknife averages and errors. Also includes several helper functions.
+2. physQuants.cpp/.h: library of functions which calculate various physical quantities.
+3. fitting.cpp/.h: library of functions used for fitting data.
 
-Input for calcEM.exe:
+Programs (see files for inputs):
 
-1. data file of two-point functions to be read                 
-2. bin size (make sure numbers of configurations are divided by bin size exactly)    
-3. 1 if printouts of the JK averaged two-point functions and effective masses are wanted, otherwise, any integer which is not 1
+1. effMass.cpp: program to calculate effective mass from two-point functions.
+2. axialCharge.cpp: program to calculate the axial charge from two- and three-point functions.
+3. scalarFF.cpp: program to calculate the scalar form factro from two- and three-point functions.
+4. fitValue.cpp: program to fit data for a single values.
+5. fitFormFactor.cpp: program to fit data for a number of momentum transfers to obtain the form factor.
