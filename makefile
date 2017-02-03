@@ -1,18 +1,35 @@
 CXX = g++
 
-all : calcEM.exe calcMassFit.exe
+all : effMass.exe axialCharge.exe scalarFF.exe fitValue.exe fitFormFactor.exe
 
 jk.o: jk.cpp ; $(CXX) -c -I. jk.cpp
 
-calcEM.o: calcEM.cpp ; $(CXX) -c -I. calcEM.cpp
+fitting.o: fitting.cpp ; $(CXX) -c -I. fitting.cpp
 
-calcEM.exe: calcEM.o jk.o ; $(CXX) -o calcEM.exe \
-	calcEM.o jk.o\
+physQuants.o: physQuants.cpp ; $(CXX) -c -I. physQuants.cpp
 
-calcMassFit.o: calcMassFit.cpp ; $(CXX) -c -I. calcMassFit.cpp
+effMass.o: effMass.cpp ; $(CXX) -c -I. effMass.cpp
 
-calcMassFit.exe: calcMassFit.o ; $(CXX) -o calcMassFit.exe \
-	calcMassFit.o\
+effMass.exe: effMass.o jk.o physQuants.o ; $(CXX) -o effMass.exe \
+	effMass.o jk.o physQuants.o\
+
+axialCharge.o: axialCharge.cpp ; $(CXX) -c -I. axialCharge.cpp
+
+axialCharge.exe: axialCharge.o jk.o fitting.o ; $(CXX) -o axialCharge.exe \
+	axialCharge.o jk.o fitting.o\
+
+scalarFF.o: scalarFF.cpp ; $(CXX) -c -I. scalarFF.cpp
+
+scalarFF.exe: scalarFF.o jk.o fitting.o physQuants.o ; $(CXX) -o scalarFF.exe \
+	scalarFF.o jk.o fitting.o physQuants.o\
+
+fitValue.o: fitValue.cpp ; $(CXX) -c -I. fitValue.cpp
+
+fitValue.exe: fitValue.o jk.o fitting.o ; $(CXX) -o fitValue.exe \
+	fitValue.o jk.o fitting.o\
+
+fitFormFactor.exe: fitFormFactor.o jk.o fitting.o ; $(CXX) -o fitFormFactor.exe \
+	fitFormFactor.o jk.o fitting.o\
 
 clean: 
 	rm -f *.o
