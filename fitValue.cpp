@@ -225,7 +225,7 @@ int main ( int argc, char *argv[] ) {
 
   sprintf( avgValFilename, "out/avg%s.dat", argv[5] );
 
-  writeFitFile( avgValFilename, fit_avg, fit_err, startTime, endTime );
+  writeFitFile( avgValFilename, fit_avg, fit_err, startTime, endTime, timestepNum - 1 );
 
   // writeFtFile is a function in "jk.h"
   

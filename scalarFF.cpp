@@ -62,7 +62,7 @@ int main ( int argc, char *argv[] ) {
   }
 
   
-  // Set delta t and number of configurations based on input files
+  // Set Tsink and number of configurations based on input files
   
   int TsinkPlusOne = detTimestepNum( argv[1], 7 ); // Because of t=0 this will be Tsink + 1
   int timestepNum_2pt = detTimestepNum( argv[2], 12 ); 
@@ -643,7 +643,7 @@ int main ( int argc, char *argv[] ) {
 
   char avgMassFitFilename[] = "out/avgFittedMass.dat";
 
-  writeFitFile( avgMassFitFilename, fitMass_avg, fitMass_err, fitStart, fitEnd );
+  writeFitFile( avgMassFitFilename, fitMass_avg, fitMass_err, fitStart, fitEnd, TsinkPlusOne - 1 );
 
   // writeFitFile is a function in "jk.h"
 

@@ -3,14 +3,14 @@
    values, the program calculates the axial charge at each timestep, fits the axial charge vs. timestep data to a constant value, and
    calculates the error of the fit, outputing the axial charge vs. timestep to one file for plotting, and the fit and error to another file.
 
-Input arguments:
+   Input arguments:
 
-1. Data file containing three-point functions in the 6th of 6 columns projected to the x direction for multiple repeating configurations
-2. Data file "                                                                       " y direction "                                   "
-3. Data file "                                                                       " z direction "                                   "
-4. Data file containing two-point functions in the 5th of 12 columns for the same number of repeating configurations and 128 timesteps
-5. Bin size
-6. (Optional) 1 if a printout of values stored in matrices is wanted
+   1. Data file containing three-point functions in the 6th of 6 columns projected to the x direction for multiple repeating configurations
+   2. Data file "                                                                       " y direction "                                   "
+   3. Data file "                                                                       " z direction "                                   "
+   4. Data file containing two-point functions in the 5th of 12 columns for the same number of repeating configurations and 128 timesteps
+   5. Bin size
+   6. (Optional) 1 if a printout of values stored in matrices is wanted
 */
 
 #include "jk.h"
@@ -55,12 +55,12 @@ int main ( int argc, char *argv[] ) {
 
   }
 
-  // Set delta and number of configurations based on input files
-  
-  int deltaT;
-  int deltaT_x = detTimestepNum( argv[1], 7 );          
-  int deltaT_y = detTimestepNum( argv[2], 7 );         
-  int deltaT_z = detTimestepNum( argv[3], 7 );         
+  // Set Tsink and number of configurations based on input files
+   
+  int TsinkPlusOne; // Because of t=0, this will be Tsink+1
+  int TsinkPlusOne_x = detTimestepNum( argv[1], 7 );          
+  int TsinkPlusOne_y = detTimestepNum( argv[2], 7 );         
+  int TsinkPlusOne_z = detTimestepNum( argv[3], 7 );         
   int timestepNum_2pt = detTimestepNum( argv[4], 12 ); 
 
   // detTimestepNum is a function in "jk.h" which reads a file of repeating
@@ -72,9 +72,9 @@ int main ( int argc, char *argv[] ) {
   
   if ( Print == 1 ) {
 
-    cout << "x delta t: " << deltaT_x << endl;
-    cout << "y delta t: " << deltaT_y << endl;
-    cout << "z delta t: " << deltaT_z << endl;  
+    cout << "x Tsink+1: " << TsinkPlusOne_x << endl;
+    cout << "y Tsink+1: " << TsinkPlusOne_y << endl;
+    cout << "z Tsink+1: " << TsinkPlusOne_z << endl;  
     cout << "Number of 2-point timesteps: " << timestepNum_2pt << endl;
     cout << endl;
     
@@ -87,11 +87,11 @@ int main ( int argc, char *argv[] ) {
 
   int binSize;
 
-  // Check that all 3 files have the same delta t
+  // Check that all 3 files have the same Tsink
   
-  if ( deltaT_x == deltaT_y && deltaT_x == deltaT_z ) {
+  if ( TsinkPlusOne_x == TsinkPlusOne_y && TsinkPlusOne_x == TsinkPlusOne_z ) {
 
-    deltaT = deltaT_x;
+    TsinkPlusOne = TsinkPlusOne_x;
     
     configNum_x = detConfigNum( argv[1], 7 );
     configNum_y = detConfigNum( argv[2], 7 );
@@ -160,7 +160,7 @@ int main ( int argc, char *argv[] ) {
   // Matrix of three-point functions projected to the x direction (P4)
   // ( thrPtFuncs_x[t][c] )
 
-  vector< vector<double> > thrPtFuncs_x(deltaT); // matrix w/ 'deltaT' rows
+  vector< vector<double> > thrPtFuncs_x(TsinkPlusOne); // matrix w/ 'TsinkPlusOne' rows
 
   giveMatrixCols( &thrPtFuncs_x, configNum ); // give matrix 'configNum' columns
 
@@ -171,32 +171,32 @@ int main ( int argc, char *argv[] ) {
   // Matrix of three-point functions projected to the y direction (P5)
   // ( thrPtFuncs_y[t][c] )
 
-  vector< vector<double> > thrPtFuncs_y(deltaT); // matrix w/ 'deltaT' rows
+  vector< vector<double> > thrPtFuncs_y(TsinkPlusOne); // matrix w/ 'TsinkPlusOne' rows
 
   giveMatrixCols( &thrPtFuncs_y, configNum ); // Give matrix 'configNum' columns
     
   // Matrix of three-point functions projected to the z direction (P6)
   // ( thrPtFuncs_z[t][c]
 
-  vector< vector<double> > thrPtFuncs_z(deltaT); // matrix w/ 'deltaT' rows
+  vector< vector<double> > thrPtFuncs_z(TsinkPlusOne); // matrix w/ 'TsinkPlusOne' rows
 
   giveMatrixCols( &thrPtFuncs_z, configNum ); // Give matrix 'configNum' columns
   
   // Matrix of three point functions averaged over momentum directions
   // ( thrPtFuncs_avg[t][c] )
 
-  vector< vector<double> > thrPtFuncs_avg(deltaT); // matrix w/ 'deltaT' rows
+  vector< vector<double> > thrPtFuncs_avg(TsinkPlusOne); // matrix w/ 'TsinkPlusOne' rows
   
   giveMatrixCols( &thrPtFuncs_avg, configNum ); // Give matrix 'configNum' columns
 
   // Matrix of resampled three point functions
   // ( thrPtFuncs_jk[t][b] )
   
-  vector< vector<double> > thrPtFuncs_jk(deltaT); // matrix w/ 'deltaT' rows
+  vector< vector<double> > thrPtFuncs_jk(TsinkPlusOne); // matrix w/ 'TsinkPlusOne' rows
 
   giveMatrixCols( &thrPtFuncs_jk, binNum ); // Give matrix 'binNum' columns
 
-  // Vector of two-point functions at t_sink (delta t)
+  // Vector of two-point functions at Tsink
   // ( twoPtFuncs[c] )
   
   vector<double> twoPtFuncs(configNum);
@@ -209,19 +209,19 @@ int main ( int argc, char *argv[] ) {
   // Matrix of axial charges
   // ( axialCharge[t][b] )
   
-  vector< vector<double> > axialCharge(deltaT); // matrix w/ 'deltaT' rows
+  vector< vector<double> > axialCharge(TsinkPlusOne); // matrix w/ 'TsinkPlusOne' rows
 
   giveMatrixCols( &axialCharge, binNum ); // Give matrix 'binNum' columns
   
   // Vector of axial charges averaged over bins
   // ( axialCharge_[t] )
   
-  vector<double> axialCharge_avg(deltaT);
+  vector<double> axialCharge_avg(TsinkPlusOne);
 
   // Vector of axial charge errors
   // ( axialCharge_err[t] )
   
-  vector<double> axialCharge_err(deltaT);
+  vector<double> axialCharge_err(TsinkPlusOne);
 
 
   ///////////////////////////////////////////////
@@ -274,7 +274,7 @@ int main ( int argc, char *argv[] ) {
 
   // Vector of two-point functions
 
-  readNthDataRow ( &twoPtFuncs, argv[4], timestepNum_2pt - 1, deltaT, 5, 12 );
+  readNthDataRow ( &twoPtFuncs, argv[4], timestepNum_2pt - 1, TsinkPlusOne - 1, 5, 12 );
 
   // Print two-point functions
 
@@ -292,7 +292,7 @@ int main ( int argc, char *argv[] ) {
   ////////////////////////////////////////////////////////////
 
   
-  for ( int t = 0; t < deltaT; t++ ) { // Loop over timesteps
+  for ( int t = 0; t < TsinkPlusOne; t++ ) { // Loop over timesteps
 
     for ( int c = 0; c < configNum; c++ ) { // Loop over configurations
 
@@ -353,7 +353,7 @@ int main ( int argc, char *argv[] ) {
   ////////////////////////////
   
 
-  for ( int t = 0; t < deltaT; t++ ) { // Loop over timesteps
+  for ( int t = 0; t < TsinkPlusOne; t++ ) { // Loop over timesteps
 
     for ( int b = 0; b < binNum; b++ ) { // Loop over bins
 
@@ -402,7 +402,7 @@ int main ( int argc, char *argv[] ) {
 
   // Set file name to include the proper delta t value
   
-  sprintf( acFileName, "out/axialCharge_dt%d.dat", deltaT );
+  sprintf( acFileName, "out/axialCharge_dt%d.dat", TsinkPlusOne - 1 );
 
   writeVectorFile( acFileName, &axialCharge_avg, &axialCharge_err );
 
@@ -418,90 +418,37 @@ int main ( int argc, char *argv[] ) {
   //////////////////////////////////////////////////////////////////////////////
   
 
-  switch( deltaT ) { // delta t determines which timeslices to include in the fit
+  switch( TsinkPlusOne ) { // delta t determines which timeslices to include in the fit
 
-  case 12 : {
+  case 13 : {
 
-    // t=3 to t=9
-    
-    // Fit each bin
-        
-    vector<double> axialCharge_fit( binNum );
-
-    fitData( &axialCharge_fit, &axialCharge, &axialCharge_err, 3, 9 );
-
-    // fitData is a function in "fitting.h" which calculates the fits for
-    // multiple sets of data over the selected starting and ending data points
-
-    // Calculate the average fit and its error
-
-    double axialCharge_fitAvg;
-
-    double axialCharge_fitErr;
-
-    averageFit( &axialCharge_fitAvg, &axialCharge_fitErr, &axialCharge_fit );
-
-    // averageFit is a function in "fitting.h" which calculates the average of a
-    // set of fits weighted by the error of each and calculates the error of the
-    // average fit
-
-    // Print the axial charge fits for each bin, the averaged fit, and its error
-
-    if ( Print == 1 ) {
-
-      printVector( &axialCharge_fit, "Axial charge fits:" );
-      
-      cout << "Average axial charge fit: " << axialCharge_fitAvg << endl;
-
-      cout << endl;
-
-      cout << "Axial charge fit error: " << axialCharge_fitErr << endl;
-      
-      cout << endl;
-      
-    }
-    
-    
-    // Write the average fit and it error to an output file
-
-    char fitFileName[] = "out/axialChargeFit_dt12_3_9.dat";
-
-    writeFitFile( fitFileName, axialCharge_fitAvg, axialCharge_fitErr, 3, 9 );
-
-    // writeFitFile is a function in "jk.h"
-        
-    break;
-  }
-
-  case 14 : {
-
-    // t=3 to t=11
+    // t=4 to t=8
 
     // Fit each bin
     
-    vector<double> axialCharge_fit_3_11( binNum );
+    vector<double> axialCharge_fit_4_8( binNum );
 
-    fitData( &axialCharge_fit_3_11, &axialCharge, &axialCharge_err, 3, 11 );
+    fitData( &axialCharge_fit_4_8, &axialCharge, &axialCharge_err, 4, 8 );
 
     // Calculate the average fit and it error
 
-    double axialCharge_fitAvg_3_11;
+    double axialCharge_fitAvg_4_8;
 
-    double axialCharge_fitErr_3_11;
+    double axialCharge_fitErr_4_8;
 
-    averageFit( &axialCharge_fitAvg_3_11, &axialCharge_fitErr_3_11, &axialCharge_fit_3_11 );
+    averageFit( &axialCharge_fitAvg_4_8, &axialCharge_fitErr_4_8, &axialCharge_fit_4_8 );
 
     // Print the axial charge fits for each bin, the averaged fit, and its error
 
     if ( Print == 1 ) {
 
-      printVector( &axialCharge_fit_3_11, "Axial charge fits (t=3 to t=11):" );
+      printVector( &axialCharge_fit_4_8, "Axial charge fits (t=4 to t=8):" );
 
-      cout << "Average axial charge fit: " << axialCharge_fitAvg_3_11 << endl;
+      cout << "Average axial charge fit: " << axialCharge_fitAvg_4_8 << endl;
 
       cout << endl;
 
-      cout << "Axial charge fit error: " << axialCharge_fitErr_3_11 << endl;
+      cout << "Axial charge fit error: " << axialCharge_fitErr_4_8 << endl;
       
       cout << endl;
       
@@ -509,10 +456,131 @@ int main ( int argc, char *argv[] ) {
         
     // Write the average fit and its error to an output file
 
-    char fitFileName_3_11[] = "out/axialChargeFit_dt14_3_11.dat";
+    char fitFileName_4_8[] = "out/axialChargeFit_dt12_4_8.dat";
 
-    writeFitFile( fitFileName_3_11, axialCharge_fitAvg_3_11, axialCharge_fitErr_3_11, 3, 11 );
+    writeFitFile( fitFileName_4_8, axialCharge_fitAvg_4_8, axialCharge_fitErr_4_8, 4, 8, TsinkPlusOne - 1 );
+
+    // t=3 to t=9
+
+    // Fit each bin
     
+    vector<double> axialCharge_fit_3_9( binNum );
+
+    fitData( &axialCharge_fit_3_9, &axialCharge, &axialCharge_err, 3, 9 );
+
+    // Calculate the average fit and it error
+
+    double axialCharge_fitAvg_3_9;
+
+    double axialCharge_fitErr_3_9;
+
+    averageFit( &axialCharge_fitAvg_3_9, &axialCharge_fitErr_3_9, &axialCharge_fit_3_9 );
+
+    // Print the axial charge fits for each bin, the averaged fit, and its error
+
+    if ( Print == 1 ) {
+
+      printVector( &axialCharge_fit_3_9, "Axial charge fits (t=3 to t=9):" );
+
+      cout << "Average axial charge fit: " << axialCharge_fitAvg_3_9 << endl;
+
+      cout << endl;
+
+      cout << "Axial charge fit error: " << axialCharge_fitErr_3_9 << endl;
+      
+      cout << endl;
+      
+    }
+        
+    // Write the average fit and its error to an output file
+
+    char fitFileName_3_9[] = "out/axialChargeFit_dt12_3_9.dat";
+
+    writeFitFile( fitFileName_3_9, axialCharge_fitAvg_3_9, axialCharge_fitErr_3_9, 3, 9, TsinkPlusOne - 1 );
+
+
+    // t=2 to t=10
+
+    // Fit each bin
+    
+    vector<double> axialCharge_fit_2_10( binNum );
+
+    fitData( &axialCharge_fit_2_10, &axialCharge, &axialCharge_err, 2, 10 );
+
+    // Calculate the average fit and it error
+
+    double axialCharge_fitAvg_2_10;
+
+    double axialCharge_fitErr_2_10;
+
+    averageFit( &axialCharge_fitAvg_2_10, &axialCharge_fitErr_2_10, &axialCharge_fit_2_10 );
+
+    // Print the axial charge fits for each bin, the averaged fit, and its error
+
+    if ( Print == 1 ) {
+
+      printVector( &axialCharge_fit_2_10, "Axial charge fits (t=2 to t=10):" );
+
+      cout << "Average axial charge fit: " << axialCharge_fitAvg_2_10 << endl;
+
+      cout << endl;
+
+      cout << "Axial charge fit error: " << axialCharge_fitErr_2_10 << endl;
+      
+      cout << endl;
+      
+    }
+        
+    // Write the average fit and its error to an output file
+
+    char fitFileName_2_10[] = "out/axialChargeFit_dt12_2_10.dat";
+
+    writeFitFile( fitFileName_2_10, axialCharge_fitAvg_2_10, axialCharge_fitErr_2_10, 2, 10, TsinkPlusOne - 1 );
+
+        
+    break;
+  }
+
+  case 15 : {
+
+    // t=5 to t=9
+
+    // Fit each bin
+    
+    vector<double> axialCharge_fit_5_9( binNum );
+
+    fitData( &axialCharge_fit_5_9, &axialCharge, &axialCharge_err, 5, 9 );
+
+    // Calculate the average fit and it error
+
+    double axialCharge_fitAvg_5_9;
+
+    double axialCharge_fitErr_5_9;
+
+    averageFit( &axialCharge_fitAvg_5_9, &axialCharge_fitErr_5_9, &axialCharge_fit_5_9 );
+
+    // Print the axial charge fits for each bin, the averaged fit, and its error
+
+    if ( Print == 1 ) {
+
+      printVector( &axialCharge_fit_5_9, "Axial charge fits (t=5 to t=9):" );
+
+      cout << "Average axial charge fit: " << axialCharge_fitAvg_5_9 << endl;
+
+      cout << endl;
+
+      cout << "Axial charge fit error: " << axialCharge_fitErr_5_9 << endl;
+      
+      cout << endl;
+      
+    }
+        
+    // Write the average fit and its error to an output file
+
+    char fitFileName_5_9[] = "out/axialChargeFit_dt14_5_9.dat";
+
+    writeFitFile( fitFileName_5_9, axialCharge_fitAvg_5_9, axialCharge_fitErr_5_9, 5, 9, TsinkPlusOne - 1 );
+
         
     // t=4 to t=10
 
@@ -550,51 +618,90 @@ int main ( int argc, char *argv[] ) {
 
     char fitFileName_4_10[] = "out/axialChargeFit_dt14_4_10.dat";
 
-    writeFitFile( fitFileName_4_10, axialCharge_fitAvg_4_10, axialCharge_fitErr_4_10, 4, 10 );
+    writeFitFile( fitFileName_4_10, axialCharge_fitAvg_4_10, axialCharge_fitErr_4_10, 4, 10, TsinkPlusOne - 1 );
     
-    break;
-  }
-    
-  case 16 : {
-
-    // t=5 to t=11
+    // t=3 to t=11
 
     // Fit each bin
     
-    vector<double> axialCharge_fit_5_11( binNum );
-    
-    fitData( &axialCharge_fit_5_11, &axialCharge, &axialCharge_err, 5, 11 );
+    vector<double> axialCharge_fit_3_11( binNum );
 
-    // Calculate the average fit and its error
+    fitData( &axialCharge_fit_3_11, &axialCharge, &axialCharge_err, 3, 11 );
 
-    double axialCharge_fitAvg_5_11;
+    // Calculate the average fit and it error
 
-    double axialCharge_fitErr_5_11;
+    double axialCharge_fitAvg_3_11;
 
-    averageFit( &axialCharge_fitAvg_5_11, &axialCharge_fitErr_5_11, &axialCharge_fit_5_11 );
-    
+    double axialCharge_fitErr_3_11;
+
+    averageFit( &axialCharge_fitAvg_3_11, &axialCharge_fitErr_3_11, &axialCharge_fit_3_11 );
+
     // Print the axial charge fits for each bin, the averaged fit, and its error
-    
+
     if ( Print == 1 ) {
 
-      printVector( &axialCharge_fit_5_11, "Axial charge fits (t=5 to t=11):" );
-      
-      cout << "Average axial charge fit: " << axialCharge_fitAvg_5_11 << endl;
+      printVector( &axialCharge_fit_3_11, "Axial charge fits (t=3 to t=11):" );
+
+      cout << "Average axial charge fit: " << axialCharge_fitAvg_3_11 << endl;
 
       cout << endl;
 
-      cout << "Axial charge fit error: " << axialCharge_fitErr_5_11 << endl;
+      cout << "Axial charge fit error: " << axialCharge_fitErr_3_11 << endl;
       
       cout << endl;
       
     }
-    
+        
     // Write the average fit and its error to an output file
 
-    char fitFileName_5_11[] = "out/axialChargeFit_dt16_5_11.dat";
+    char fitFileName_3_11[] = "out/axialChargeFit_dt14_3_11.dat";
 
-    writeFitFile( fitFileName_5_11, axialCharge_fitAvg_5_11, axialCharge_fitErr_5_11, 5, 11 );
+    writeFitFile( fitFileName_3_11, axialCharge_fitAvg_3_11, axialCharge_fitErr_3_11, 3, 11, TsinkPlusOne - 1 );
+    
+    
+    // t=2 to t=12
 
+    // Fit each bin
+    
+    vector<double> axialCharge_fit_2_12( binNum );
+
+    fitData( &axialCharge_fit_2_12, &axialCharge, &axialCharge_err, 2, 12 );
+
+    // Calculate the average fit and it error
+
+    double axialCharge_fitAvg_2_12;
+
+    double axialCharge_fitErr_2_12;
+
+    averageFit( &axialCharge_fitAvg_2_12, &axialCharge_fitErr_2_12, &axialCharge_fit_2_12 );
+
+    // Print the axial charge fits for each bin, the averaged fit, and its error
+
+    if ( Print == 1 ) {
+
+      printVector( &axialCharge_fit_2_12, "Axial charge fits (t=2 to t=12):" );
+
+      cout << "Average axial charge fit: " << axialCharge_fitAvg_2_12 << endl;
+
+      cout << endl;
+
+      cout << "Axial charge fit error: " << axialCharge_fitErr_2_12 << endl;
+      
+      cout << endl;
+      
+    }
+        
+    // Write the average fit and its error to an output file
+
+    char fitFileName_2_12[] = "out/axialChargeFit_dt14_2_12.dat";
+
+    writeFitFile( fitFileName_2_12, axialCharge_fitAvg_2_12, axialCharge_fitErr_2_12, 2, 12, TsinkPlusOne - 1 );
+    
+    
+    break;
+  }
+    
+  case 17 : {
     
     // t=6 to t=10
 
@@ -633,7 +740,124 @@ int main ( int argc, char *argv[] ) {
 
     char fitFileName_6_10[] = "out/axialChargeFit_dt16_6_10.dat";
 
-    writeFitFile( fitFileName_6_10, axialCharge_fitAvg_6_10, axialCharge_fitErr_6_10, 6, 10 );    
+    writeFitFile( fitFileName_6_10, axialCharge_fitAvg_6_10, axialCharge_fitErr_6_10, 6, 10, TsinkPlusOne - 1 );    
+
+    // t=5 to t=11
+
+    // Fit each bin
+    
+    vector<double> axialCharge_fit_5_11( binNum );
+    
+    fitData( &axialCharge_fit_5_11, &axialCharge, &axialCharge_err, 5, 11 );
+
+    // Calculate the average fit and its error
+
+    double axialCharge_fitAvg_5_11;
+
+    double axialCharge_fitErr_5_11;
+
+    averageFit( &axialCharge_fitAvg_5_11, &axialCharge_fitErr_5_11, &axialCharge_fit_5_11 );
+    
+    // Print the axial charge fits for each bin, the averaged fit, and its error
+    
+    if ( Print == 1 ) {
+
+      printVector( &axialCharge_fit_5_11, "Axial charge fits (t=5 to t=11):" );
+      
+      cout << "Average axial charge fit: " << axialCharge_fitAvg_5_11 << endl;
+
+      cout << endl;
+
+      cout << "Axial charge fit error: " << axialCharge_fitErr_5_11 << endl;
+      
+      cout << endl;
+      
+    }
+    
+    // Write the average fit and its error to an output file
+
+    char fitFileName_5_11[] = "out/axialChargeFit_dt16_5_11.dat";
+
+    writeFitFile( fitFileName_5_11, axialCharge_fitAvg_5_11, axialCharge_fitErr_5_11, 5, 11, TsinkPlusOne - 1 );
+
+
+    // t=4 to t=12
+
+    // Fit each bin
+    
+    vector<double> axialCharge_fit_4_12( binNum );
+    
+    fitData( &axialCharge_fit_4_12, &axialCharge, &axialCharge_err, 4, 12 );
+
+    // Calculate the average fit and its error
+
+    double axialCharge_fitAvg_4_12;
+
+    double axialCharge_fitErr_4_12;
+
+    averageFit( &axialCharge_fitAvg_4_12, &axialCharge_fitErr_4_12, &axialCharge_fit_4_12 );
+    
+    // Print the axial charge fits for each bin, the averaged fit, and its error
+    
+    if ( Print == 1 ) {
+
+      printVector( &axialCharge_fit_4_12, "Axial charge fits (t=4 to t=12):" );
+      
+      cout << "Average axial charge fit: " << axialCharge_fitAvg_4_12 << endl;
+
+      cout << endl;
+
+      cout << "Axial charge fit error: " << axialCharge_fitErr_4_12 << endl;
+      
+      cout << endl;
+      
+    }
+    
+    // Write the average fit and its error to an output file
+
+    char fitFileName_4_12[] = "out/axialChargeFit_dt16_4_12.dat";
+
+    writeFitFile( fitFileName_4_12, axialCharge_fitAvg_4_12, axialCharge_fitErr_4_12, 4, 12, TsinkPlusOne - 1 );
+
+
+    // t=3 to t=13
+
+    // Fit each bin
+    
+    vector<double> axialCharge_fit_3_13( binNum );
+    
+    fitData( &axialCharge_fit_3_13, &axialCharge, &axialCharge_err, 3, 13 );
+
+    // Calculate the average fit and its error
+
+    double axialCharge_fitAvg_3_13;
+
+    double axialCharge_fitErr_3_13;
+
+    averageFit( &axialCharge_fitAvg_3_13, &axialCharge_fitErr_3_13, &axialCharge_fit_3_13 );
+    
+    // Print the axial charge fits for each bin, the averaged fit, and its error
+    
+    if ( Print == 1 ) {
+
+      printVector( &axialCharge_fit_3_13, "Axial charge fits (t=3 to t=13):" );
+      
+      cout << "Average axial charge fit: " << axialCharge_fitAvg_3_13 << endl;
+
+      cout << endl;
+
+      cout << "Axial charge fit error: " << axialCharge_fitErr_3_13 << endl;
+      
+      cout << endl;
+      
+    }
+    
+    // Write the average fit and its error to an output file
+
+    char fitFileName_3_13[] = "out/axialChargeFit_dt16_3_13.dat";
+
+    writeFitFile( fitFileName_3_13, axialCharge_fitAvg_3_13, axialCharge_fitErr_3_13, 3, 13, TsinkPlusOne - 1 );
+
 
     break;
   }

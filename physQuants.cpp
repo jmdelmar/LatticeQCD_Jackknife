@@ -151,3 +151,41 @@ void calcScalarFF( vector< vector< vector<double> > > *scalarFF,
 
   return;
 }
+
+
+// Project the nucleons by multiplying the nucleon 4x4matrix by 1/4( 1 + g4 )
+// in the physical basis and taking the trace for each timestep and configuration.
+
+void projNucl( vector< vector<double> > *proj, 
+	       vector< vector< vector< vector<double> > > > *nucl ) {
+
+  if ( nucl -> size() != 4 || nucl -> at(0).size() != 4 ) {
+    
+    cout << "ERROR( projNucl() ): first two dimensions of nucleon tensor ";
+    cout << "must be 4x4" << endl;
+
+    return;
+  
+  }
+
+  int Tsink = nucl -> at(0).at(0).size();
+  int configNum = nucl -> at(0).at(0).at(0).size();
+
+  for ( int t = 0; t < Tsink; t++ ) {
+
+    for ( int c = 0; c < configNum; c++ ) {
+
+      // Multiple the sum of nucl[1][1] and nucl[2][2] by 1/4.
+      // This is equivalent to multiplying by 1/4( 1 + g4 ) in the physical
+      // basis and taking the trace
+
+      proj -> at(t).at(c) = ( nucl -> at(1).at(1).at(t).at(c) 
+			      
+			      + nucl -> at(2).at(2).at(t).at(c) ) / 4;
+
+    }
+  }
+
+  return;
+
+}

@@ -58,7 +58,6 @@ int detTimestepNum( char *file, int colTot ) {
   else cout << "ERROR (detTimestepNum): Could not open file to determine the number of timesteps" << endl;
 
   return timestepNum;
-
 }
 
 // Reads a given data file with the timesteps for a number of configurations
@@ -507,7 +506,7 @@ void writeVectorFile( char *fileName, vector<double> *data, vector<double> *err 
 // error, repeated twice. This format is used so that the fit can easily be
 // plotted as a line.
 
-void writeFitFile( char *fileName, double fit, double err, int firstT, int lastT ) {
+void writeFitFile( char *fileName, double fit, double err, int firstT, int lastT, int Tsink ) {
 
   ofstream file;
 
@@ -517,18 +516,19 @@ void writeFitFile( char *fileName, double fit, double err, int firstT, int lastT
 
     file << left << setw(15) << firstT; // Write the 1st time-slice
     file << left << setw(15) << fit; // Write 1st double
-    file << err << endl; // Write 2nd double
+    file << left << setw(15) << err; // Write 2nd double
+    file << Tsink << endl; // Write Tsink
 
     file << left << setw(15) << lastT; // Write the last time-slice
     file << left << setw(15) << fit; // Write 1st double
-    file << err << endl; // Write 2nd double
-						
+    file << left << setw(15) << err; // Write 2nd double
+    file << Tsink << endl; // Write Tsink						
       
     file.close();
   }
   else {
     
-    cout << "ERROR (writeDoubleFile): Could not open output file\n";
+    cout << "ERROR (writeFitFile): Could not open output file\n";
 
   }
 

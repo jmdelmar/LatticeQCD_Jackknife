@@ -80,7 +80,7 @@ void writeVectorFile( char *, vector<double> *, vector<double> * );
 // error, repeated twice. This format is used so that the fit can easily be
 // plotted as a line.
 
-void writeFitFile( char *, double, double, int, int );
+void writeFitFile( char *, double, double, int, int, int );
 
 
 // Prints a tensor to standard out and formats it so that the first dimension is

@@ -28,6 +28,13 @@ void calcRatio( vector< vector< vector<double> > > *,
 void calcScalarFF( vector< vector< vector<double> > > *,
 		   vector< vector< vector<double> > > *,
 		   vector<double> *, vector<int> *, int );
+
+
+// Project the nucleons by multiplying the nucleon 4x4matrix by 1/4( 1 + g4 )
+// in the physical basis and taking the trace for each timestep and configuration.
+
+void projNucl( vector< vector<double> > *, 
+	       vector< vector< vector< vector<double> > > > * );
   
 
 #endif

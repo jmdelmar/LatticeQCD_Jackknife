@@ -1,6 +1,6 @@
 CXX = g++
 
-all : effMass.exe axialCharge.exe scalarFF.exe fitValue.exe fitFormFactor.exe
+all : effMass.exe axialCharge.exe avgX.exe scalarFF.exe fitValue.exe fitFormFactor.exe
 
 jk.o: jk.cpp ; $(CXX) -c -I. jk.cpp
 
@@ -17,6 +17,11 @@ axialCharge.o: axialCharge.cpp ; $(CXX) -c -I. axialCharge.cpp
 
 axialCharge.exe: axialCharge.o jk.o fitting.o ; $(CXX) -o axialCharge.exe \
 	axialCharge.o jk.o fitting.o\
+
+avgX.o: avgX.cpp ; $(CXX) -c -I. avgX.cpp
+
+avgX.exe: avgX.o jk.o fitting.o ; $(CXX) -o avgX.exe \
+	avgX.o jk.o fitting.o\
 
 scalarFF.o: scalarFF.cpp ; $(CXX) -c -I. scalarFF.cpp
 
