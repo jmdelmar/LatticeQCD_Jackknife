@@ -55,7 +55,100 @@ int detTimestepNum( char *file, int colTot ) {
                    // and increase timestepNum once t goes back to 0
 
   }
-  else cout << "ERROR (detTimestepNum): Could not open file to determine the number of timesteps" << endl;
+  else {
+    
+    cout << "ERROR (detTimestepNum): Could not open file to determine the";
+    cout << " number of timesteps" << endl;
+
+  }
+
+  return timestepNum;
+}
+
+// Reads files by each configuration and returns the number of timesteps in the 
+// files. If the timesteps in the 1st column of a file does not start at 0 
+// and/or increase by 1 for each new line, the number of timesteps in a file
+// differ from the first configuration read, or the a file cannot be opened, the 
+// configuration of the file at fault is thrown as an exception. File should 
+// contain the name of its sub-directory in its name only once, represented in 
+// the given filename template by a '*'.
+
+int detTimestepNum_rbc( vector<string> *filenames, int colTot ) {
+
+  int timestepNum;
+
+  int check = 0; //This is used to set timeStep_new to timestepNum automatically 
+                 //after the first file is read
+
+  for( int c = 0; c < filenames -> size(); c++ ) {
+
+    ifstream data( filenames -> at(c).c_str() );
+  
+    if ( data.is_open() ) {
+
+      double d; // Placeholder for doubles in file
+     
+      int tNew;      //These are used to check that timesteps in 1st column 
+      //               start at 0 and increase by one for each new line
+      int tOld = -1;
+
+      int timestepNum_new = 0;
+
+      data >> d; // Move to first double in the data file
+
+      for( int i = 0; !data.eof(); i++ ) {
+	
+	if( i % colTot == 0 ) { //If d is in the 1st column
+
+	  tNew = d;
+
+ 	  if( tNew == tOld + 1 ) {
+
+	    tOld = tNew;
+
+	    timestepNum_new++;
+
+	  }
+	  else {
+
+	    throw filenames -> at(c);
+
+	  } 
+	  // This should be updated so that the exact type of exception can be 
+	  // determined (classes?)
+
+	}
+
+	  data >> d; // Move to next double in data file
+
+      }
+
+      data.close();
+
+      //If timestepNum has been set for first file, compare timestepNum_new and 
+      //timestepNum
+
+      if( check == 1 ) { 
+	
+	if( timestepNum_new != timestepNum ) {
+
+	  throw filenames -> at(c);
+	  // This should be updated so that the exact type of exception can be 
+	  // determined (classes?)
+
+	}
+      }
+      else {
+
+	timestepNum = timestepNum_new;
+
+	check = 1;
+
+      }
+    }
+    else throw filenames -> at(c);
+
+  }
 
   return timestepNum;
 }
@@ -107,7 +200,6 @@ int detConfigNum( char *file, int colTot ) {
   else cout << "ERROR (detConfigNum): Could not open file to determine the number of configurations" << endl;
 
 }
-
 
 // Reads a given file and puts the colNth column out of colTot columns into the given matrix
 
@@ -161,6 +253,83 @@ void readNthDataCol( vector< vector<double> > *vals, char *fileName, int colN, i
 }
 
 
+// Reads a given file of strings and puts each string into the given vector.
+// Throws the filename as an expection if the file cannot be opened.
+
+void readStringFile( vector<string> *vals, char *fileName ) {
+  
+  ifstream file(fileName);
+
+  string s; // placeholder for strings in file to be set in vector
+
+  if ( file.is_open() ) {
+
+    file >> s; // Set placeholder to first string in file
+
+    for ( int i = 0; !file.eof(); i++ ) {
+      
+      vals -> push_back( s ); //store s in vector
+
+      file >> s; // Set placeholder to next string in file
+
+    }
+
+    file.close();
+
+  }
+  else throw fileName;
+  
+  return;
+}
+
+
+// Reads a given file by configurations in seperate directories and puts the 
+// colNth column out of colTot columns into the given matrix. File should 
+// contain the name of its sub-directory in its name only once, represented in 
+// the given filename template by a '*'.
+
+void readNthDataCol_rbc( vector< vector<double> > *vals, vector<string> *filenames, 
+			 int colN, int colTot ) {
+
+  for( int c = 0; c < filenames -> size(); c++ ) {
+
+    ifstream data( filenames -> at(c).c_str() );
+
+    double d; // placeholder for doubles in data files to be set in matrix
+
+    int timestepNum = vals -> size();
+  
+    int t = 0;
+	
+    if ( data.is_open() ) {
+
+      for ( int i = 0; !data.eof(); i++ ) {
+      
+	data >> d; // Set placeholder to next number in data file
+     
+	//If d is in the colNth column, store it in vals[t][c]
+      
+	if( ( i % colTot + 1 ) == colN ) {
+
+	  vals -> at(t).push_back( d );
+
+	  t++;
+				
+	}
+
+      }
+
+      data.close();
+
+    }
+    else throw filenames -> at(c);
+      
+  }
+  
+  return;
+}
+
+
 // Reads a given file with data for different momentum transfers and reads the
 // colNth column out of colTot columns into the given matrix for each momentum
 
@@ -205,10 +374,7 @@ void readNthMomDataCol( vector< vector< vector< vector<double> > > > *vals,
 	      vals -> at(q).at(t).at(c).at(n) = d;
 
 	      n++; // Change to next value for this q squared
-	      /*
-	      cout << "q=" << q << " t=" << t << " c=" << c << " n=" << endl;
-	      cout << d << endl;
-	      */
+	      
 	    }
 	  }
 	}
@@ -280,6 +446,67 @@ void readNthDataRow( vector<double> *vals, char *fileName, int timestepNum, int 
 
   }
   else cout << "ERROR (readNthDataRow): Could not open file to read data" << endl;
+
+  return;
+}
+
+
+// Reads a given file by configurations in different directories with colTot 
+// columns and timestepNum timesteps per configuration and fills the given 
+// vector with the colNth double in the rowNth row for each configuration.
+// File should contain the name of its sub-directory in its name only once, 
+// represented in the given filename template by a '*'.
+
+void readNthDataRow_rbc( vector<double> *vals, vector<string> *filenames, 
+			 int rowN, int colN, int colTot ) {
+
+  ifstream data;
+
+  for( int c = 0; c < filenames -> size(); c++ ) {
+
+    data.open( filenames -> at(c).c_str(), ifstream::in );
+
+    double d; // Placeholder for doubles in data file
+
+    if ( data.is_open() ) {
+
+      // Run through doubles in data file until the rowNth row is reached
+      
+      data >> d;
+
+      for ( int i = 0; !data.eof(); i++ ) {
+
+	int check = 0; // This will be used to check that data is only stored once 
+                       // per configuration
+	
+	// If d is in the rowNth row and colNth column, store it in vals
+
+	if( i / colTot == rowN && ( i % colTot +1 ) == colN ) {
+
+	  vals -> push_back( d );
+
+	  check++;
+
+	}
+
+	// Check that this has only been done once per configuration
+
+	if ( check > 1 ) {
+
+	  throw filenames -> at(c);
+
+	}
+
+	data >> d;
+
+      }
+
+      data.close();
+
+    }
+    else throw filenames -> at(c);
+
+  }
 
   return;
 }
@@ -390,17 +617,13 @@ void averageRows( vector<double> *avg, vector<double> *stdDev, vector< vector<do
       // Sum each value in a row
       
       sum += vals -> at(r).at(c);
-      /*
-      cout << vals -> at(r).at(c) << "+";
-      */
+      
     }
 
     // Calculate and store averages
     
     avg -> at(r) = sum / columnNum;
-    /*
-    cout << "/" << columnNum << "=" << avg -> at(r) << endl;
-    */
+    
   }
 	
   for(int r = 0; r < rowNum; r++) { // Loop through rows
@@ -598,8 +821,8 @@ void printMatrix( vector< vector<double> > *vals, string title ) {
 }
 
 
-// Prints a vector to standard out, formatted so that each component is on a
-// seperate line
+// Prints a vector of doubles to standard out, formatted so that each component 
+// is on a seperate line
 
 void printVector( vector<double> *vals, string title ) {
   
@@ -610,6 +833,25 @@ void printVector( vector<double> *vals, string title ) {
   for (int t = 0; t < timestepNum; t++) { // Loop through timesteps
 		
     cout << vals -> at(t) << endl; // Print each each component of the vector
+						
+  }
+
+  return;
+}
+
+
+// Prints a vector of strings to standard out, formatted so that each component 
+// is on a seperate line
+
+void printVector( vector<string> *vals, string title ) {
+  
+  int timestepNum = vals -> size();
+
+  cout << endl << title << endl << endl; // Print title
+  
+  for (int t = 0; t < timestepNum; t++) { // Loop through timesteps
+		
+    cout << vals -> at(t) << endl; // Print each component of the vector
 						
   }
 
@@ -709,6 +951,75 @@ void giveTensorTensor( vector< vector< vector< vector<double> > > > *vals,
   }
 
   return;
+}
+
+
+// Splits a string into tokens seperated by a deliminator
+
+void split( vector<string> *tokens, char *str, char *delim ) {
+
+  char *tok = strtok ( str, delim );
+
+  string stok;
+
+  while ( tok != NULL ) {
+
+    stok = tok;
+
+    tokens -> push_back ( stok );
+
+    tok = strtok ( NULL, delim );
+
+  }
+
+  return;
+
+}
+
+
+// Writes the name of a file contained in a sub-directory of the given home 
+// directory. File should contain the name of its sub-directory in its name, 
+// represented in the given filename template by a '*'.
+
+void setFilename( vector<string> *filename, char *homeDir, 
+		  vector<string> *subDirs, char *fnTemplate ) { 
+
+  vector<string> fnTokens; // The parts of the filename template seperated by '*'
+
+  char delim[] = "*";
+
+  split( &fnTokens, fnTemplate, delim );
+
+  // split() is a funtion in "jk.h"
+
+  int tokNum = fnTokens.size();
+
+  for ( int sD = 0; sD < subDirs -> size(); sD++ ) { // Loop over sub-directories
+    
+    stringstream fnss;
+
+    // Write path to file to string stream
+
+    fnss << homeDir << "/" << subDirs -> at(sD) << "/";
+
+    // Write current sub-directory name between filename tokens
+
+    for ( int t = 0; t < tokNum - 1; t++ ) { // Loop through tokens
+
+      fnss << fnTokens[t] << subDirs -> at(sD);
+      
+    }
+   
+    fnss << fnTokens[ tokNum - 1 ]; // Write last token to end of fnss
+
+    string fn = fnss.str(); // Set fn to the contents of fnss
+
+    filename -> push_back( fn ); // Set next component of filename[] equal to fn
+
+  }
+
+  return;
+
 }
 
 // Fills a matrix with test values, starting at zero and going up by one for
