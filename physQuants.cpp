@@ -10,14 +10,14 @@ void effMass( vector< vector<double> > *eMass, vector< vector<double> > *twoPtFu
   int timestepNum = twoPtFuncsJK -> size();
   int binNum = twoPtFuncsJK -> at(0).size();
 	
-  twoPtFuncsJK -> push_back(twoPtFuncsJK -> at(0)); //set periodic boundary conditions
+  twoPtFuncsJK -> push_back( twoPtFuncsJK -> at(0) ); //set periodic boundary conditions
 	
   //Calculate effective masses from two-point functions
 
   for(int t = 0; t < timestepNum; t++) { // Loop through timesteps
-		
+    
     for(int b = 0; b < binNum; b++) { // Loop through bins
-			
+
       eMass -> at(t).at(b) = log( twoPtFuncsJK -> at(t).at(b) / twoPtFuncsJK -> at(t+1).at(b) );
 		
     }

@@ -8,6 +8,9 @@
 #include <iomanip>
 #include <vector>
 #include <cmath>
+#include <string.h>
+#include <string>
+#include <sstream>
 
 using namespace std;
 
@@ -16,6 +19,15 @@ using namespace std;
 // of timesteps
 
 int detTimestepNum( char *, int );
+
+
+//Reads files by each configuration and returns the number of timesteps in the 
+//files. If the timesteps in the 1st column of a file does not start at 0 and 
+//increase by 1 for each new line or the number of timesteps in a file differ 
+//from the first configuration read, the configuration of the file at fault 
+//is thrown as an exception.
+
+int detTimestepNum_rbc( vector<string> *, int );
 
 
 // Reads a given data file with the timesteps for a number of configurations
@@ -28,7 +40,20 @@ int detConfigNum( char *, int );
 // Reads a given file and puts the colNth column out of colTot columns into the
 // given matrix
 
-void readNthDataCol( vector< vector<double> > *, char *, int, int );
+void readNthDataCol( vector< vector<double> > *vals, char *, int, int );
+
+
+// Reads a given file by configurations in seperate directories and puts the 
+// colNth column out of colTot columns into the given matrix
+
+void readNthDataCol_rbc( vector< vector<double> > *, vector<string> *, int, 
+			 int );
+
+
+// Reads a given file of strings and puts each string into the given vector
+
+void readStringFile( vector<string> *, char * );
+  
 
 // Reads a given file with data for different momentum transfers and reads the
 // colNth column out of colTot columns into the given matrix for each momentum
@@ -42,6 +67,13 @@ void readNthMomDataCol( vector< vector< vector< vector<double> > > > *, char *,
 // row for each configuration
 
 void readNthDataRow( vector<double> *, char *, int, int, int, int );
+
+
+// Reads a given file by configurations in different directories with colTot 
+// columns and timestepNum timesteps per configuration and fills the given 
+// vector with the colNth double in the rowNth row for each configuration
+
+void readNthDataRow_rbc( vector<double> *, vector<string> *, int, int, int );
 
 
 // Calculates the resampled averages of values in rows of a given 'configNum' by
@@ -73,6 +105,11 @@ void writeMatrixFile( char *, vector< vector<double> > * );
 
 void writeVectorFile( char *, vector<double> *, vector<double> * );
 
+
+// Prints a vector of strings to standard out, formatted so that each component 
+// is on a seperate line
+
+void printVector( vector<string> *, string );
 
 // Writes a fit, its error, and the first and last time-slices in the fit. The
 // 1st column is the 1st and last time-slices, given as 'firstT' and 'lastT',
@@ -120,6 +157,21 @@ void giveTensorMatrix( vector< vector< vector<double> > > *,
 void giveTensorTensor( vector< vector< vector< vector<double> > > > *,
 		       int, int, vector<int> * );
   
+
+// Splits a string into tokens seperated by a deliminator
+
+void split( vector<string> *, char *, char * );
+
+
+// Writes the name of a file contained in a sub-directory of the given home 
+// directory. File should contain the name of its sub-directory in its name 
+// only once, represented in the given filename template by a '*'.
+
+// [This could be modified to include more than one *, I think using sting
+// streams]
+
+void setFilename( vector<string> *, char *, vector<string> *, char * );
+
 
 // Fills a matrix with test values, starting at zero and going up by one for
 // each entry

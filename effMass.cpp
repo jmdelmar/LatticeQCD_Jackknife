@@ -6,11 +6,12 @@
    timestep.
 
 Input: 
-1.	data file of two-point functions to be read
-2.	bin size (make sure numbers of configurations are divided by bin size
- 	exactly)
-3.      (Optional) 1 if printouts of the JK averaged two-point functions and 
-        effective masses are wanted
+1. Path to home directory containing sub-directories of configurations
+2. File name template for two-point functions
+3. Bin size (make sure numbers of configurations are divided by bin size
+   exactly)
+4. (Optional) 1 if printouts of the JK averaged two-point functions and 
+   effective masses are wanted
 */
 
 #include "jk.h"
@@ -27,26 +28,85 @@ int main ( int argc, char *argv[] ) {
   //////////////////////
 
   
-  if ( argc < 3 ) {
+  // Check that all required arguments have been included
 
-    cout << "Missing input arguments" << endl;
-    cout << "Include:" << endl;
-    cout << "1. two-point function data file" << endl;
-    cout << "2. bin size" << endl;
-    cout << "3. (Optional) 1 for printout of data" << endl;
+  if ( argc < 4 ) {
+
+    cout << "Usage:" << endl;
+    cout << "1. Path to home directory containing sub-directories of ";
+    cout << "configurations" << endl;
+    cout << "2. File name template for two-point functions" << endl;
+    cout << "3. Bin size" << endl;
+    cout << "4. (Optional) 1 for printout of data" << endl;
 
     return 1;
   }
 
-  int timestepNum = detTimestepNum( argv[1], 12 );
-  int configNum = detConfigNum( argv[1], 12 );
+  // Set path to home directory, where directories of each configuration are
 
-  // detTimestepNum is a function in "jk.h" which reads a file of repeating
-  // configurations with the timesteps in the first column out of the given
-  // number of columns and determines the number of timesteps in the file before
-  // a new configuration starts and the timesteps repeat
+  char *homeDir = argv[1];
 
-  int binSize = atoi( argv[2] );
+  // Set file names for two-point functions contained in their 
+  // configuration directory
+
+  char *fnTemplate = argv[2];
+
+  // Set bin size
+
+  int binSize = atoi( argv[3] );
+
+  // If a print argument has been given, set Print (Print = 1 to print)
+  
+  int Print;
+  
+  if ( argc == 5 ) {
+
+    Print = atoi( argv[4] );
+
+  }
+
+  // Use ls bash command to get a file listing configuration replica and 
+  // trajectories
+
+  char confsFilename[] = "out/conf_list_effMass.txt";
+
+  char lsCommand[256];
+
+  sprintf( lsCommand, "ls -1 %s > %s", homeDir, confsFilename ); 
+
+  system( lsCommand );
+
+  // Read conf_list.txt and store configurations in a vector
+
+  vector<string> confs;
+
+  try {
+
+    readStringFile( &confs, confsFilename );
+
+    // readStringFile() is a function in "jk.h"
+  
+  }
+  catch( string *badFile ) {
+
+    cout << "ERROR(readStringFile): file " << *badFile << " cannot be opened";
+    cout << endl;
+
+    return 1;
+
+  }
+
+  // Set filenames
+
+  vector<string> filenames;
+
+  setFilename( &filenames, homeDir, &confs, fnTemplate );
+
+  // setFilename() is a function in "jk.h"
+
+  // Set number of configurations from list
+
+  int configNum = confs.size();
 
   // Check that configNum is exactly divided by binSize
 
@@ -62,13 +122,44 @@ int main ( int argc, char *argv[] ) {
 
   int binNum = configNum / binSize;
 
-  // If a print argument has been given, set Print (Print = 1 to print)
-  
-  int Print;
-  
-  if ( argc == 4 ) {
+  // Print number of configurations, bins, and binsize
 
-    Print = atoi( argv[3] );
+  if( Print == 1 ) {
+
+    cout << "Number of configurations: " << configNum << endl;
+
+    cout << "Bin size: " << binSize << endl;
+
+    cout << "Number of bins: " << binNum << endl;
+
+  }
+
+  // Set number of timesteps based on input files
+
+  int timestepNum;
+
+  try {
+
+    timestepNum = detTimestepNum_rbc( &filenames, 12 ); 
+ 
+    // detTimestepNum_rbc is a function in "jk.h"
+ 
+  }
+  catch ( string badConf ) {
+
+    cout << "ERROR(detTimestepNum_rbc): Two-point function in configuration ";
+    cout << badConf << " is in error (either its timesteps in the 1st column ";
+    cout << "do not start at 0 and/or increase by 1 for each new line, its ";
+    cout << "number of timesteps do not match with the file in the first ";
+    cout << "configuration, or it cannot be opened)." << endl;
+    
+    return 1;
+ 
+  }
+
+  if( Print == 1 ) {
+
+    cout << "Number of timesteps: " << timestepNum << endl;
 
   }
 
@@ -83,40 +174,42 @@ int main ( int argc, char *argv[] ) {
   
   vector< vector<double> > twoPtFuncs( timestepNum ); //matrix w/ 'timestepNum' rows
 
-  giveMatrixCols( &twoPtFuncs, configNum ); // give matrix 'configNum' columns
-
-  // giveMatrixCols is a function in "jk.h" which fills each row of a
-  // matrix with a given number of columns
-
   
   // Matrix of JK averaged TPFs
   // ( twoPtFuncs_jk[t][b] )
   
   vector< vector<double> > twoPtFuncs_jk( timestepNum );  //matrix w/ 'timestepNum' rows
 
-  giveMatrixCols( &twoPtFuncs_jk, binNum ); // give matrix 'binNum' columns
+  giveMatrixCols( &twoPtFuncs_jk, binNum );
+
+  // giveMatrixCols() is a function in "jk.h"
+
 
   // Matrix of effective masses
   // ( eMass[t][b] )
 
   vector< vector<double> > eMass( timestepNum );  //matrix w/ 'timestepNum' rows
 
-  giveMatrixCols( &eMass, binNum ); //give each row 'binNum' columns
-  
+  giveMatrixCols( &eMass, binNum );
+
+
   // Vector of average two-point functions
   // ( twoPtFuncs_avg[t] )
   
   vector<double> twoPtFuncs_avg( timestepNum );
+
 
   // Vector of two-point function errors
   // ( twoPtFuncs_err[t] )
   
   vector<double> twoPtFuncs_err( timestepNum );
 
+
   // Vector of average effective masses
   // ( eMass_avg[t] )
   
   vector<double> eMass_avg( timestepNum );
+
 
   // Vector of effective mass errors
   // ( eMass_err[t] )
@@ -129,12 +222,21 @@ int main ( int argc, char *argv[] ) {
   ///////////////////////////////////////////////
 
 
-  readNthDataCol( &twoPtFuncs, argv[1], 5 , 12 );
+  try {
 
-  // readNthDataCol is a function in "jk.h" which reads a file and stores
-  // the numbers in the first given numbered column and stores them in a
-  // matrix
+    readNthDataCol_rbc( &twoPtFuncs, &filenames, 5 , 12 );
 
+    // readNthDataCol_rbc is a function in "jk.h"
+
+  }
+  catch( string badFile ) {
+
+    cout << "ERROR(readNthDataCol_rbc): Two-point function file " << badFile;
+    cout <<  " cannot be opened" << endl;
+
+    return 1;
+
+  }
 
   //Print matrix of two-point functions
 
@@ -163,7 +265,7 @@ int main ( int argc, char *argv[] ) {
 
   if( Print == 1 ) {
 
-    printMatrix( &twoPtFuncs_jk, "Jackknifed two-point functions:" );
+    printMatrix( &twoPtFuncs_jk, "Resampled two-point functions:" );
 
   }
   
@@ -172,7 +274,7 @@ int main ( int argc, char *argv[] ) {
   // Calculate effective masses //
   ////////////////////////////////
 
-  
+
   effMass( &eMass, &twoPtFuncs_jk );
 
   // effMass is a function in "physQuants.h" which calculates the effective mass
@@ -213,7 +315,9 @@ int main ( int argc, char *argv[] ) {
 
   // Effective masses for each bin and timestep
 
-  char emjkFileName[] = "out/effMasses.dat";
+  char emjkFileName[256];
+
+  sprintf( emjkFileName, "out/effMasses_%dConfigs_binSize%d.dat", configNum, binSize );
 
   writeMatrixFile( emjkFileName, &eMass );
 
@@ -223,7 +327,9 @@ int main ( int argc, char *argv[] ) {
   
   // Averaged effective masses and their errors
   
-  char emFileName[] = "out/avgEffMass.dat";
+  char emFileName[256];
+
+  sprintf( emFileName, "out/avgEffMass_%dConfigs_binSize%d.dat", configNum, binSize );
 
   writeVectorFile( emFileName, &eMass_avg, &eMass_err );
   
