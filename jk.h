@@ -37,45 +37,6 @@ int detTimestepNum_rbc( vector<string> *, int );
 int detConfigNum( char *, int );
 
 
-// Reads a given file and puts the colNth column out of colTot columns into the
-// given matrix
-
-void readNthDataCol( vector< vector<double> > *vals, char *, int, int );
-
-
-// Reads a given file by configurations in seperate directories and puts the 
-// colNth column out of colTot columns into the given matrix
-
-void readNthDataCol_rbc( vector< vector<double> > *, vector<string> *, int, 
-			 int );
-
-
-// Reads a given file of strings and puts each string into the given vector
-
-void readStringFile( vector<string> *, char * );
-  
-
-// Reads a given file with data for different momentum transfers and reads the
-// colNth column out of colTot columns into the given matrix for each momentum
-
-void readNthMomDataCol( vector< vector< vector< vector<double> > > > *, char *,
-			vector<int> *, int, int );
-
-
-// Reads a given file with colTot columns and timestrepNum timesteps per
-// configuration and fills the given vector with the colNth double in the rowNth
-// row for each configuration
-
-void readNthDataRow( vector<double> *, char *, int, int, int, int );
-
-
-// Reads a given file by configurations in different directories with colTot 
-// columns and timestepNum timesteps per configuration and fills the given 
-// vector with the colNth double in the rowNth row for each configuration
-
-void readNthDataRow_rbc( vector<double> *, vector<string> *, int, int, int );
-
-
 // Calculates the resampled averages of values in rows of a given 'configNum' by
 // 'timestepNum' matrix and puts them in a given 'binNum' by 'timestepNum' matrix
 
@@ -161,16 +122,6 @@ void giveTensorTensor( vector< vector< vector< vector<double> > > > *,
 // Splits a string into tokens seperated by a deliminator
 
 void split( vector<string> *, char *, char * );
-
-
-// Writes the name of a file contained in a sub-directory of the given home 
-// directory. File should contain the name of its sub-directory in its name 
-// only once, represented in the given filename template by a '*'.
-
-// [This could be modified to include more than one *, I think using sting
-// streams]
-
-void setFilename( vector<string> *, char *, vector<string> *, char * );
 
 
 // Fills a matrix with test values, starting at zero and going up by one for

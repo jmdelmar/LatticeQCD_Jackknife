@@ -12,29 +12,18 @@ int main (void) {
 
   readInfo rInfo;
 
-  rInfo.dimNum = 3;
+  info.timestepNum = 48;
+  info.complex = 0; // get real part
 
-  rInfo.subDim[0] = 32;
-  rInfo.subDim[1] = 1;
-  rInfo.subDim[2] = 2;
+  vector <vector< vector<double> > > data(rInfo.timestepNum);
 
-  rInfo.count[0] = 32;
-  rInfo.count[1] = 1;
-  rInfo.count[2] = 2;
+  vector<string> confs(2);
 
-  rInfo.offset[0] = 0;
-  rInfo.offset[1] = 0;
-  rInfo.offset[2] = 0;
+  confs.at(0) = "0200";
 
-  rInfo.stride[0] = 1;
-  rInfo.stride[1] = 1;
-  rInfo.stride[2] = 1;
+  confs.at(1) = "0220";
 
-  rInfo.block[0] = 1;
-  rInfo.block[1] = 1;
-  rInfo.block[2] = 1;
-
-  vector< vector<double> > data(rInfo.subDim[0]);
+  vector<
 
   readTwopMesons_0mom(&data, file, dataset, rInfo);
 

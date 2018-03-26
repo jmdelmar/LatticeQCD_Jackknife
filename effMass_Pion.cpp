@@ -16,9 +16,11 @@ Input:
 
 #include "jk.h"
 #include "physQuants.h"
+#include "readWrite.h"
 #include <cstdlib> //for atoi()
 
-using namespace std;
+using std::cout;
+using std::endl;
 
 int main ( int argc, char *argv[] ) {
 
@@ -30,14 +32,16 @@ int main ( int argc, char *argv[] ) {
   
   // Check that all required arguments have been included
 
-  if ( argc < 4 ) {
+  if ( argc < 6 ) {
 
     cout << "Usage:" << endl;
     cout << "1. Path to home directory containing sub-directories of ";
     cout << "configurations" << endl;
     cout << "2. File name template for two-point functions" << endl;
-    cout << "3. Bin size" << endl;
-    cout << "4. (Optional) 1 for printout of data" << endl;
+    cout << "3. Path to directory containing source lists named *CONF*_src.list" << endl; 
+    cout << "4. Path to output directory" << endl; 
+    cout << "5. Bin size" << endl;
+    cout << "6. (Optional) 1 for printout of data" << endl;
 
     return 1;
   }
@@ -51,24 +55,34 @@ int main ( int argc, char *argv[] ) {
 
   char *fnTemplate = argv[2];
 
+  // Set source list directory
+
+  char *srcListDir = argv[3];
+
+  // Set output directory
+
+  char *outputDir = argv[4];
+
   // Set bin size
 
-  int binSize = atoi( argv[3] );
+  int binSize = atoi( argv[5] );
 
   // If a print argument has been given, set Print (Print = 1 to print)
   
   int Print;
   
-  if ( argc == 5 ) {
+  if ( argc == 7 ) {
 
-    Print = atoi( argv[4] );
+    Print = atoi( argv[6] );
 
   }
 
   // Use ls bash command to get a file listing configuration replica and 
   // trajectories
 
-  char confsFilename[] = "out/conf_list_effMass.txt";
+  char confsFilename[256];
+
+  sprintf( confsFilename, "%s/conf_list_effMass.txt", outputDir ); 
 
   char lsCommand[256];
 
@@ -95,14 +109,6 @@ int main ( int argc, char *argv[] ) {
     return 1;
 
   }
-
-  // Set filenames
-
-  vector<string> filenames;
-
-  setFilename( &filenames, homeDir, &confs, fnTemplate );
-
-  // setFilename() is a function in "jk.h"
 
   // Set number of configurations from list
 
@@ -133,6 +139,42 @@ int main ( int argc, char *argv[] ) {
     cout << "Number of bins: " << binNum << endl;
 
   }
+
+  vector <vector<string> > srcPos(configNum);
+
+  for( int c=0; c<confs.size(); c++) { // Loop over confs
+
+    char srcList[256];
+
+    sprintf( srcList, "%s/%s_src.list", srcListDir, confs.at(c) );
+
+    try {
+
+      readStringFile( &srcPos.at(c), srcList );
+
+      // readStringFile() is a function in "jk.h"
+  
+    }
+    catch( string *badFile ) {
+
+      cout << "ERROR(readStringFile): file " << *badFile << " cannot be opened";
+      cout << endl;
+
+      return 1;
+
+    }
+
+    // Check that there is the correct of number of sources
+
+    if( srcPos.at(c) != srcNum ) {
+
+      cout << "WARNING: Configuration " << confs.at(c);
+      cout << " has " << srcPos.at(c) << " sources ";
+      cout << "(should be " << srcNum << ")." << endl;
+
+    }
+    
+  } // End confs loop
 
   // Set number of timesteps based on input files
 
@@ -170,11 +212,10 @@ int main ( int argc, char *argv[] ) {
 
 	
   // Matrix of two point functions
-  // ( twoPtFuncs[t][c] )
+  // ( twoPtFuncs[t][c][s] )
   
-  vector< vector<double> > twoPtFuncs( timestepNum ); //matrix w/ 'timestepNum' rows
+  vector< vector < vector<double> > > twoPtFuncs( timestepNum ); //matrix w/ 'timestepNum' rows
 
-  
   // Matrix of JK averaged TPFs
   // ( twoPtFuncs_jk[t][b] )
   
@@ -222,6 +263,12 @@ int main ( int argc, char *argv[] ) {
   ///////////////////////////////////////////////
 
 
+  // CJL: make this its own function which reads files into a buffer vector and then reorders it so that it goes [t][c][s]
+
+  readTwop_g5Mesons_Qsq0( &twoPtFuncs, homeDir, &confs, srcPos, fnTemplate, rinfo);
+  
+  // readTwopMesons_0mom() is a function in "readWrite.h"
+  /*
   try {
 
     readNthDataCol_rbc( &twoPtFuncs, &filenames, 5 , 12 );
@@ -237,7 +284,7 @@ int main ( int argc, char *argv[] ) {
     return 1;
 
   }
-
+  */
   //Print matrix of two-point functions
 
   if( Print == 1 ) {
