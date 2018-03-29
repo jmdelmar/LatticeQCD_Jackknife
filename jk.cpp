@@ -449,10 +449,44 @@ void writeFitFile( char *fileName, double fit, double err, int firstT, int lastT
 }
 
 
-// Prints a tensor to standard out and formats it so that the first dimension is
-// printed one after another as elements seperated by a column in each row
+// Prints a tensor to standard out and formats it so that the first dimension
+// is printed one after another as elements seperated by a column in each row
 
-void printTensor( vector< vector< vector<double> > > *vals, vector<int> *q2, string title ) {
+void printTensor( vector< vector< vector<double> > > *vals, string title ) {
+
+  int dim0 = vals -> size();
+  int dim1 = vals -> at(0).size();
+  int dim2 = vals -> at(0).at(0).size();
+
+  cout << endl << title << endl; // Print title
+
+  for ( int d0 = 0; d0 < dim0; d0++ ) { // Loop through seperate matrices
+
+    cout << endl << d0 << ":" << endl; // Print 1st dimension
+      
+    for ( int d1 = 0; d1 < dim1; d1++ ) { // Loop through rows
+
+      for ( int d2 = 0; d2 < dim2 - 1; d2++ ) { // Loop through columns
+
+	cout << vals -> at(d0).at(d1).at(d2) << ", "; // Print each value, seperated
+                                                     // by commas 
+      }
+
+      cout << vals -> at(d0).at(d1).at(dim2-1) << endl; // Print last value of of
+                                                       // each row w/o a comma after
+    }                                                  // it
+
+  }
+
+  return;
+}
+
+
+// Prints a tensor to standard out and formats it so that the first dimension,
+// Q^2, is printed one after another as elements seperated by a column in each row
+
+void printQsqTensor( vector< vector< vector<double> > > *vals, 
+		     vector<int> *q2, string title ) {
 
   int dim0 = vals -> size();
   int dim1 = vals -> at(0).size();

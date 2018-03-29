@@ -2,11 +2,13 @@ CXX = g++
 
 all : effMass.exe gA.exe gT.exe avgX.exe scalarFF.exe fitValue.exe fitFormFactor.exe
 
-test : testRead.exe
+test : effMass_Pion
 
 jk.o: jk.cpp ; $(CXX) -c -I. jk.cpp
 
-readWrite.o: readWrite.cpp ; $(CXX) -c -I. -I/gpfs/opt/libs/hdf5-1.10.1/include readWrite.cpp
+util.o: util.cpp ; $(CXX) -c -I. util.cpp
+
+readWrite.o: readWrite.cpp ; $(CXX) -c -I. -I/opt/apps/intel17/hdf5/1.8.16/x86_64/include readWrite.cpp
 
 fitting.o: fitting.cpp ; $(CXX) -c -I. fitting.cpp
 
@@ -17,10 +19,10 @@ effMass.o: effMass.cpp ; $(CXX) -c -I. effMass.cpp
 effMass.exe: effMass.o jk.o physQuants.o ; $(CXX) -o effMass.exe \
 	effMass.o jk.o physQuants.o\
 
-testRead.o: testRead.cpp ; $(CXX) -c -I. -I/gpfs/opt/libs/hdf5-1.10.1/include testRead.cpp
+effMass_Pion.o: effMass_Pion.cpp ; $(CXX) -c -I. -I/opt/apps/intel17/hdf5/1.8.16/x86_64/include effMass_Pion.cpp
 
-testRead.exe: testRead.o readWrite.o ; $(CXX) -L/gpfs/opt/libs/hdf5-1.10.1/lib -lhdf5 -o testRead.exe \
-	testRead.o readWrite.o\
+effMass_Pion: effMass_Pion.o readWrite.o jk.o physQuants.o util.o ; $(CXX) -L/opt/apps/intel17/hdf5/1.8.16/x86_64/lib -lhdf5 -o effMass_Pion \
+	effMass_Pion.o readWrite.o jk.o physQuants.o util.o\
 
 gA.o: gA.cpp ; $(CXX) -c -I. gA.cpp
 

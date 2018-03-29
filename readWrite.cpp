@@ -12,7 +12,7 @@ void readTwopMesonFile_Qsq0(vector<double> *data, char *file, char *dataset, rea
 
   hsize_t subDim[dimNum];
 
-  subDim[0] = info.timestepNum; // Set the number of timesteps to read
+  subDim[0] = info.timeDim; // Set the number of timesteps to read
   subDim[1] = 1; // Only get one Q^2 component
   subDim[2] = 1; // Only get one complex component
 
@@ -51,25 +51,21 @@ void readTwopMesonFile_Qsq0(vector<double> *data, char *file, char *dataset, rea
   status = H5Fclose (file_id);
 
   for(int t=0; t<subDim[0]; t++) 
-    data->at(t).push_back( buff[t][0][0] );
+    data->push_back( buff[t][0][0] );
 
 return;
 }
 
 void readTwop_g5Mesons_Qsq0( vector< vector< vector<double> > > *data, 
 			     char *homeDir, vector<string> *confs, 
-			     vector< vector< vector<string> > > *srcPos, 
+			     vector< vector< vector<int> > > *srcPos, 
 			     char *fnTemplate, readInfo info ) {
 
   int confsNum = confs->size();
 
-  giveMatrixCols( data, confsNum );
-
-  // giveMatrixCols is a function in "jk.h"
-
   // Substitute configurations into filename template
 
-  char *confDelim[] = "_CONF_";
+  char confDelim[] = "_CONF_";
 
   vector<string> filenames_conf; 
 
@@ -79,23 +75,33 @@ void readTwop_g5Mesons_Qsq0( vector< vector< vector<double> > > *data,
 
   for( int c=0; c<confsNum; c++ ) { // Loop over confs
 
+    giveMatrixCols( &data->at(c), srcPos->at(c).size() );
+
+    // giveMatrixCols is a function in "jk.h"
+
     // Substitute source position into filename template
 
-    char *srcDelim[] = "_SRC_";
+    char srcDelim[] = "_SRC_";
 
-    char *fnTemplate_conf = filenames_conf.at(c);
+    //char *fnTemplate_conf = filenames_conf.at(c);
 
     vector<string> filenames_src;
 
-    setFilename( &filenames_src, homeDir, confs, fnTemplate_conf, srcDelim );
+    char *fn_conf;
+
+    sprintf( fn_conf, "%s", filenames_conf.at(c) );
+
+    setFilename( &filenames_src, homeDir, confs, fn_conf, srcDelim );
+
+    //setFilename( &filenames_src, homeDir, confs, fnTemplate_conf, srcDelim );
 
     // setFilename() is a function in "readWrite.h"
 
     for( int s=0; s<srcPos->at(c).size(); s++ ) { // Loop over sources
 
-      vector<double> buff(info.timestepNum);
+      vector<double> buff(info.timeDim);
 
-      char *dataset[256];
+      char dataset[256];
 
       sprintf( dataset, "conf_%s/sx%0dsy%0dsz%0dst%0d/g5/twop_meson_%d", 
 	       confs->at(c), srcPos->at(c).at(s).at(0), srcPos->at(c).at(s).at(1), 
@@ -103,10 +109,14 @@ void readTwop_g5Mesons_Qsq0( vector< vector< vector<double> > > *data,
       // CJL: This needs to be changed to support source positions with t component > 99
       // Maybe read source group name directly from h5 file?
 
-      readTwopMesonsFile_Qsq0( &buff, filenames_src.at(s), dataset, info );
+      char fn_src[256];
 
-      for( int t=0; t<info.timestepNum; t++ ) // Loop over timesteps
-	data->at(t).at(c).at(s).push_back( buff.at(t) );
+      sprintf( fn_src, "%s", filenames_src.at(s) );
+
+      readTwopMesonsFile_Qsq0( &buff, fn_src, dataset, info );
+
+      for( int t=0; t<info.timeDim; t++ ) // Loop over timesteps
+	data->at(t).at(c).push_back( buff.at(t) );
 
     } // End source loop
   } // End confs loop
@@ -164,7 +174,7 @@ void setFilename( vector<string> *filename, char *homeDir,
 // postition represented by _SRC_.
 
 void setFilename_wSrc( vector< vector<string> > *filename, char *homeDir, 
-		       vector<string> *subDirs, vector< vector<string> > srcPos, 
+		       vector<string> *subDirs, vector< vector<string> > *srcPos, 
 		       char *fnTemplate ) { 
 
   vector<string> fnTokens_conf; // The parts of the filename template seperated by '_CONF_'
@@ -197,23 +207,23 @@ void setFilename_wSrc( vector< vector<string> > *filename, char *homeDir,
     
     fnss_conf << fnTokens_conf[ tokNum_conf - 1 ]; // Write last token to end of fnss_conf
 
-    string fn_conf = fnss_conf.str(); // Filename with _CONF_'s replaced with configuration name
+    string filename_conf = fnss_conf.str(); // Filename with _CONF_'s replaced with configuration name
 
     // Replace _SRC_'s with source position
 
-    for( isrc=0; isrc<srcPos->at(sD).size(); isrc++) { // Loop over source positions
+    for( int isrc=0; isrc<srcPos->at(sD).size(); isrc++) { // Loop over source positions
 
       vector<string> fnTokens_src; // The parts of the filename template seperated by '_SRC_'
+
+      char fn_conf[256];
+
+      sprintf( fn_conf, "%s", filename_conf );
 
       split( &fnTokens_src, fn_conf, delim_src );
 
       int tokNum_src = fnTokens_src.size();
 
       stringstream fnss_src;
-
-      // Write path to file to string stream
-
-      fnss_src << homeDir << "/" << srcPos -> at(sD).at(isrc) << "/";
 
       // Write current sub-directory name between filename tokens
 
@@ -236,69 +246,50 @@ void setFilename_wSrc( vector< vector<string> > *filename, char *homeDir,
 
 }
 
-void getSourcePositions( vector< vector< vector<int> > > *srcPos, char *homeDir, vector<string> *subDirs, char *fnTemplate, char *outputDir, char *delim ) {
+void getSourcePositions( vector< vector< vector<int> > > *srcPos, char *srcDir, 
+			 vector<string> *confs ) {
   
-  vector<string> fnTokens; // The parts of the filename template seperated by delim
+  for ( int c = 0; c < confs -> size(); c++ ) { // Loop over configs
 
-  split( &fnTokens, fnTemplate, delim );
+    char srcFile[256];
 
-  // split() is a funtion in "jk.h"
+    sprintf( srcFile, "%s/%s_src.list", srcDir, confs->at(c) );
 
-  int tokNum = fnTokens.size();
+    ifstream data;
 
-    for ( int sD = 0; sD < subDirs -> size(); sD++ ) { // Loop over sub-directories
+    data.open( srcFile, ifstream::in );
 
-      char srcFile[256];
+    int src; // Placeholder for source components in source file
 
-      sprintf( srcFile, "%s/%s_effMass_src.list", outputDir ); 
+    if ( data.is_open() ) {
 
-      char lsComm[256];
+      // Run through each row of four components in source
 
-      sprintf( lsComm, "ls -1 %s/%s > %s", homeDir, subDir->at(sD), srcFile ); 
+      data >> src;
 
-      system( lsComm );
+      for( int sP=0; !data.eof(); sP++ ) { // Loop through source positions
 
-      stringstream fnss;
+	srcPos->at(c).at(sP) = vector<int>(4); // give next source position 4 components
 
-      // Write path to file to string stream
+	for( int sC=0; sC<4; sC++ ) { // Loop through source components
 
-      fnss << outputDir << "/" << subDirs->at(sD) << "/";
-      
-      for ( int t = 0; t < tokNum; t++ ) { // Loop through tokens
+	  srcPos->at(c).at(sP).at(sC) = src;
 
-	char *tok = fnTokens.at(t);
+	  data >> src;
 
-	char sedComm[256];
+	} // End component loop
 
-	sprintf( sedComm, 'sed -i s/"%s"/""/g %s', tok, srcFile );
+      } // End position loop
 
-	system( sedComm );
+      data.close();
 
-      } // End token loop
+    }
+    else throw srcFile;
 
-      char sedComm[256];
+  } // End configs loop
 
-      sprintf( sedComm, 'sed -i s/"."/" "/g %s', srcFile );
-
-      system( sedComm );
-
-      try {
-
-	readSourcePositionFile( srcPos->at(sD), srcFile );
-
-	// readSourcePositionFile() is a function "readWrite.h"
-
-      }
-      catch( char *badFile ) {
-
-	throw badFile;
-
-      }
-
-    } // End sub-directory loop
-
-    return;
-  }
+  return;
+}
 
 // Reads a given file and puts the colNth column out of colTot columns into the given matrix
 
@@ -604,47 +595,6 @@ void readNthDataRow_rbc( vector<double> *vals, vector<string> *filenames,
 
     }
     else throw filenames -> at(c);
-
-  }
-
-  return;
-}
-
-
-void readSourcePositionFile( vector <vector<int> > *srcPos, char *srcFile ) {
-
-  ifstream data;
-
-  for( int c = 0; c < filenames -> size(); c++ ) {
-
-    data.open( srcFile, ifstream::in );
-
-    int src; // Placeholder for source components in source file
-
-    if ( data.is_open() ) {
-
-      // Run through each row of four components in source
-
-      data >> src;
-
-      for( int sP=0; !data.eof(); sP++ ) { // Loop through source positions
-
-	srcPos->at(sP) = vector<int>(4); // give next source position 4 components
-
-	for( int sC=0; sC<4; sC++ ) { // Loop through source components
-
-	  srcPos->at(sP).at(sC) = src;
-
-	  data >> src;
-
-	} // End component loop
-
-      } // End position loop
-
-      data.close();
-
-    }
-    else throw srcFile;
 
   }
 

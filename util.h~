@@ -1,0 +1,25 @@
+#ifndef UTIL_H
+#define UTIL_H
+#endif
+
+#include <string.h>
+#include <cstdlib>
+#include <iostream>
+
+extern char *threepDir;
+extern char *twopDir;
+extern char *sourceDir;
+extern char *confList;
+extern char *threepTemplate;
+extern char *twopTemplate;
+extern char *outputPre;
+extern int binSize;
+extern int tsink;
+extern int timeDim;
+extern bool Print;
+
+using namespace std;
+
+void usage( char *exe );
+
+int process_command_line_option( int argc, char** argv, int* idx );

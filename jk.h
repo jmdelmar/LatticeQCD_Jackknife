@@ -81,10 +81,17 @@ void printVector( vector<string> *, string );
 void writeFitFile( char *, double, double, int, int, int );
 
 
-// Prints a tensor to standard out and formats it so that the first dimension is
-// printed one after another as elements seperated by a column in each row
+// Prints a tensor to standard out and formats it so that the first dimension
+// is printed one after another as elements seperated by a column in each row
 
-void printTensor( vector< vector< vector<double> > > *, vector<int> *, string );
+void printTensor( vector< vector< vector<double> > > *vals, string title );
+
+
+// Prints a tensor to standard out and formats it so that the first dimension,
+// Q^2, is printed one after another as elements seperated by a column in each row
+
+void printQsqTensor( vector< vector< vector<double> > > *vals, 
+		     vector<int> *q2, string title );
 
 
 // Prints a matrix to standard out and formats it so that each value is seperated
