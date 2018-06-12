@@ -2,9 +2,11 @@
 
 using namespace lQCD_jk;
 using std::cout;
+using std::cerr;
 using std::endl;
 
-void readTwopMesonFile_Qsq0(vector<double> *data, char *file, char *dataset, readInfo info) {
+void readTwopMesonFile_Qsq0( vector<double> *data, char *file, 
+			     char *dataset, readInfo info ) {
 
   herr_t status;
 
@@ -35,7 +37,7 @@ void readTwopMesonFile_Qsq0(vector<double> *data, char *file, char *dataset, rea
     block[d] = 1; // Data are next to each other
 
   float buff[ subDim[0] ][ subDim[1] ][ subDim[2] ];
-      
+
   hid_t file_id = H5Fopen (file, H5F_ACC_RDWR, H5P_DEFAULT);
   hid_t dataset_id = H5Dopen2 (file_id, dataset, H5P_DEFAULT);
   hid_t memspace_id = H5Screate_simple (dimNum, subDim, NULL); 
@@ -56,46 +58,30 @@ void readTwopMesonFile_Qsq0(vector<double> *data, char *file, char *dataset, rea
 return;
 }
 
-void readTwop_g5Mesons_Qsq0( vector< vector< vector<double> > > *data, 
+void readTwop_pseudoscalarMesons_Qsq0( vector< vector< vector<double> > > *data, 
 			     char *homeDir, vector<string> *confs, 
 			     vector< vector< vector<int> > > *srcPos, 
 			     char *fnTemplate, readInfo info ) {
 
-  int confsNum = confs->size();
+  int confNum = confs->size();
 
-  // Substitute configurations into filename template
+  vector< vector<string> > filenames( confNum ); 
 
-  char confDelim[] = "_CONF_";
-
-  vector<string> filenames_conf; 
-
-  setFilename( &filenames_conf, homeDir, confs, fnTemplate, confDelim );
+  setFilename_wSrc( &filenames, homeDir, confs, srcPos, fnTemplate );
   
-  // setFilename() is a function in "readWrite.h"
+  // setFilename_wSrc() is a function in "readWrite.h"
 
-  for( int c=0; c<confsNum; c++ ) { // Loop over confs
+  for( int c=0; c<confNum; c++ ) { // Loop over confs
 
-    giveMatrixCols( &data->at(c), srcPos->at(c).size() );
+    for( int t=0; t<data->size(); t++ ) {
+      
+      data->at(t) = vector< vector<double> >( confNum );
 
-    // giveMatrixCols is a function in "jk.h"
+      data->at(t).at(c) = vector<double>( srcPos->at(c).size() );
 
-    // Substitute source position into filename template
+    }
 
-    char srcDelim[] = "_SRC_";
-
-    //char *fnTemplate_conf = filenames_conf.at(c);
-
-    vector<string> filenames_src;
-
-    char *fn_conf;
-
-    sprintf( fn_conf, "%s", filenames_conf.at(c) );
-
-    setFilename( &filenames_src, homeDir, confs, fn_conf, srcDelim );
-
-    //setFilename( &filenames_src, homeDir, confs, fnTemplate_conf, srcDelim );
-
-    // setFilename() is a function in "readWrite.h"
+    cerr << "flag0" << endl;
 
     for( int s=0; s<srcPos->at(c).size(); s++ ) { // Loop over sources
 
@@ -103,20 +89,22 @@ void readTwop_g5Mesons_Qsq0( vector< vector< vector<double> > > *data,
 
       char dataset[256];
 
-      sprintf( dataset, "conf_%s/sx%0dsy%0dsz%0dst%0d/g5/twop_meson_%d", 
-	       confs->at(c), srcPos->at(c).at(s).at(0), srcPos->at(c).at(s).at(1), 
+      sprintf( dataset, "conf_%s/sx%02dsy%02dsz%02dst%02d/pseudoscalar/twop_meson_%d", 
+	       confs->at(c).c_str(), srcPos->at(c).at(s).at(0), srcPos->at(c).at(s).at(1), 
 	       srcPos->at(c).at(s).at(2), srcPos->at(c).at(s).at(3), info.meson );
-      // CJL: This needs to be changed to support source positions with t component > 99
-      // Maybe read source group name directly from h5 file?
+
+      cerr << dataset << endl;
 
       char fn_src[256];
 
-      sprintf( fn_src, "%s", filenames_src.at(s) );
+      sprintf( fn_src, "%s", filenames.at(c).at(s).c_str() );
 
-      readTwopMesonsFile_Qsq0( &buff, fn_src, dataset, info );
+      readTwopMesonFile_Qsq0( &buff, fn_src, dataset, info );
 
       for( int t=0; t<info.timeDim; t++ ) // Loop over timesteps
-	data->at(t).at(c).push_back( buff.at(t) );
+	data->at(t).at(c).at(s) = buff.at(t);
+
+      cerr << "flag1" << endl;
 
     } // End source loop
   } // End confs loop
@@ -174,14 +162,14 @@ void setFilename( vector<string> *filename, char *homeDir,
 // postition represented by _SRC_.
 
 void setFilename_wSrc( vector< vector<string> > *filename, char *homeDir, 
-		       vector<string> *subDirs, vector< vector<string> > *srcPos, 
+		       vector<string> *subDirs, vector< vector < vector <int> > > *srcPos, 
 		       char *fnTemplate ) { 
 
   vector<string> fnTokens_conf; // The parts of the filename template seperated by '_CONF_'
 
-  char delim_conf[] = "_CONF_";
+  char delim_conf[] = "*";
 
-  char delim_src[] = "_SRC_";
+  char delim_src[] = "#";
 
   split( &fnTokens_conf, fnTemplate, delim_conf );
 
@@ -207,7 +195,15 @@ void setFilename_wSrc( vector< vector<string> > *filename, char *homeDir,
     
     fnss_conf << fnTokens_conf[ tokNum_conf - 1 ]; // Write last token to end of fnss_conf
 
-    string filename_conf = fnss_conf.str(); // Filename with _CONF_'s replaced with configuration name
+    char filename_conf[256]; // Filename with _CONF_'s replaced with configuration name
+
+    { // New scope for memory management
+
+      string fn_conf = fnss_conf.str(); // Need to convert stringstream to sting before cstring
+
+      sprintf( filename_conf, "%s", fn_conf.c_str() );
+
+    }
 
     // Replace _SRC_'s with source position
 
@@ -215,29 +211,35 @@ void setFilename_wSrc( vector< vector<string> > *filename, char *homeDir,
 
       vector<string> fnTokens_src; // The parts of the filename template seperated by '_SRC_'
 
-      char fn_conf[256];
-
-      sprintf( fn_conf, "%s", filename_conf );
-
-      split( &fnTokens_src, fn_conf, delim_src );
+      split( &fnTokens_src, filename_conf, delim_src );
 
       int tokNum_src = fnTokens_src.size();
 
       stringstream fnss_src;
 
-      // Write current sub-directory name between filename tokens
+      // Write current source components seperated by periods between filename tokens
 
       for ( int t = 0; t < tokNum_src - 1; t++ ) { // Loop through tokens
 
-	fnss_src << fnTokens_src[t] << srcPos -> at(sD).at(isrc);
-      
+	fnss_src << fnTokens_src[t];
+
+	for( int sC=0; sC<3; sC++ ) { // Replace # with each 1st through 3rd source component, followed by a period
+
+	  fnss_src << setfill( '0' ) << setw( 2 ) 
+		   << srcPos->at(sD).at(isrc).at(sC) << ".";
+	  
+	}
+	
+	  fnss_src << setfill( '0' ) << setw( 2 ) 
+		   << srcPos->at(sD).at(isrc).at(3); // Add the last source component
+
       }
     
       fnss_src << fnTokens_src[ tokNum_src - 1 ]; // Write last token to end of fnss_src
 
       string fn_src = fnss_src.str(); // Filename with _SRC_'s replaced with srciguration name    
 
-      filename -> at(sD).push_back( fn_src ); // Set next component of filename[] equal to fn
+      filename->at(sD).push_back( fn_src ); // Set next component of filename[] equal to fn
 
     } // End source position loop
   } // End sub-directory loop
@@ -253,7 +255,7 @@ void getSourcePositions( vector< vector< vector<int> > > *srcPos, char *srcDir,
 
     char srcFile[256];
 
-    sprintf( srcFile, "%s/%s_src.list", srcDir, confs->at(c) );
+    sprintf( srcFile, "%s/%s_src.list", srcDir, confs->at(c).c_str() );
 
     ifstream data;
 
@@ -269,7 +271,9 @@ void getSourcePositions( vector< vector< vector<int> > > *srcPos, char *srcDir,
 
       for( int sP=0; !data.eof(); sP++ ) { // Loop through source positions
 
-	srcPos->at(c).at(sP) = vector<int>(4); // give next source position 4 components
+	srcPos->at(c).resize( sP+1 );
+
+	srcPos->at(c).at(sP) = ( vector<int>(4) ); // give next source position 4 components
 
 	for( int sC=0; sC<4; sC++ ) { // Loop through source components
 

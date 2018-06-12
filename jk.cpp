@@ -690,7 +690,7 @@ void split( vector<string> *tokens, char *str, char *delim ) {
 
     stok = tok;
 
-    tokens -> push_back ( stok );
+    tokens->push_back ( stok );
 
     tok = strtok ( NULL, delim );
 

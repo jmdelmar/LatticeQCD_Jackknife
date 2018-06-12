@@ -41,7 +41,17 @@ int main ( int argc, char *argv[] ) {
     cout << "ERROR: Invalid option:" << argv[i] << endl;
     usage( argv[0] );
   }
+  /*
+  cout << "twopDir: " << twopDir << endl;
+  cout << "sourceDir: " << sourceDir << endl;
+  cout << "confList: " << confList << endl;
+  cout << "twopTemplate: " << twopTemplate << endl;
+  cout << "outputPre: " << outputPre << endl;
+  cout << "binSize: " << binSize << endl;
+  cout << "timeDim: " << timeDim << endl;
 
+  return 0;
+  */
   // Read configuration list and store configurations in a vector
 
   vector<string> confs;
@@ -138,7 +148,7 @@ int main ( int argc, char *argv[] ) {
   // Matrix of two point functions
   // ( twoPtFuncs[t][c][s] )
   
-  vector< vector < vector<double> > > twoPtFuncs( timeDim ); // Tensor w/ 'timeDim' rows
+  vector< vector < vector<double> > > twoPtFuncs( timeDim ); // Tensor w/ 'timeDim' matrices
 
   // Matrix of two-point functions averaged over source positions
   // ( twoPtFuncs_srcAvg[t][c] )
@@ -201,11 +211,13 @@ int main ( int argc, char *argv[] ) {
 
   rinfo.timeDim = timeDim;
   rinfo.complex = 0; // Get real part
-  rinfo.meson = 0; // Get twop for pion+
+  rinfo.meson = 1; // Get twop for pion+
 
-  readTwop_g5Mesons_Qsq0( &twoPtFuncs, twopDir, &confs, &srcPos, twopTemplate, rinfo);
-  
-  // readTwop_g5Mesons_Qsq0() is a function in "readWrite.h"
+  readTwop_pseudoscalarMesons_Qsq0( &twoPtFuncs, twopDir, &confs, &srcPos, twopTemplate, rinfo);
+
+  // readTwop_pseudoscalarMesons_Qsq0() is a function in "readWrite.h"
+
+  cerr << "Flag" << endl;
 
   //Print matrix of two-point functions
 

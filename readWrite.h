@@ -23,10 +23,14 @@ using namespace lQCD_jk;
 
 using std::vector;
 
-void readTwopMesonsFile_Qsq0(vector<double> *data, char *file, char *dataset, readInfo info);
+void readTwopMesonFile_Qsq0( vector<double> *data, char *file, 
+			     char *dataset, readInfo info );
 
 
-void readTwop_g5Mesons_Qsq0( vector< vector< vector<double> > > *data, char *homeDir, vector<string> *confs, vector< vector< vector<int> > > *srcPos, char *fnTemplate, readInfo info );
+void readTwop_pseudoscalarMesons_Qsq0( vector< vector< vector<double> > > *data, 
+				       char *homeDir, vector<string> *confs, 
+				       vector< vector< vector<int> > > *srcPos, 
+				       char *fnTemplate, readInfo info );
 
 
 // Writes the name of a file contained in a sub-directory of the given home 
@@ -41,8 +45,8 @@ void setFilename( vector<string> *, char *, vector<string> *, char *, char * );
 // represented in the given filename template by a "_CONF_" and its source
 // postition represented by "_SRC_".
 
-void setFilename_wSrc( vector <vector<string> > *filename, char *homeDir, 
-		       vector<string> *subDirs, vector< vector<string> > srcPos, 
+void setFilename_wSrc( vector< vector<string> > *filename, char *homeDir, 
+		       vector<string> *subDirs, vector< vector < vector <int> > > *srcPos, 
 		       char *fnTemplate );
 
 

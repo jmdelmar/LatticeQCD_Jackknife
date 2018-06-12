@@ -1,22 +1,22 @@
 #include "util.h"
 
-extern char *threepDir;
-extern char *twopDir;
-extern char *sourceDir;
-extern char *confList;
-extern char *threepTemplate;
-extern char *twopTemplate;
-extern char *outputPre;
-extern int binSize;
-extern int tsink;
-extern int timeDim;
-extern bool Print;
+char *threepDir;
+char *twopDir;
+char *sourceDir;
+char *confList;
+char *threepTemplate;
+char *twopTemplate;
+char *outputPre;
+int binSize;
+int tsink;
+int timeDim;
+bool Print;
 
 using namespace std;
 
 void usage( char *exe ) {
 
-  if( strcmp( exe, "effMass_Mesons" ) == 0 ) {
+  if( strcmp( exe, "./effMass_Pion" ) == 0 ) {
 
     cout << "Usage:" << endl;
 
@@ -36,14 +36,14 @@ void usage( char *exe ) {
     cout << "--config-list:";
     cout << "Path to and filename of configuration list" << endl; 
 
-    cout << "-o: ";
-    cout << "Output prefix" << endl; 
-
     cout << "--bin-size: ";
     cout << "Bin size" << endl;
 
     cout << "--time-dimension: ";
     cout << "Length of time dimension in two-point function files" << endl;
+
+    cout << "-o: ";
+    cout << "Output prefix" << endl; 
 
     cout << "-p: ";
     cout << "Sets printout option on" << endl;
