@@ -406,12 +406,21 @@ int main ( int argc, char *argv[] ) {
 
   // Three-point functions
   
-  readNthDataCol_rbc( &thrPtFuncs, &filenames_3pt, 5, 8 );
+  try {
 
-  // readNthDataCol is a function in "jk.h" which reads a file and stores
-  // the numbers in the first given numbered column and stores them in a
-  // matrix
+    readNthDataCol_rbc( &thrPtFuncs, &filenames_3pt, 5, 8 );
 
+    // readNthDataCol is a function in "jk.h" which reads a file and stores
+    // the numbers in the first given numbered column and stores them in a
+    // matrix
+
+  }
+  catch( string badFile ) {
+
+    cout << "ERROR(readNthDataCol_rbc): File" << badFile << "could not be ";
+    cout << "opened or is not formatted properly" << endl;
+  
+  } 
   
   // Print matrix of three-point functions
 
@@ -495,8 +504,8 @@ int main ( int argc, char *argv[] ) {
 
     for ( int b = 0; b < binNum; b++ ) { // Loop over bins
 
-      avgX[t][b] = -4/3 * Z / fitMass[b] * thrPtFuncs_jk[t][b] / twoPtFuncs_jk[b];
-
+      avgX[t][b] = -4.0 / 3.0 * Z / fitMass[b] * thrPtFuncs_jk[t][b] / twoPtFuncs_jk[b];
+      
     }
   }
 
