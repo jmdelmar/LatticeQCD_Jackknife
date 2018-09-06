@@ -518,7 +518,7 @@ int main ( int argc, char *argv[] ) {
     for ( int c = 0; c < configNum; c++ ) { // Loop over configurations
 
       thrPtFuncs_avg[t][c] = ( thrPtFuncs_G5G1[t][c] + thrPtFuncs_G5G2[t][c] 
-			       + thrPtFuncs_G5G3[t][c] ) / 3.0;
+			       + thrPtFuncs_G5G3[t][c] ) / 3;
 
     } // End loop over configurations
   } // End loop over timesteps

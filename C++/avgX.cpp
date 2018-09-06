@@ -505,7 +505,7 @@ int main ( int argc, char *argv[] ) {
     for ( int b = 0; b < binNum; b++ ) { // Loop over bins
 
       avgX[t][b] = -4.0 / 3.0 * Z / fitMass[b] * thrPtFuncs_jk[t][b] / twoPtFuncs_jk[b];
-
+      
     }
   }
 
