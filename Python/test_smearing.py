@@ -1,10 +1,8 @@
 import math
-import h5py
 import numpy as np
 import argparse as argp
 from os import listdir as ls
 import functions as fncs
-from glob import glob
 
 #########################
 # Parse input arguments #
@@ -88,9 +86,9 @@ mEff_err = np.std( mEff, axis=0 ) * float( binNum - 1 ) / math.sqrt( float( binN
 
 for ns in range( len( mEff_avg ) ):
 
-    output_filename = output_dir + "/effMass_nsmear" + str( ns + 1 ).zfill(2) + ".dat"
+    output_filename = output_dir + "/effMass_nsmear" + str( ns ).zfill(2) + ".dat"
 
-    output_avg_filename = output_dir + "/effMass_avg_nsmear" + str( ns + 1 ).zfill(2) + ".dat"
+    output_avg_filename = output_dir + "/effMass_avg_nsmear" + str( ns ).zfill(2) + ".dat"
 
     fncs.writeDataFile( mEff[ :, ns, : ], output_filename )
 

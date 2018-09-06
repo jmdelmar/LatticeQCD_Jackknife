@@ -2,60 +2,260 @@ import math
 import h5py
 import numpy as np
 import re
+from scipy.optimize import leastsq
 from os import listdir as ls
 from glob import glob
 
-def getTwopDatasets( confs_dir, confs_list, fn_template ):
+def twoStateFit( twop, threep ):
+
+    # twop[ ts ][ b ]
+
+    # threep[ ts ][ b, t ]
     
-    twop = []
+    fit = []
 
-    # Loop through conf indexes
+    # Check that number of bins is the same for all values of tsink
 
-    for c in range( len( confs_list ) ):
+    binNum = []
+
+    for ts in range( len( threep ) ):
+ 
+        binNum.append( threep[ ts ].shape[ 0 ] )
+
+        assert binNum[ ts ] == binNum [ 0 ], "Number of bins not the same for every value of tsink."
+
+    for b in range( binNum[ 0 ] ):
+
+        # ti[ ts ][ t ], ...
+
+        a00 = 1.0 
+        a01 = 1.0 
+        a11 = 1.0 
+        c0 = 1.0 
+        c1 = 1.0 
+        E0 = 1.0 
+        E1 = 1.0 
+
+        fitParams = np.array( [ a00, a01, a11, c0, c1, E0, E1 ] )
+
+        ti = []
+        tsink = [] 
+        twop_cp = [] 
+        threep_cp = []
+
+        for ts in range( len( threep ) ):
+ 
+            tNum = threep[ ts ].shape[ -1 ]
+
+            ti.append( np.array( range( tNum ) ) )
+
+            tsink.append( ( tNum - 1 ) * np.ones( tNum ) )
+
+            twop_cp.append( twop[ ts ][ b ] * np.ones( tNum ) )
+
+            threep_cp.append( threep[ ts ][ b ] )
+
+        fit.append( leastsq( twoStateErrorFunction, fitParams, \
+                             args = ( ti[0], ti[1], tsink[0], tsink[1], twop_cp[0], twop_cp[1], threep_cp[0], threep_cp[1] ) )[0] )
+
+    return fit
+
+
+def twoStateThreep( ti, ts, a00, a01, a11, E0, E1 ):
+
+    return a00 * np.exp( -E0 * ts ) \
+        + a01 * np.exp( -E0 * ( ts - ti ) - E1 * ti ) \
+        + a01 * np.exp( -E1 * ( ts - ti ) - E0 * ti ) \
+        + a11 * np.exp( -E1 * ts )
+
+
+def twoStateTwop( ts, c0, c1, E0, E1 ):
+
+    return c0 * np.exp( -E0 * ts ) + c1 * np.exp( -E1 * ts )
+
+
+#def twoStateErrorFunction( fitParams, ti, tsink, twop, threep ):
+
+def twoStateErrorFunction( fitParams, ti0, ti1, tsink0, tsink1, twop0, twop1, threep0, threep1 ):
+
+    a00 = fitParams[ 0 ]
+          
+    a01 = fitParams[ 1 ]
+          
+    a11 = fitParams[ 2 ]
+          
+    c0 = fitParams[ 3 ]
+          
+    c1 = fitParams[ 4 ]
         
-        twop.append( [] )
-
-        traj = confs_list[c].rpartition( "-" )[-1]
-
-        # Get filenames in specific confs directory which follow template
-
-        filename = glob( confs_dir + "/" + confs_list[c] + "/" + fn_template )
-
-        filename = sorted( filename )
-
-        # Loop through indexes of file names in specific conf directory
-
-        for fn in range( len( filename ) ): 
-
-            with h5py.File( filename[fn], "r" ) as data_file:
-
-                # Ensure the twop group of the file has the 
-                # correct trajectory name
+    E0 = fitParams[ 5 ]
                 
-                dsetname = data_file[ "/conf_" + traj ].visit( lambda x: x if "twop" in x else None )
+    E1 = fitParams[ 6 ]
+
+    """
+    for ts in range( len( threep ) ):
+
+        err.append( twoStateTwop( tsink[ ts ], c0, c1, E0, E1 ) \
+                    - twop[ ts ] )
+        
+        err.append( twoStateThreep( ti[ ts ], tsink[ ts ], a00, a01, a11, E0, E1 ) \
+                    - threep[ ts ] )
+    """
+    err0 = twoStateTwop( tsink0, c0, c1, E0, E1 ) \
+                - twop0
+        
+    err1 = twoStateThreep( ti0, tsink0, a00, a01, a11, E0, E1 ) \
+                - threep0
+
+    err2 = twoStateTwop( tsink1, c0, c1, E0, E1 ) \
+                - twop1
+
+    err3 = twoStateThreep( ti1, tsink1, a00, a01, a11, E0, E1 ) \
+                - threep1
+
+    return np.concatenate( ( err0, err1, err2, err3 ) )
+
+
+def fold( data ):
+
+    timestepNum = data.shape[ -1 ]
+
+    out = np.zeros( data.shape[ :-1 ] + ( timestepNum / 2 + 1, ) )
+
+    out[ ..., 0 ] = data[ ..., 0 ]
+
+    for t in range( 1, timestepNum / 2 ):
+        
+        out[ ..., t ] = ( data[ ..., t ] + data[ ..., -t ] ) / 2
+
+    out[ ..., timestepNum / 2 ] = data[ ..., timestepNum / 2 ]
+
+    return out
+
+
+def getConfigList( configListFilename, configDir ):
+
+    if configListFilename:
+
+        if glob( configListFilename ):
+
+            with open( configListFilename, "r" ) as configFile:
+
+                configList = configFile.read().splitlines()
+
+            print "Configuration list read"
+
+        else:
+
+            print "WARNING: Given configuration does not exist. " \
+                + "Will use all configurations in configuration directory."
             
-                # Append top group name to the rest of dataset path
+            configList = ls( configDir )
 
-                dsetname = "/conf_" + traj + "/" + dsetname
+            configList = sorted( configList )
 
-                # Copy dataset to twop
+            with open( configListFilename, "w" ) as configFile:
 
-                twop[c].append( np.array( data_file[ dsetname ] ) )
+                for config in configList:
 
-    return np.array( twop )
+                    configFile.write( str( config ) + "\n" )
+
+            print "Configuration list written"
+
+    else:
+
+        configList = ls( configDir )
+
+        configList = sorted( configList )
+
+        configFilename = "./confs.txt"
+
+        if glob( configFilename ):
+
+            print "WARNING: Configuration list already exists in this directory. " \
+                + "Will not overwrite."
+
+        else:
+
+            with open( configFilename, "w" ) as configFile:
+
+                for config in configList:
+
+                    configFile.write( str( config ) + "\n" )
+
+            print "Configuration list written"
+
+    print "Number of configurations: " + str( len( configList ) )
+
+    return configList
 
 
-def get_datasets( filename, datasets ):
+def processMomList( momLists ):
 
-    with h5py.File( filename, "r" ) as data_file:
+    # Check that momenta lists are the same across configurations
 
-        names = []
+    momList_0 = momLists[ 0 ].flat
+
+    for ml in momLists[ 1: ]:
+
+        for i in range( ml.size ):
+
+                assert ml.flat[ i ] == momList_0[ i ], \
+                    "Momenta lists in configuration " + configList[ c ] \
+                    + " do not match"
+
+    momList = momLists[ 0 ]
+
+    # Get indexes where each Q^2 begins and ends
+
+    Qsq_start = []
+
+    Qsq_end = []
+
+    Qsq = np.round( ( np.apply_along_axis( np.linalg.norm, 1, np.array( momList ) ) ) ** 2 )
     
-        data_file.visit( lambda x: names.append(x) if "threep" in x or "twop" in x else None )
-    
-        for name in names:
+    #Qsq = ( np.apply_along_axis( np.linalg.norm, 1, np.array( momList ) ) ) ** 2
 
-            datasets[name] = np.array( data_file[name] )
+    q_last = Qsq[ 0 ]
+
+    Qsq_start.append( 0 )
+
+    Qsq_end.append( 0 )
+
+    for q in Qsq[ 1: ]:
+
+        if q != q_last:
+
+            assert q > q_last, "Momentum list not in assending order."
+
+            Qsq_start.append( np.where( Qsq == q )[0][0] )
+
+            Qsq_end.append ( np.where( Qsq == q )[0][-1] )
+
+            q_last = q
+
+    # Remove duplicate Q^2's
+
+    Qsq = sorted( list( set( Qsq ) ) )
+
+    #return np.array( Qsq ), np.array( Qsq_start ), np.array( Qsq_end )
+
+    return np.array( Qsq, dtype=int ), np.array( Qsq_start ), np.array( Qsq_end )
+
+
+# Averages over equal Q^2 for numpy array whose last dimension is Q and 
+# returns averaged data as a numpy array whose first dimension is Q^2
+
+def averageOverQsq( data, Qsq_start, Qsq_end ):
+
+    avg = []
+
+    for start, end in zip( Qsq_start, Qsq_end ):
+
+        avg.append( np.average( data[ ..., start : end + 1 ], axis=-1 ) )
+            
+    return np.array( avg )
+    
 
 def check_sources( filenames, sourceNum ):
 
@@ -73,9 +273,9 @@ def check_sources( filenames, sourceNum ):
 
     for fn in filenames:
 
-        with h5py.File( fn, "r" ) as data_file:
+        with h5py.File( fn, "r" ) as dataFile:
 
-            sourcePos.append( str( data_file.visit( lambda x: data_file[x].keys() if "conf" in x else None ) ) )
+            sourcePos.append( str( dataFile.visit( lambda x: dataFile[x].keys() if "conf" in x else None ) ) )
 
     for src1 in sourcePos:
         
@@ -121,71 +321,3 @@ def jackknife( vals, binSize ):
         vals_jk[ bins ] = np.average( temp, axis=0 )
 
     return np.array( vals_jk )
-
-def calculateEffMass( twop ):
-
-    mEff = np.zeros( twop.shape )
-
-    # Recursively loop though each axis of twop, until the
-    # last dimension, which should be time, is reached
-
-    if( twop.ndim > 1 ):
-
-        for dim in range( len( twop ) ):
-
-            mEff[dim] = calculateEffMass( twop[dim] )
-
-    else:
-
-        timeLength = len( twop )
-
-        # Loop through timestep, excluding the last timestep
-
-        for t in range( timeLength - 1 ):
-
-            mEff[ t ] = math.log( twop[ t ] / twop[ t + 1 ] )
-
-            # Calculate effective mass at last timestep, 
-            # applying boundary conditions
-
-        mEff[ timeLength - 1 ] = math.log( twop[ timeLength - 1 ] / twop[ 0 ] )
-
-    return np.array( mEff )
-
-
-def writeDataFile( data, filename ):
-
-    if data.ndim != 2:
-
-        print "Error (writeDataFile): Data array does not have two dimensions"
-
-        return -1
-
-    with open( filename, "w" ) as output:
-
-        for d0 in range( len( data ) ):
-
-            for d1 in range( len( data[ d0 ] ) ):
-                
-                output.write( str( d1 ).ljust(5) + str( data[ d0, d1 ] ) + "\n" )
-
-
-def writeAvgDataFile( data, error, filename ):
-
-    if data.ndim != 1:
-
-        print "Error (writeAvgDataFile): Data array has more than one dimension"
-
-        return -1
-
-    if data.shape != error.shape or len( data ) != len( error ):
-
-        print "Error (writeAvgDataFile): Error array's length and shape does not match data array's"
-        
-        return -1
-
-    with open( filename, "w" ) as output:
-
-        for d0 in range( len( data ) ):
-
-            output.write( str( d0 ).ljust(5) + str( data[ d0 ] ).ljust(20) + str( error[ d0 ] ) + "\n" )
