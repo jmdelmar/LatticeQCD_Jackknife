@@ -7,9 +7,11 @@ import physQuants as pq
 
 Z = 1.0
 
-particle_list = [ "pion", "kaon" ]
+particle_list = [ "pion", "kaon", "nucleon" ]
 
-# TO DO: add support for kaon IS and nulceon
+format_list = [ "gpu", "cpu" ]
+
+# TO DO: add support nulceon
 
 #########################
 # Parse input arguments #
@@ -31,13 +33,15 @@ parser.add_argument( "mEff_fit_start", action='store', type=int )
 
 parser.add_argument( "mEff_fit_end", action='store', type=int )
 
-parser.add_argument( "particle", action='store', help="Particle to calculate gA for. Should be pion or kaon.", type=str )
+parser.add_argument( "particle", action='store', help="Particle to calculate gA for. Should be 'pion' or 'kaon'.", type=str )
 
 parser.add_argument( 't_sink', action='store', \
                      help="Comma seperated list of t sink's", \
                      type=lambda s: [int(item) for item in s.split(',')] )
 
 parser.add_argument( "-o", "--output_template", action='store', type=str, default="./*.dat" )
+
+parser.add_argument( "-f", "--data_format", action='store', help="Data format. Should be 'gpu' or 'cpu'.", type=str, default="gpu" )
 
 parser.add_argument( "-c", "--config_list", action='store', type=str, default="" )
 
@@ -67,10 +71,15 @@ tsink = args.t_sink
 
 output_template = args.output_template
 
-# Check particle
+dataFormat = args.data_format
+
+# Check inputs
 
 assert particle in particle_list, "Error: Particle not supported. " \
     + "Supported particles: " + str( particle_list )
+
+assert dataFormat in format_list, "Error: Data format not supported. " \
+    + "Supported particles: " + str( format_list )
 
 # Get configurations from given list or from given threep
 # directory if list not given
@@ -152,122 +161,138 @@ for ts in tsink:
     # three-point functions at zero-momentum
     # threep[ c, t ]
 
-    threep_u_gxDx = rw.getDatasets( threepDir, configList, threep_template, \
-                                    "tsink_" + str( ts ), "oneD", "dir_00", \
-                                    "up", "threep" )[ :, 0, 0, ..., 0, 1, 0 ]
+    if particle == "nucleon":
 
-    threep_u_gyDy = rw.getDatasets( threepDir, configList, threep_template, \
-                                  "tsink_" + str( ts ), "oneD", "dir_01", \
-                                  "up", "threep" )[ :, 0, 0, ..., 0, 2, 0 ]
+        if dataFormat == "cpu":
+
+            filename_u_gxDx = threep_template + str( ts ) + ".up.h5"
+
+            threep_u_gxDx = rw.getDatasets( threepDir, configList, filename_u_gxDx, \
+                                            "=der:gxDx:sym=", "msq0000", "arr" )[ :, 0, 0, :, 0 ].real
+
+            filename_u_gyDy = threep_template + str( ts ) + ".up.h5"
+
+            threep_u_gyDy = rw.getDatasets( threepDir, configList, filename_u_gyDy, \
+                                            "=der:gyDy:sym=", "msq0000", "arr" )[ :, 0, 0, :, 0 ].real
+
+            filename_u_gzDz = threep_template + str( ts ) + ".up.h5"
+
+            threep_u_gzDz = rw.getDatasets( threepDir, configList, filename_u_gzDz, \
+                                            "=der:gzDz:sym=", "msq0000", "arr" )[ :, 0, 0, :, 0 ].real
+
+            filename_u_gtDt = threep_template + str( ts ) + ".up.h5"
+
+            threep_u_gtDt = rw.getDatasets( threepDir, configList, filename_u_gtDt, \
+                                            "=der:g0D0:sym=", "msq0000", "arr" )[ :, 0, 0, :, 0 ].real
+
+            filename_d_gxDx = threep_template + str( ts ) + ".dn.h5"
+
+            threep_d_gxDx = rw.getDatasets( threepDir, configList, filename_d_gxDx, \
+                                            "=der:gxDx:sym=", "msq0000", "arr" )[ :, 0, 0, :, 0 ].real
+
+            filename_d_gyDy = threep_template + str( ts ) + ".dn.h5"
+
+            threep_d_gyDy = rw.getDatasets( threepDir, configList, filename_d_gyDy, \
+                                            "=der:gyDy:sym=", "msq0000", "arr" )[ :, 0, 0, :, 0 ].real
+
+            filename_d_gzDz = threep_template + str( ts ) + ".dn.h5"
+
+            threep_d_gzDz = rw.getDatasets( threepDir, configList, filename_d_gzDz, \
+                                            "=der:gzDz:sym=", "msq0000", "arr" )[ :, 0, 0, :, 0 ].real
+
+            filename_d_gtDt = threep_template + str( ts ) + ".dn.h5"
+
+            threep_d_gtDt = rw.getDatasets( threepDir, configList, filename_d_gtDt, \
+                                            "=der:g0D0:sym=", "msq0000", "arr" )[ :, 0, 0, :, 0 ].real
+            
+            threep_gxDx = threep_u_gxDx - threep_d_gxDx
+
+            threep_gyDy = threep_u_gyDy - threep_d_gyDy
+
+            threep_gzDz = threep_u_gzDz - threep_d_gzDz
+
+            threep_gtDt = threep_u_gtDt - threep_d_gtDt
+
+        else:
+
+            print "GPU format not supported for nucleon, yet."
+
+            exit()
+
+    else: # Particle is meson
+
+        if dataFormat == "gpu":
+
+            threep_gxDx = rw.getDatasets( threepDir, configList, threep_template, \
+                                          "tsink_" + str( ts ), "oneD", "dir_00", \
+                                          "up", "threep" )[ :, 0, 0, ..., 0, 1, 0 ]
+
+            threep_gyDy = rw.getDatasets( threepDir, configList, threep_template, \
+                                          "tsink_" + str( ts ), "oneD", "dir_01", \
+                                          "up", "threep" )[ :, 0, 0, ..., 0, 2, 0 ]
     
-    threep_u_gzDz = rw.getDatasets( threepDir, configList, threep_template, \
-                                  "tsink_" + str( ts ), "oneD", "dir_02", \
-                                  "up", "threep" )[ :, 0, 0, ..., 0, 3, 0 ]
+            threep_gzDz = rw.getDatasets( threepDir, configList, threep_template, \
+                                          "tsink_" + str( ts ), "oneD", "dir_02", \
+                                          "up", "threep" )[ :, 0, 0, ..., 0, 3, 0 ]
 
-    threep_u_gtDt = rw.getDatasets( threepDir, configList, threep_template, \
-                                    "tsink_" + str( ts ), "oneD", "dir_03", \
-                                    "up", "threep" )[ :, 0, 0, ..., 0, 4, 0 ]
+            threep_gtDt = rw.getDatasets( threepDir, configList, threep_template, \
+                                            "tsink_" + str( ts ), "oneD", "dir_03", \
+                                            "up", "threep" )[ :, 0, 0, ..., 0, 4, 0 ]
 
-    threep_s_gxDx = np.array( [] )
-           
-    threep_s_gyDy = np.array( [] )
-                 
-    threep_s_gzDz = np.array( [] )
+            threep_s_gxDx = np.array( [] )
+            
+            threep_s_gyDy = np.array( [] )
+        
+            threep_s_gzDz = np.array( [] )
     
-    threep_s_gtDt = np.array( [] )
+            threep_s_gtDt = np.array( [] )
 
-    if particle == "kaon":
+            if particle == "kaon":
+            
+                threep_s_gxDx = rw.getDatasets( threepDir, configList, threep_template, \
+                                                "tsink_" + str( ts ), "oneD", "dir_00", \
+                                                "strange", "threep" )[ :, 0, 0, ..., 0, 1, 0 ]
 
-        threep_s_gxDx = rw.getDatasets( threepDir, configList, threep_template, \
-                                      "tsink_" + str( ts ), "oneD", "dir_00", \
-                                      "strange", "threep" )[ :, 0, 0, ..., 0, 1, 0 ]
-
-        threep_s_gyDy = rw.getDatasets( threepDir, configList, threep_template, \
-                                      "tsink_" + str( ts ), "oneD", "dir_01", \
-                                      "strange", "threep" )[ :, 0, 0, ..., 0, 2, 0 ]
+                threep_s_gyDy = rw.getDatasets( threepDir, configList, threep_template, \
+                                                "tsink_" + str( ts ), "oneD", "dir_01", \
+                                                "strange", "threep" )[ :, 0, 0, ..., 0, 2, 0 ]
     
-        threep_s_gzDz = rw.getDatasets( threepDir, configList, threep_template, \
-                                      "tsink_" + str( ts ), "oneD", "dir_02", \
-                                      "strange", "threep" )[ :, 0, 0, ..., 0, 3, 0 ]
+                threep_s_gzDz = rw.getDatasets( threepDir, configList, threep_template, \
+                                                "tsink_" + str( ts ), "oneD", "dir_02", \
+                                                "strange", "threep" )[ :, 0, 0, ..., 0, 3, 0 ]
 
-        threep_s_gtDt = rw.getDatasets( threepDir, configList, threep_template, \
-                                        "tsink_" + str( ts ), "oneD", "dir_03", \
-                                        "strange", "threep" )[ :, 0, 0, ..., 0, 4, 0 ]
+                threep_s_gtDt = rw.getDatasets( threepDir, configList, threep_template, \
+                                                "tsink_" + str( ts ), "oneD", "dir_03", \
+                                                "strange", "threep" )[ :, 0, 0, ..., 0, 4, 0 ]
+            
+        elif dataFormat == "cpu":
+
+            print "CPU format not supported for mesons, yet."
+            
+            exit()
 
     print "Read three-point functions from HDF5 files for tsink " + str( ts )
-    """
-    threep_gxDx = np.array( [] )
-            
-    threep_gyDy = np.array( [] )
-    
-    threep_gzDz = np.array( [] )
-            
-    threep_gtDt = np.array( [] )
 
-    if particle == "pion": 
-
-        # u-d=2u (d=-u)
-
-        threep_gxDx = 2 * threep_gxDx_u
-
-        threep_gyDy = 2 * threep_gyDy_u
-
-        threep_gzDz = 2 * threep_gzDz_u
-
-        threep_gtDt = 2 * threep_gtDt_u
-
-    elif particle == "kaon":
-
-        # u
-
-        #threep_gxDx = #threep_gxDx_u
-                                   
-        #threep_gyDy = #threep_gyDy_u
-                                   
-        #threep_gzDz = #threep_gzDz_u
-                                   
-        #threep_gtDt = #threep_gtDt_u
-
-        # s
-
-        #threep_gxDx = #threep_gxDx_s
-                                   
-        #threep_gyDy = #threep_gyDy_s
-                                   
-        #threep_gzDz = #threep_gzDz_s
-                                   
-        #threep_gtDt = #threep_gtDt_s
-
-        # u-s
-
-        threep_gxDx = threep_gxDx_u + threep_gxDx_s
-                                                   
-        threep_gyDy = threep_gyDy_u + threep_gyDy_s
-                                                   
-        threep_gzDz = threep_gzDz_u + threep_gzDz_s
-                                                   
-        threep_gtDt = threep_gtDt_u + threep_gtDt_s
-    """
     # Subtract average over directions from gtDt
 
-    threep_u = threep_u_gtDt - 0.25 * ( threep_u_gtDt + threep_u_gxDx + threep_u_gyDy + threep_u_gzDz )
+    threep = threep_gtDt - 0.25 * ( threep_gtDt + threep_gxDx + threep_gyDy + threep_gzDz )
 
     # Jackknife
-    # threep_u_jk[ b, t ]
+    # threep_jk[ b, t ]
     
-    threep_u_jk = fncs.jackknife( threep_u, binSize )
+    threep_jk = fncs.jackknife( threep, binSize )
 
     #################
     # Calculate <x> #
     #################
 
-    avgX_u = Z * pq.calcAvgX( threep_u_jk, twop_jk[ :, ts ], mEff_fit_avg )
+    avgX = Z * pq.calcAvgX( threep_jk, twop_jk[ :, ts ], mEff_fit_avg )
 
     # Average over bins
 
-    avgX_u_avg = np.average( avgX_u, axis=0 )
+    avgX_avg = np.average( avgX, axis=0 )
 
-    avgX_u_err = np.std( avgX_u, axis=0 ) * float( binNum - 1 ) / np.sqrt( float( binNum ) )
+    avgX_err = np.std( avgX, axis=0 ) * float( binNum - 1 ) / np.sqrt( float( binNum ) )
 
     ######################
     # Write output files #
@@ -275,9 +300,9 @@ for ts in tsink:
 
     # <x>
     
-    avgX_u_outFilename = output_template.replace( "*", "avgX_u_tsink" + str( ts ) )
+    avgX_outFilename = output_template.replace( "*", "avgX_tsink" + str( ts ) )
 
-    rw.writeAvgDataFile( avgX_u_avg, avgX_u_err, avgX_u_outFilename )
+    rw.writeAvgDataFile( avgX_avg, avgX_err, avgX_outFilename )
 
     # Fitted effective mass
 
@@ -295,21 +320,33 @@ for ts in tsink:
 
     if ts == 12:
 
-        fitStart = [ 5, 4 ]
+        fitStart = [ 5, 4, 3 ]
 
-        fitEnd = [ 7, 8 ]
+        fitEnd = [ 7, 8, 9 ]
 
     elif ts == 14:
 
-        fitStart = [ 6, 5 ]
+        fitStart = [ 6, 5, 4 ]
 
-        fitEnd = [ 8, 9 ]
+        fitEnd = [ 8, 9, 10 ]
 
     elif ts == 16:
 
-        fitStart = [ 7, 6 ]
+        fitStart = [ 7, 6, 5 ]
 
-        fitEnd = [ 9, 10 ]
+        fitEnd = [ 9, 10, 11 ]
+
+    elif ts == 18:
+
+        fitStart = [ 8, 7, 6 ]
+
+        fitEnd = [ 10, 11, 12 ]
+
+    elif ts == 20:
+
+        fitStart = [ 9, 8, 7 ]
+
+        fitEnd = [ 11, 12, 13 ]
 
     else:
 
@@ -321,35 +358,51 @@ for ts in tsink:
 
     for irange in range( len( fitStart ) ):
 
-        avgX_u_fit = []
+        avgX_fit = []
 
         # Fit each bin
 
-        for x in avgX_u:
+        for x in avgX:
 
-            avgX_u_fit.append( float( np.polyfit( range( fitStart[ irange ], fitEnd[ irange ] + 1 ), \
+            avgX_fit.append( float( np.polyfit( range( fitStart[ irange ], fitEnd[ irange ] + 1 ), \
                                          x[ fitStart[ irange ] : fitEnd[ irange ] + 1 ], \
-                                         0, w=avgX_u_err[ fitStart[ irange ] : fitEnd[ irange ] + 1 ] ) ) )
+                                         0, w=avgX_err[ fitStart[ irange ] : fitEnd[ irange ] + 1 ] ) ) )
 
-        avgX_u_fit = np.array( avgX_u_fit )
+        avgX_fit = np.array( avgX_fit )
 
         # Average over bins
 
-        avgX_u_fit_avg = np.average( avgX_u_fit )
+        avgX_fit_avg = np.average( avgX_fit )
 
-        avgX_u_fit_err = np.std( avgX_u_fit ) * float( binNum - 1 ) / np.sqrt( float( binNum ) )
+        avgX_fit_err = np.std( avgX_fit ) * float( binNum - 1 ) / np.sqrt( float( binNum ) )
 
         # Write output files
 
-        avgX_u_fit_outFilename = output_template.replace( "*", \
-                                                          "avgX_u_fit_" \
-                                                          "tsink" + str( ts ) \
-                                                          + "_" + str( fitStart[ irange ] ) \
-                                                          + "_" + str( fitEnd[ irange ] ) )
+        avgX_fit_outFilename = ""
 
-        rw.writeFitDatafile( avgX_u_fit_outFilename, avgX_u_fit_avg, avgX_u_fit_err, fitStart[ irange ], fitEnd[ irange ] )
+        if particle == "nucleon":
+
+            avgX_fit_outFilename = output_template.replace( "*", \
+                                                            "avgX_fit_" \
+                                                            "tsink" + str( ts ) \
+                                                            + "_" + str( fitStart[ irange ] ) \
+                                                            + "_" + str( fitEnd[ irange ] ) )
+
+        else:
+
+            avgX_fit_outFilename = output_template.replace( "*", \
+                                                            "avgX_u_fit_" \
+                                                            "tsink" + str( ts ) \
+                                                            + "_" + str( fitStart[ irange ] ) \
+                                                            + "_" + str( fitEnd[ irange ] ) )
+
+        rw.writeFitDatafile( avgX_fit_outFilename, avgX_fit_avg, avgX_fit_err, fitStart[ irange ], fitEnd[ irange ] )
 
     if particle == "kaon":
+
+        ###########################
+        # Repeat for strange part #
+        ###########################
 
         # Subtract average over directions from gtDt
 
@@ -391,34 +444,6 @@ for ts in tsink:
         ###############
         # Fit plateau #
         ###############
-
-        fitStart = []
-
-        fitEnd = []
-
-        if ts == 12:
-
-            fitStart = [ 5, 4 ]
-
-            fitEnd = [ 7, 8 ]
-
-        elif ts == 14:
-
-            fitStart = [ 6, 5 ]
-
-            fitEnd = [ 8, 9 ]
-
-        elif ts == 16:
-
-            fitStart = [ 7, 6 ]
-
-            fitEnd = [ 9, 10 ]
-
-        else:
-
-            print "Tsink not supported."
-
-            exit()
 
         # Loop over fit ranges
 

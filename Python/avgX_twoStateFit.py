@@ -9,7 +9,7 @@ Z = 1.0
 
 particle_list = [ "pion", "kaon" ]
 
-# TO DO: add support for kaon IS and nulceon
+# TO DO: add support for nulceon
 
 #########################
 # Parse input arguments #

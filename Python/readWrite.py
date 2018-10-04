@@ -47,6 +47,8 @@ def getDatasets( configDir, configList, fn_template, *keyword ):
 
         # Get filenames in specific configs directory which follow template
 
+        #print configDir + "/" + configList[c] + "/" + fn_template
+
         filename = glob( configDir + "/" + configList[c] + "/" + fn_template )
 
         filename = sorted( filename )
@@ -232,6 +234,8 @@ def getDatasets_wNames( configDir, configList, fn_template, *keyword ):
                                           if type( obj ) is h5py.Dataset \
                                           else None )
 
+                #print dsetName_tmp
+
                 groups_0 = dsetName_tmp[0].split( "/" )
 
                 sources.add( groups_0[1] )
@@ -281,7 +285,6 @@ def getDatasets_wNames( configDir, configList, fn_template, *keyword ):
     # End loop over configs
 
     return np.array( dataset ), datasetName
-    #return dataset, datasetName
 
 
 def readDataFile( filename, timestepNum, binNum ):
