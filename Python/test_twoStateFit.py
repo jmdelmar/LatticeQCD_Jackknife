@@ -241,6 +241,14 @@ for ts in tsink:
     
     threep_jk.append( fncs.jackknife( threep, binSize ) )
 
+    threep_avg = np.average( threep_jk[ -1 ], axis=0 )
+
+    threep_err = np.std( threep_jk[ -1 ], axis=0 ) * float( binNum - 1 ) / np.sqrt( float( binNum ) )
+
+    threep_outFilename = output_template.replace( "*", "threep_tsink" + str( ts ) )
+
+    rw.writeAvgDataFile( threep_outFilename, threep_avg, threep_err )
+
 # End loop over tsink
 
 ##################
@@ -248,7 +256,15 @@ for ts in tsink:
 ##################
 
 # fitParams[ b, param ]
+"""
+threep_cp = []
 
+for ts in range( tsinkNum ):
+
+    threep_cp.append( threep_jk[ ts ][ :, 2:-2 ] )
+
+fitParams = fncs.twoStateFit( twop_jk, threep_cp )
+"""
 fitParams = fncs.twoStateFit( twop_jk, threep_jk )
 
 a00 = fitParams[ :, 0 ]
@@ -265,49 +281,45 @@ E0 = fitParams[ :, 5 ]
                 
 E1 = fitParams[ :, 6 ]
 
-# Write curve with constant insertion time = tsink / 2
+# Write curve with constant tsink
 
-curve = np.zeros( ( binNum, 50 ) )
+curve = np.zeros( ( binNum, tsinkNum, 50 ) )
 
-avgX = np.zeros( binNum )
+t_i= np.zeros( ( tsinkNum, 50 ) )
 
 for b in range( binNum ):
 
-    t_s = np.linspace( tsink[ 0 ] - 2, tsink[ -1 ] + 2, 50 )
+    for ts in range( tsinkNum ):
 
-    for t in range( t_s.shape[ 0 ] ):
-        
-        curve[ b, t ] = -4.0 / 3.0 / E0[ b ] * Z * \
-                        fncs.twoStateThreep( t / 2, t, \
-                                             a00[ b ], a01[ b ], a11[ b ], \
-                                             E0[ b ], E1[ b ] ) \
-                        / fncs.twoStateTwop( t, c0[ b ], c1[ b ], \
-                                             E0[ b ], E1[ b] )
-    
-    avgX[ b ] = -4.0 / 3.0 / E0[ b ] * Z * a00[ b ] / c0[ 0 ]
+        t_i[ ts, : ] = np.linspace( -2, tsink[ ts ] + 2, 50 )
+
+        for t in range( t_i.shape[ -1 ] ):
+
+            curve[ b, ts, t ] = fncs.twoStateThreep( t_i[ ts, t ], tsink[ ts ], \
+                                                     a00[ b ], a01[ b ], a11[ b ], \
+                                                     E0[ b ], E1[ b ] )
 
 # Average over bins
 
 curve_avg = np.average( curve, axis=0 )
 
 curve_err = np.std( curve, axis=0 ) * float( binNum - 1 ) / np.sqrt( float( binNum ) )
-
+                        
 fitParams_avg = np.average( fitParams, axis=0 )
 
 fitParams_err = np.std( fitParams, axis=0 ) * float( binNum - 1 ) / np.sqrt( float( binNum ) )
-
-avgX_avg = np.average( avgX )
-
-avgX_err = np.std( avgX ) * float( binNum - 1 ) / np.sqrt( float( binNum ) )
 
 #####################
 # Write output file #
 #####################
 
-curveOutputFilename = output_template.replace( "*", "avgX_twoStateFit_curve" )
+for ts in range( tsinkNum ):
 
-rw.writeAvgDataFile_wX( curveOutputFilename, t_s, curve_avg, curve_err )
+    curveOutputFilename = output_template.replace( "*", "threep_twoStateFit_curve_tsink" + str( tsink[ ts ] ) )
 
-avgXOutputFilename = output_template.replace( "*", "avgX_twoStateFit" )
+    rw.writeAvgDataFile_wX( curveOutputFilename, t_i[ ts ], curve_avg[ ts ], curve_err[ ts ] )
 
-rw.writeFitDataFile( avgXOutputFilename, avgX_avg, avgX_err, 0, 0 )
+avgXParamsOutputFilename = output_template.replace( "*", "threep_twoStateFitParams" )
+
+rw.writeTSFParamsFile( avgXParamsOutputFilename, fitParams_avg, fitParams_err )
+

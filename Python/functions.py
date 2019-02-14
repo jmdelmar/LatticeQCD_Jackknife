@@ -2,23 +2,36 @@ import math
 import h5py
 import numpy as np
 import re
-from scipy.optimize import leastsq
+from scipy.optimize import leastsq, fmin, minimize
+#from scipy.optimize import differential_evolution
 from os import listdir as ls
 from glob import glob
 
-def twoStateFit( twop, threep ):
+#def twoStateFitCurve_constTs( a00, a01, a11, E0, E1 ):
 
-    # twop[ ts ][ b ]
+
+#def twoStateFitCurve_constTi( ):
+
+
+def twoStateFit( twop, twop_err, twop_rangeStart, twop_rangeEnd, threep, threep_err, threep_neglect ):
+
+    # twop[ b, t ]
+    # twop_err[ t ]
 
     # threep[ ts ][ b, t ]
-    
+    # threep_err[ ts ][ t ]
+
     fit = []
+
+    chi_sq = []
 
     # Check that number of bins is the same for all values of tsink
 
     binNum = []
 
-    for ts in range( len( threep ) ):
+    tsinkNum = len( threep )
+
+    for ts in range( tsinkNum ):
  
         binNum.append( threep[ ts ].shape[ 0 ] )
 
@@ -26,57 +39,92 @@ def twoStateFit( twop, threep ):
 
     for b in range( binNum[ 0 ] ):
 
-        # ti[ ts ][ t ], ...
-
         a00 = 1.0 
         a01 = 1.0 
         a11 = 1.0 
-        c0 = 1.0 
+        c0 = 1.0
         c1 = 1.0 
-        E0 = 1.0 
-        E1 = 1.0 
+        E0 = 0.1 
+        E1 = 0.01
 
         fitParams = np.array( [ a00, a01, a11, c0, c1, E0, E1 ] )
 
+        # ti[ts][t]
+
         ti = []
+
+        # tsink[ts]
+
         tsink = [] 
-        twop_cp = [] 
+
+        # twop_cp
+
+        twop_cp = twop[ b, twop_rangeStart : twop_rangeEnd + 1 ]
+
+        twop_tsink = np.array( range( twop_rangeStart, twop_rangeEnd + 1 ) )
+
+        twop_err_cp = twop_err[ twop_rangeStart : twop_rangeEnd + 1 ]
+
+        #print "twop: " + str( twop[ b, : ] )
+        
+        #print "twop_cp: " + str( twop_cp )
+
+        #print "twop_tsink: " + str( twop_tsink )
+
+        twop_err_cp = []
+
         threep_cp = []
 
-        for ts in range( len( threep ) ):
- 
-            tNum = threep[ ts ].shape[ -1 ]
+        for ts in range( tsinkNum ):
 
+            tNum = threep[ ts ].shape[ -1 ] - 2 * threep_neglect
+
+            #print "tNum: " + str( tNum )
+            """
             ti.append( np.array( range( tNum ) ) )
 
-            tsink.append( ( tNum - 1 ) * np.ones( tNum ) )
+            tsink.append( tNum - 1 )
+            """
+            ti.append( np.array( range( threep_neglect, threep_neglect + tNum ) ) )
 
-            twop_cp.append( twop[ ts ][ b ] * np.ones( tNum ) )
+            tsink.append( tNum - 1 + 2 * threep_neglect )
 
-            threep_cp.append( threep[ ts ][ b ] )
+            #threep_cp[ ts ][ ti ]
 
-        fit.append( leastsq( twoStateErrorFunction, fitParams, \
-                             args = ( ti[0], ti[1], tsink[0], tsink[1], twop_cp[0], twop_cp[1], threep_cp[0], threep_cp[1] ) )[0] )
+            threep_cp.append( threep[ ts ][ b, threep_neglect : threep_neglect + tNum ] )
 
-    return fit
+            #print "threep: " + str( threep )
+
+            #print "threep_cp: " + str( threep_cp[ -1 ] )
+
+        ti = np.array( ti )
+
+        #print "ti: " + str( ti )
+
+        tsink = np.array( tsink )
+
+        #print "tsink: " + str( tsink )
+        
+        twop_cp = np.array( twop_cp )
+
+        #fit.append( leastsq( twoStateErrorFunction, fitParams, \
+        #                     args = ( ti, tsink, twop_cp, threep_cp ) )[0] )
+
+        min = minimize( twoStateErrorFunction, fitParams, \
+                              args = ( twop_tsink, ti, tsink, twop_cp, twop_err_cp, threep_cp, threep_err ), \
+                              method='Nelder-Mead', jac = False, tol=1e-9, \
+                              options = {'maxiter':100000} )
+
+        fit.append( min.x )
+
+        chi_sq.append( min.fun )
+
+    # End loop over bins
+
+    return np.array( fit ), np.array( chi_sq )
 
 
-def twoStateThreep( ti, ts, a00, a01, a11, E0, E1 ):
-
-    return a00 * np.exp( -E0 * ts ) \
-        + a01 * np.exp( -E0 * ( ts - ti ) - E1 * ti ) \
-        + a01 * np.exp( -E1 * ( ts - ti ) - E0 * ti ) \
-        + a11 * np.exp( -E1 * ts )
-
-
-def twoStateTwop( ts, c0, c1, E0, E1 ):
-
-    return c0 * np.exp( -E0 * ts ) + c1 * np.exp( -E1 * ts )
-
-
-#def twoStateErrorFunction( fitParams, ti, tsink, twop, threep ):
-
-def twoStateErrorFunction( fitParams, ti0, ti1, tsink0, tsink1, twop0, twop1, threep0, threep1 ):
+def twoStateErrorFunction( fitParams, twop_tsink, ti, tsink, twop, twop_err, threep, threep_err ):
 
     a00 = fitParams[ 0 ]
           
@@ -92,28 +140,127 @@ def twoStateErrorFunction( fitParams, ti0, ti1, tsink0, tsink1, twop0, twop1, th
                 
     E1 = fitParams[ 6 ]
 
-    """
-    for ts in range( len( threep ) ):
+    # twopErr[ ts ]
 
-        err.append( twoStateTwop( tsink[ ts ], c0, c1, E0, E1 ) \
-                    - twop[ ts ] )
+    #twopErr = np.array( ( ( twoStateTwop( twop_tsink, c0, c1, E0, E1 ) \
+    #                        - twop ) / twop ) ** 2 )
+
+    #twopErr = np.array( ( ( twoStateTwop( tsink, c0, c1, E0, E1 ) \
+    #                        - twop ) / twop_err ) ** 2 )
+
+    #print tsink
+
+    #print twoStateTwop( tsink, c0, c1, E0, E1 )
+
+    #print twop_tsink
+
+    #print twoStateTwop( twop_tsink, c0, c1, E0, E1 )
+
+    #print twop
+
+    twopErr = np.array( ( twoStateTwop( twop_tsink, c0, c1, E0, E1 ) \
+                          - twop ) ** 2 )
+
+    # threepErr[ ts ][ ti ]
+
+    threepErr = []
+
+    for ti_ts, ts, threep_ts, threep_err_ts in zip( ti, tsink, threep, threep_err ):
+
+        for t, threep_ti, threep_err_ti in zip( ti_ts, threep_ts, threep_err_ts ):
+
+            #print "ti: " + str(t) + ", ts: " + str(ts) + ", a00: " + str(a00) + ", a01: " + str(a01) + ", a11: " + str(a11) + ", c0: " + str(c0) + ", c1: " + str(c1) + ", E0: " + str(E0) + ", E1: " + str(E1)
+
+            #print "data: " + str(threep_ti)
+
+            #print "function: " + str(twoStateThreep( t, ts, a00, a01, a11, E0, E1 ) )
+
+            #threepErr.append( ( ( twoStateThreep( t, ts, a00, a01, a11, E0, E1 ) \
+            #                      - threep_ti ) / threep_ti ) ** 2 )
+
+            #threepErr.append( ( ( twoStateThreep( t, ts, a00, a01, a11, E0, E1 ) \
+            #                      - threep_ti ) / threep_err_ti ) ** 2 )
+
+            threepErr.append( ( twoStateThreep( t, ts, a00, a01, a11, E0, E1 ) \
+                                - threep_ti ) ** 2 )
+
+    #print np.concatenate( ( twopErr, threepErr ) )
+
+    return np.sum( np.concatenate( ( twopErr, threepErr ) ) )
+
+
+def twoStateThreep( ti, tsink, a00, a01, a11, E0, E1 ):
+
+    return a00 * np.exp( -E0 * tsink ) \
+        + a01 * np.exp( -E0 * ( tsink - ti ) - E1 * ti ) \
+        + a01 * np.exp( -E1 * ( tsink - ti ) - E0 * ti ) \
+        + a11 * np.exp( -E1 * tsink )
+
+
+def twoStateTwop( tsink, c0, c1, E0, E1 ):
+
+    return c0 * np.exp( -E0 * tsink ) \
+        + c1 * np.exp( -E1 * tsink )
+
+
+def twopFit( twop, fitStart, fitEnd ):
+
+    # twop[ b, t ]
+
+    fit = []
+
+    # Check that number of bins is the same for all values of tsink
+
+    binNum = twop.shape[ 0 ]
+
+    print fitStart
+
+    print fitEnd
+
+    print range(fitStart,fitEnd+1)
+
+    t = np.array( range( fitStart, fitEnd + 1 ) )
+
+    for b in range( binNum ):
+
+        G = 0.1 
+        E = 0.1 
         
-        err.append( twoStateThreep( ti[ ts ], tsink[ ts ], a00, a01, a11, E0, E1 ) \
-                    - threep[ ts ] )
-    """
-    err0 = twoStateTwop( tsink0, c0, c1, E0, E1 ) \
-                - twop0
+        fitParams = np.array( [ G, E ] )
+
+        print t
+
+        print twop[ b, : ]
+
+        print twop[ b, fitStart : fitEnd + 1 ]
+
+        fit.append( minimize( twopExpErrFunction, fitParams, \
+                              args = ( t, twop[ b, fitStart : fitEnd + 1 ] ), \
+                              method='Nelder-Mead', jac = False, \
+                              options = {'maxiter':100000} ).x )
+
+    # End loop over bins
+
+    return np.array( fit )
+
+
+def twopExpErrFunction( fitParams, t, twop ):
+
+    G = fitParams[ 0 ]
+          
+    E = fitParams[ 1 ]
         
-    err1 = twoStateThreep( ti0, tsink0, a00, a01, a11, E0, E1 ) \
-                - threep0
+    # twopErr[ t ]
 
-    err2 = twoStateTwop( tsink1, c0, c1, E0, E1 ) \
-                - twop1
+    twopErr = np.array( ( ( twopExp( t, G, E, ) \
+                            - twop ) ) ** 2 )
 
-    err3 = twoStateThreep( ti1, tsink1, a00, a01, a11, E0, E1 ) \
-                - threep1
+    return np.sum( twopErr )
 
-    return np.concatenate( ( err0, err1, err2, err3 ) )
+
+def twopExp( t, G, E ):
+    
+    return G**2 / 2 / E * ( np.exp( -E * t ) + np.exp( -E * ( 64 - t ) ) )
 
 
 def fold( data ):

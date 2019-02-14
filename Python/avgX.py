@@ -7,11 +7,13 @@ import physQuants as pq
 
 Z = 1.0
 
+twopFitStart = 5
+
+twopFitEnd = 30
+
 particle_list = [ "pion", "kaon", "nucleon" ]
 
 format_list = [ "gpu", "cpu" ]
-
-# TO DO: add support nulceon
 
 #########################
 # Parse input arguments #
@@ -41,6 +43,10 @@ parser.add_argument( 't_sink', action='store', \
 
 parser.add_argument( "-o", "--output_template", action='store', type=str, default="./*.dat" )
 
+parser.add_argument( "-tsf", "--two_state_fit", action='store', \
+                     help="Comma seperated list in the form 'twop_rangeStart,twop_rangeEnd,threep_neglect'", \
+                     type=lambda s: [int(item) for item in s.split(',')] )
+
 parser.add_argument( "-f", "--data_format", action='store', help="Data format. Should be 'gpu' or 'cpu'.", type=str, default="gpu" )
 
 parser.add_argument( "-c", "--config_list", action='store', type=str, default="" )
@@ -69,9 +75,25 @@ particle = args.particle
 
 tsink = args.t_sink
 
+tsinkNum = len( tsink )
+
+twoStateFit = args.two_state_fit
+
 output_template = args.output_template
 
 dataFormat = args.data_format
+
+tsf = False
+
+if args.two_state_fit:
+
+    tsf = True
+
+    twop_rangeStart = args.two_state_fit[ 0 ]
+
+    twop_rangeEnd = args.two_state_fit[ 1 ]
+
+    threep_neglect = args.two_state_fit[ 2 ]
 
 # Check inputs
 
@@ -81,8 +103,8 @@ assert particle in particle_list, "Error: Particle not supported. " \
 assert dataFormat in format_list, "Error: Data format not supported. " \
     + "Supported particles: " + str( format_list )
 
-# Get configurations from given list or from given threep
-# directory if list not given
+# Get configurations from given list or from given 
+# threep directory if list not given
 
 configList = fncs.getConfigList( args.config_list, threepDir )
 
@@ -135,6 +157,12 @@ mEff_fit_avg = np.average( mEff_fit )
 
 mEff_fit_err = np.std( mEff_fit ) * float( binNum - 1 ) / np.sqrt( float( binNum ) )
 
+# Write fitted effective mass file
+
+mEff_outputFilename = output_template.replace( "*", "mEff_fit" )
+
+rw.writeFitDataFile( mEff_outputFilename, mEff_fit_avg, mEff_fit_err, mEff_fitStart, mEff_fitEnd )
+
 #######################
 # Two-point functions #
 #######################
@@ -142,7 +170,16 @@ mEff_fit_err = np.std( mEff_fit ) * float( binNum - 1 ) / np.sqrt( float( binNum
 # Get the real part of two-point functions
 # twop[ c, t ]
 
-twop = rw.getDatasets( twopDir, configList, twop_template, "twop" )[ :, 0, 0, ..., 0, 0 ]
+twop = []
+
+if dataFormat == "cpu":
+
+    twop = rw.getDatasets( twopDir, configList, twop_template, \
+                                            "msq0000", "arr" )[ :, 0, 0, :, 0 ].real
+
+else:
+        
+    twop = rw.getDatasets( twopDir, configList, twop_template, "twop" )[ :, 0, 0, ..., 0, 0 ]
 
 print "Read two-point functions from HDF5 files"
 
@@ -150,6 +187,12 @@ print "Read two-point functions from HDF5 files"
 # twop_jk[ b, t ]
 
 twop_jk = fncs.jackknife( twop, binSize )
+
+twop_err = np.std( twop_jk, axis=0 ) * float( binNum - 1 ) / np.sqrt( float( binNum ) )
+
+threep_jk = []
+
+threep_err = []
 
 for ts in tsink:
     
@@ -267,10 +310,56 @@ for ts in tsink:
             
         elif dataFormat == "cpu":
 
-            print "CPU format not supported for mesons, yet."
-            
-            exit()
+            filename_gxDx = threep_template + str( ts ) + ".up.h5"
 
+            threep_gxDx = rw.getDatasets( threepDir, configList, filename_gxDx, \
+                                            "=der:gxDx:sym=", "msq0000", "arr" )[ :, 0, 0, :, 0 ].real
+
+            filename_gyDy = threep_template + str( ts ) + ".up.h5"
+
+            threep_gyDy = rw.getDatasets( threepDir, configList, filename_gyDy, \
+                                            "=der:gyDy:sym=", "msq0000", "arr" )[ :, 0, 0, :, 0 ].real
+
+            filename_gzDz = threep_template + str( ts ) + ".up.h5"
+
+            threep_gzDz = rw.getDatasets( threepDir, configList, filename_gzDz, \
+                                            "=der:gzDz:sym=", "msq0000", "arr" )[ :, 0, 0, :, 0 ].real
+
+            filename_gtDt = threep_template + str( ts ) + ".up.h5"
+
+            threep_gtDt = rw.getDatasets( threepDir, configList, filename_gtDt, \
+                                            "=der:g0D0:sym=", "msq0000", "arr" )[ :, 0, 0, :, 0 ].real
+
+            threep_s_gxDx = np.array( [] )
+            
+            threep_s_gyDy = np.array( [] )
+        
+            threep_s_gzDz = np.array( [] )
+    
+            threep_s_gtDt = np.array( [] )
+
+            if particle == "kaon":
+            
+                filename_s_gxDx = threep_template + str( ts ) + ".strange.h5"
+
+                threep_s_gxDx = rw.getDatasets( threepDir, configList, filename_s_gxDx, \
+                                                "=der:gxDx:sym=", "msq0000", "arr" )[ :, 0, 0, :, 0 ].real
+
+                filename_s_gyDy = threep_template + str( ts ) + ".strange.h5"
+
+                threep_s_gyDy = rw.getDatasets( threepDir, configList, filename_s_gyDy, \
+                                                "=der:gyDy:sym=", "msq0000", "arr" )[ :, 0, 0, :, 0 ].real
+
+                filename_s_gzDz = threep_template + str( ts ) + ".strange.h5"
+
+                threep_s_gzDz = rw.getDatasets( threepDir, configList, filename_s_gzDz, \
+                                                "=der:gzDz:sym=", "msq0000", "arr" )[ :, 0, 0, :, 0 ].real
+                
+                filename_s_gtDt = threep_template + str( ts ) + ".strange.h5"
+
+                threep_s_gtDt = rw.getDatasets( threepDir, configList, filename_s_gtDt, \
+                                                "=der:g0D0:sym=", "msq0000", "arr" )[ :, 0, 0, :, 0 ].real
+            
     print "Read three-point functions from HDF5 files for tsink " + str( ts )
 
     # Subtract average over directions from gtDt
@@ -278,15 +367,27 @@ for ts in tsink:
     threep = threep_gtDt - 0.25 * ( threep_gtDt + threep_gxDx + threep_gyDy + threep_gzDz )
 
     # Jackknife
-    # threep_jk[ b, t ]
+    # threep_jk[ ts ][ b, t ]
     
-    threep_jk = fncs.jackknife( threep, binSize )
+    threep_jk.append( fncs.jackknife( threep, binSize ) )
+
+    threep_err.append( np.std( threep_jk[ -1 ], axis=0 ) * float( binNum - 1 ) / np.sqrt( float( binNum ) ) )
 
     #################
     # Calculate <x> #
     #################
 
-    avgX = Z * pq.calcAvgX( threep_jk, twop_jk[ :, ts ], mEff_fit_avg )
+    twopFitParams = fncs.twopFit( twop_jk, twopFitStart, twopFitEnd )
+
+    G = np.repeat( twopFitParams[ :, 0 ], ts + 1 ).reshape( binNum, ts + 1 )
+
+    E = np.repeat( twopFitParams[ :, 1 ], ts + 1 ).reshape( binNum, ts + 1 )
+
+    mEff_fit_cp = np.repeat( mEff_fit, ts + 1 ).reshape( binNum, ts + 1 )
+
+    avgX = -4.0/3.0/mEff_fit_cp * threep_jk[ -1 ] / fncs.twopExp( ts, G, E )
+
+    #avgX = Z * pq.calcAvgX( threep_jk[ -1 ], twop_jk[ :, ts ], mEff_fit_avg )
 
     # Average over bins
 
@@ -300,59 +401,17 @@ for ts in tsink:
 
     # <x>
     
-    avgX_outFilename = output_template.replace( "*", "avgX_tsink" + str( ts ) )
+    avgX_outFilename = output_template.replace( "*", "avgX_u_tsink" + str( ts ) )
 
-    rw.writeAvgDataFile( avgX_avg, avgX_err, avgX_outFilename )
-
-    # Fitted effective mass
-
-    mEff_outputFilename = output_template.replace( "*", "mEff_fit" )
-
-    rw.writeFitDatafile( mEff_outputFilename, mEff_fit_avg, mEff_fit_err, mEff_fitStart, mEff_fitEnd )
+    rw.writeAvgDataFile( avgX_outFilename, avgX_avg, avgX_err )
 
     ###############
     # Fit plateau #
     ###############
 
-    fitStart = []
+    fitStart = [ ts / 2 - 1, ts / 2 - 2, ts / 2 - 3 ]
 
-    fitEnd = []
-
-    if ts == 12:
-
-        fitStart = [ 5, 4, 3 ]
-
-        fitEnd = [ 7, 8, 9 ]
-
-    elif ts == 14:
-
-        fitStart = [ 6, 5, 4 ]
-
-        fitEnd = [ 8, 9, 10 ]
-
-    elif ts == 16:
-
-        fitStart = [ 7, 6, 5 ]
-
-        fitEnd = [ 9, 10, 11 ]
-
-    elif ts == 18:
-
-        fitStart = [ 8, 7, 6 ]
-
-        fitEnd = [ 10, 11, 12 ]
-
-    elif ts == 20:
-
-        fitStart = [ 9, 8, 7 ]
-
-        fitEnd = [ 11, 12, 13 ]
-
-    else:
-
-        print "Tsink not supported."
-
-        exit()
+    fitEnd = [ ts / 2 + 1, ts / 2 + 2, ts / 2 + 3 ]
 
     # Loop over fit ranges
 
@@ -380,23 +439,13 @@ for ts in tsink:
 
         avgX_fit_outFilename = ""
 
-        if particle == "nucleon":
+        avgX_fit_outFilename = output_template.replace( "*", \
+                                                        "avgX_u_fit_" \
+                                                        "tsink" + str( ts ) \
+                                                        + "_" + str( fitStart[ irange ] ) \
+                                                        + "_" + str( fitEnd[ irange ] ) )
 
-            avgX_fit_outFilename = output_template.replace( "*", \
-                                                            "avgX_fit_" \
-                                                            "tsink" + str( ts ) \
-                                                            + "_" + str( fitStart[ irange ] ) \
-                                                            + "_" + str( fitEnd[ irange ] ) )
-
-        else:
-
-            avgX_fit_outFilename = output_template.replace( "*", \
-                                                            "avgX_u_fit_" \
-                                                            "tsink" + str( ts ) \
-                                                            + "_" + str( fitStart[ irange ] ) \
-                                                            + "_" + str( fitEnd[ irange ] ) )
-
-        rw.writeFitDatafile( avgX_fit_outFilename, avgX_fit_avg, avgX_fit_err, fitStart[ irange ], fitEnd[ irange ] )
+        rw.writeFitDataFile( avgX_fit_outFilename, avgX_fit_avg, avgX_fit_err, fitStart[ irange ], fitEnd[ irange ] )
 
     if particle == "kaon":
 
@@ -433,13 +482,7 @@ for ts in tsink:
     
         avgX_s_outFilename = output_template.replace( "*", "avgX_s_tsink" + str( ts ) )
 
-        rw.writeAvgDataFile( avgX_s_avg, avgX_s_err, avgX_s_outFilename )
-
-        # Fitted effective mass
-
-        mEff_outputFilename = output_template.replace( "*", "mEff_fit" )
-
-        rw.writeFitDatafile( mEff_outputFilename, mEff_fit_avg, mEff_fit_err, mEff_fitStart, mEff_fitEnd )
+        rw.writeAvgDataFile( avgX_s_outFilename, avgX_s_avg, avgX_s_err )
 
         ###############
         # Fit plateau #
@@ -475,8 +518,148 @@ for ts in tsink:
                                                               + "_" + str( fitStart[ irange ] ) \
                                                               + "_" + str( fitEnd[ irange ] ) )
 
-            rw.writeFitDatafile( avgX_s_fit_outFilename, avgX_s_fit_avg, avgX_s_fit_err, fitStart[ irange ], fitEnd[ irange ] )
+            rw.writeFitDataFile( avgX_s_fit_outFilename, avgX_s_fit_avg, avgX_s_fit_err, fitStart[ irange ], fitEnd[ irange ] )
 
     print "Wrote output files for tsink " + str( ts )
 
 # End loop over tsink
+
+if( tsf ):
+
+    ##################
+    # Two-state Fit  #
+    ##################
+
+    #twop_rangeEnd = 10
+
+    #for twop_rangeStart in range(4,21):
+
+    #for twop_rangeStart in range( 0, twop_rangeEnd ):
+
+        #for threep_neglect in 2, 3:
+
+            threep_cp = []
+
+            threep_err_cp = []
+
+            # fitParams[ b, param ]
+
+            fitParams, chiSq = fncs.twoStateFit( twop_jk, twop_err, \
+                                                  twop_rangeStart, twop_rangeEnd, \
+                                                  threep_jk, threep_err, \
+                                                  threep_neglect )
+
+            #print fitParams.shape
+
+            a00 = fitParams[ :, 0 ]
+          
+            a01 = fitParams[ :, 1 ]
+
+            a11 = fitParams[ :, 2 ]
+          
+            c0 = fitParams[ :, 3 ]
+
+            c1 = fitParams[ :, 4 ]
+        
+            E0 = fitParams[ :, 5 ]
+                
+            E1 = fitParams[ :, 6 ]
+
+            # Calculate curve with constant tsink
+
+            curve = np.zeros( ( binNum, tsinkNum, 50 ) )
+
+            avgX = np.zeros( binNum )
+
+            t_i= np.zeros( ( tsinkNum, 50 ) )
+
+            for b in range( binNum ):
+
+                for ts in range( tsinkNum ):
+
+                    t_i[ ts, : ] = np.linspace( 0 + threep_neglect, tsink[ ts ] - threep_neglect, 50 )
+
+                    for t in range( t_i.shape[ -1 ] ):
+
+                        curve[ b, ts, t ] = -4.0 / 3.0 / mEff_fit[ b ] * Z \
+                                            * fncs.twoStateThreep( t_i[ ts, t ], tsink[ ts ], \
+                                                                   a00[ b ], a01[ b ], a11[ b ], \
+                                                                   E0[ b ], E1[ b ] ) \
+                                            / fncs.twoStateTwop( tsink[ ts ], c0[ b ], c1[ b ], \
+                                                                 E0[ b ], E1[ b ] )
+
+                        avgX[ b ] = -4.0 / 3.0 / mEff_fit[ b ] * Z * a00[ b ] / c0[ b ]
+
+                # Write curve with constant insertion time = tsink / 2
+
+                """
+                for b in range( binNum ):
+                    
+                t_s = np.linspace( tsink[ 0 ] - 2, tsink[ -1 ] + 2, 50 )
+
+                for t in range( t_s.shape[ 0 ] ):
+        
+                curve[ b, t ] = -4.0 / 3.0 / E0[ b ] * Z * \
+                fncs.twoStateThreep( t_s[ t ] / 2, t_s[ t ], \
+                a00[ b ], a01[ b ], a11[ b ], \
+                E0[ b ], E1[ b ] ) \
+                / fncs.twoStateTwop( t_s[ t ], c0[ b ], c1[ b ], \
+                E0[ b ], E1[ b] )
+                """
+            # Average over bins
+                    
+            curve_avg = np.average( curve, axis=0 )
+                
+            curve_err = np.std( curve, axis=0 ) * float( binNum - 1 ) / np.sqrt( float( binNum ) )
+                
+            fitParams_avg = np.average( fitParams, axis=0 )
+
+            fitParams_err = np.std( fitParams, axis=0 ) * float( binNum - 1 ) / np.sqrt( float( binNum ) )
+
+            chiSq_avg = np.average( chiSq, axis=0 )
+
+            chiSq_err = np.std( chiSq, axis=0 ) * float( binNum - 1 ) / np.sqrt( float( binNum ) )
+
+            avgX_avg = np.average( avgX )
+
+            avgX_err = np.std( avgX ) * float( binNum - 1 ) / np.sqrt( float( binNum ) )
+    
+            # Write output file
+
+            range_str = "2s" + str( twop_rangeStart ) \
+                        + ".2e" + str( twop_rangeEnd ) \
+                        + ".3n" + str( threep_neglect )
+
+            for ts in range( tsinkNum ):
+
+                curveOutputFilename \
+                    = output_template.replace( "*", \
+                                               "avgX_twoStateFit_curve_tsink" \
+                                               + str( tsink[ ts ] ) + "_" \
+                                               + range_str )
+
+                rw.writeAvgDataFile_wX( curveOutputFilename, t_i[ ts ], curve_avg[ ts ], curve_err[ ts ] )
+
+                avgXOutputFilename \
+                    = output_template.replace( "*", \
+                                               "avgX_twoStateFit_" \
+                                               + range_str )
+
+                rw.writeFitDataFile( avgXOutputFilename, avgX_avg, avgX_err, 0, 0 )
+
+                chiSqOutputFilename \
+                    = output_template.replace( "*", \
+                                               "avgX_twoStateFit_chiSq_" \
+                                               + range_str )
+
+                rw.writeFitDataFile( chiSqOutputFilename, chiSq_avg, chiSq_err, 0, 0 )
+
+                avgXParamsOutputFilename \
+                    = output_template.replace( "*", \
+                                               "avgX_twoStateFitParams_" \
+                                               + range_str )
+
+                rw.writeTSFParamsFile( avgXParamsOutputFilename, fitParams_avg, fitParams_err )
+
+# End if two-state fit
+

@@ -334,13 +334,13 @@ for ts in tsink:
     
     avgX_u_outFilename = output_template.replace( "*", "avgX_u_tsink" + str( ts ) )
 
-    rw.writeAvgDataFile( avgX_u_avg, avgX_u_err, avgX_u_outFilename )
+    rw.writeAvgDataFile( avgX_u_outFilename, avgX_u_avg, avgX_u_err )
 
     # Fitted effective mass
 
     mEff_outputFilename = output_template.replace( "*", "mEff_fit" )
 
-    rw.writeFitDatafile( mEff_outputFilename, mEff_fit_avg, mEff_fit_err, mEff_fitStart, mEff_fitEnd )
+    rw.writeFitDataFile( mEff_outputFilename, mEff_fit_avg, mEff_fit_err, mEff_fitStart, mEff_fitEnd )
 
     ###############
     # Fit plateau #
@@ -404,7 +404,7 @@ for ts in tsink:
                                                           + "_" + str( fitStart[ irange ] ) \
                                                           + "_" + str( fitEnd[ irange ] ) )
 
-        rw.writeFitDatafile( avgX_u_fit_outFilename, avgX_u_fit_avg, avgX_u_fit_err, fitStart[ irange ], fitEnd[ irange ] )
+        rw.writeFitDataFile( avgX_u_fit_outFilename, avgX_u_fit_avg, avgX_u_fit_err, fitStart[ irange ], fitEnd[ irange ] )
 
     if particle == "kaon":
 
@@ -437,13 +437,13 @@ for ts in tsink:
     
         avgX_s_outFilename = output_template.replace( "*", "avgX_s_tsink" + str( ts ) )
 
-        rw.writeAvgDataFile( avgX_s_avg, avgX_s_err, avgX_s_outFilename )
+        rw.writeAvgDataFile( avgX_s_outFilename, avgX_s_avg, avgX_s_err )
 
         # Fitted effective mass
 
         mEff_outputFilename = output_template.replace( "*", "mEff_fit" )
 
-        rw.writeFitDatafile( mEff_outputFilename, mEff_fit_avg, mEff_fit_err, mEff_fitStart, mEff_fitEnd )
+        rw.writeFitDataFile( mEff_outputFilename, mEff_fit_avg, mEff_fit_err, mEff_fitStart, mEff_fitEnd )
 
         ###############
         # Fit plateau #
@@ -507,7 +507,7 @@ for ts in tsink:
                                                               + "_" + str( fitStart[ irange ] ) \
                                                               + "_" + str( fitEnd[ irange ] ) )
 
-            rw.writeFitDatafile( avgX_s_fit_outFilename, avgX_s_fit_avg, avgX_s_fit_err, fitStart[ irange ], fitEnd[ irange ] )
+            rw.writeFitDataFile( avgX_s_fit_outFilename, avgX_s_fit_avg, avgX_s_fit_err, fitStart[ irange ], fitEnd[ irange ] )
 
     print "Wrote output files for tsink " + str( ts )
 

@@ -504,7 +504,7 @@ def detQsqConfigNumAndTimestepNum( filename ):
     return np.array( Qsq ), configNum, timestepNum
 
 
-def writeDataFile( data, filename ):
+def writeDataFile( filename, data ):
 
     if data.ndim != 2:
 
@@ -519,9 +519,11 @@ def writeDataFile( data, filename ):
             for d1 in range( len( data[ d0 ] ) ):
                 
                 output.write( str( d1 ).ljust(5) + str( data[ d0, d1 ] ) + "\n" )
+                
+    print "Wrote " + filename
 
 
-def writeAvgDataFile( data, error, filename ):
+def writeAvgDataFile( filename, data, error ):
 
     if data.ndim != 1:
 
@@ -541,18 +543,20 @@ def writeAvgDataFile( data, error, filename ):
 
             output.write( str( d0 ).ljust(5) + str( data[ d0 ] ).ljust(20) + str( error[ d0 ] ) + "\n" )
 
+    print "Wrote " + filename
 
-def writeAvgDataFile_wX( x, y, error, filename ):
+
+def writeAvgDataFile_wX( filename, x, y, error ):
 
     if y.ndim != 1:
 
-        print "Error (writeAvgDataFile): Data array has more than one dimension"
+        print "Error (writeAvgDataFile_wX): Data array has more than one dimension"
 
         return -1
 
     if y.shape != error.shape or len( y ) != len( error ):
 
-        print "Error (writeAvgDataFile): Error array's length and shape does not match data array's"
+        print "Error (writeAvgDataFile_wX): Error array's length and shape does not match data array's"
         
         return -1
 
@@ -560,7 +564,9 @@ def writeAvgDataFile_wX( x, y, error, filename ):
 
         for ix, iy, ierr in zip( x, y, error ):
 
-            output.write( str( ix ).ljust(5) + str( iy ).ljust(20) + str( ierr ) + "\n" )
+            output.write( str( ix ).ljust(20) + str( iy ).ljust(20) + str( ierr ) + "\n" )
+
+    print "Wrote " + filename
 
 
 def writeFormFactorFile( filename, data, Qsq ):
@@ -576,7 +582,9 @@ def writeFormFactorFile( filename, data, Qsq ):
                 
                 for t in range( data.shape[ 2 ] ):
 
-                    output.write( str( t ).ljust(5) + str( Qsq[ q ] ).ljust(5) + str( data[ q, b, t ] ) + "\n" )
+                    output.write( str( t ).ljust(20) + str( Qsq[ q ] ).ljust(20) + str( data[ q, b, t ] ) + "\n" )
+
+    print "Wrote " + filename
 
 
 def writeAvgFormFactorFile( filename, data, error, Qsq ):
@@ -598,8 +606,10 @@ def writeAvgFormFactorFile( filename, data, error, Qsq ):
                               + str( data[ q, t ] ).ljust(20) 
                               + str( error[ q, t ] ) + "\n" )
 
+    print "Wrote " + filename
 
-def writeFitDatafile( filename, fit, err, fitStart, fitEnd ):
+
+def writeFitDataFile( filename, fit, err, fitStart, fitEnd ):
 
     with open( filename, "w" ) as output:
 
@@ -607,3 +617,88 @@ def writeFitDatafile( filename, fit, err, fitStart, fitEnd ):
                       + str( err ).ljust( 20 ) 
                       + str( int( fitStart ) ).ljust( 5 ) 
                       + str( int( fitEnd ) ) + "\n" )
+
+    print "Wrote " + filename
+
+
+def writeTSFParamsFile( filename, params, params_err ):
+
+    assert len( params ) == 7, "Error (writeTwoStateFitParams): " \
+        + "number of fit parameters should be 7."
+
+    assert len( params ) == len( params_err ), \
+        "Error (writeTwoStateFitParams): " \
+        + "number of parameters and number of parameter errors do not match."
+
+    with open( filename, "w" ) as output:
+
+        # A00
+        output.write( "A00".ljust( 5 ) 
+                      + str( params[ 0 ] ).ljust( 20 ) 
+                      + str( params_err[ 0 ] ) + "\n" )
+
+        # A01
+        output.write( "A01".ljust( 5 ) 
+                      + str( params[ 1 ] ).ljust( 20 ) 
+                      + str( params_err[ 1 ] ) + "\n" )
+
+        # A11
+        output.write( "A11".ljust( 5 ) 
+                      + str( params[ 2 ] ).ljust( 20 ) 
+                      + str( params_err[ 2 ] ) + "\n" )
+
+        # c0
+        output.write( "c0".ljust( 5 ) 
+                      + str( params[ 3 ] ).ljust( 20 ) 
+                      + str( params_err[ 3 ] ) + "\n" )
+
+        # c1
+        output.write( "c1".ljust( 5 ) 
+                      + str( params[ 4 ] ).ljust( 20 ) 
+                      + str( params_err[ 4 ] ) + "\n" )
+
+        # E0
+        output.write( "E0".ljust( 5 ) 
+                      + str( params[ 5 ] ).ljust( 20 ) 
+                      + str( params_err[ 5 ] ) + "\n" )
+
+        # E1
+        output.write( "E1".ljust( 5 ) 
+                      + str( params[ 6 ] ).ljust( 20 ) 
+                      + str( params_err[ 6 ] ) + "\n" )
+
+    print "Wrote " + filename
+
+def writeTSFParamsFile_twop( filename, params, params_err ):
+
+    assert len( params ) == 4, "Error (writeTwoStateFitParams): " \
+        + "number of fit parameters should be 4."
+
+    assert len( params ) == len( params_err ), \
+        "Error (writeTwoStateFitParams): " \
+        + "number of parameters and number of parameter errors do not match."
+
+    with open( filename, "w" ) as output:
+
+        # c0
+        output.write( "c0".ljust( 5 ) 
+                      + str( params[ 0 ] ).ljust( 20 ) 
+                      + str( params_err[ 0 ] ) + "\n" )
+
+        # c1
+        output.write( "c1".ljust( 5 ) 
+                      + str( params[ 1 ] ).ljust( 20 ) 
+                      + str( params_err[ 1 ] ) + "\n" )
+
+        # E0
+        output.write( "E0".ljust( 5 ) 
+                      + str( params[ 2 ] ).ljust( 20 ) 
+                      + str( params_err[ 2 ] ) + "\n" )
+
+        # E1
+        output.write( "E1".ljust( 5 ) 
+                      + str( params[ 3 ] ).ljust( 20 ) 
+                      + str( params_err[ 3 ] ) + "\n" )
+
+    print "Wrote " + filename
+

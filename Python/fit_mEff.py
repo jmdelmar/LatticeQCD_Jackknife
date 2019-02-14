@@ -75,5 +75,5 @@ print str( mEff_fit_avg ) + "+/-" + str( mEff_fit_err )
 
 # Fitted effective mass
 
-rw.writeFitDatafile( output, mEff_fit_avg, mEff_fit_err, fitStart, fitEnd )
+rw.writeFitDataFile( output, mEff_fit_avg, mEff_fit_err, fitStart, fitEnd )
 
