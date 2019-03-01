@@ -7,7 +7,7 @@ import physQuants as pq
 
 Z = 1.0
 
-twopFitStart = 5
+twopFitStart = 10
 
 twopFitEnd = 30
 
@@ -204,162 +204,26 @@ for ts in tsink:
     # three-point functions at zero-momentum
     # threep[ c, t ]
 
-    if particle == "nucleon":
+    threeps = rw.readAvgXFile( threepDir, configList, threep_template, \
+                               ts, particle, dataFormat)
 
-        if dataFormat == "cpu":
-
-            filename_u_gxDx = threep_template + str( ts ) + ".up.h5"
-
-            threep_u_gxDx = rw.getDatasets( threepDir, configList, filename_u_gxDx, \
-                                            "=der:gxDx:sym=", "msq0000", "arr" )[ :, 0, 0, :, 0 ].real
-
-            filename_u_gyDy = threep_template + str( ts ) + ".up.h5"
-
-            threep_u_gyDy = rw.getDatasets( threepDir, configList, filename_u_gyDy, \
-                                            "=der:gyDy:sym=", "msq0000", "arr" )[ :, 0, 0, :, 0 ].real
-
-            filename_u_gzDz = threep_template + str( ts ) + ".up.h5"
-
-            threep_u_gzDz = rw.getDatasets( threepDir, configList, filename_u_gzDz, \
-                                            "=der:gzDz:sym=", "msq0000", "arr" )[ :, 0, 0, :, 0 ].real
-
-            filename_u_gtDt = threep_template + str( ts ) + ".up.h5"
-
-            threep_u_gtDt = rw.getDatasets( threepDir, configList, filename_u_gtDt, \
-                                            "=der:g0D0:sym=", "msq0000", "arr" )[ :, 0, 0, :, 0 ].real
-
-            filename_d_gxDx = threep_template + str( ts ) + ".dn.h5"
-
-            threep_d_gxDx = rw.getDatasets( threepDir, configList, filename_d_gxDx, \
-                                            "=der:gxDx:sym=", "msq0000", "arr" )[ :, 0, 0, :, 0 ].real
-
-            filename_d_gyDy = threep_template + str( ts ) + ".dn.h5"
-
-            threep_d_gyDy = rw.getDatasets( threepDir, configList, filename_d_gyDy, \
-                                            "=der:gyDy:sym=", "msq0000", "arr" )[ :, 0, 0, :, 0 ].real
-
-            filename_d_gzDz = threep_template + str( ts ) + ".dn.h5"
-
-            threep_d_gzDz = rw.getDatasets( threepDir, configList, filename_d_gzDz, \
-                                            "=der:gzDz:sym=", "msq0000", "arr" )[ :, 0, 0, :, 0 ].real
-
-            filename_d_gtDt = threep_template + str( ts ) + ".dn.h5"
-
-            threep_d_gtDt = rw.getDatasets( threepDir, configList, filename_d_gtDt, \
-                                            "=der:g0D0:sym=", "msq0000", "arr" )[ :, 0, 0, :, 0 ].real
-            
-            threep_gxDx = threep_u_gxDx - threep_d_gxDx
-
-            threep_gyDy = threep_u_gyDy - threep_d_gyDy
-
-            threep_gzDz = threep_u_gzDz - threep_d_gzDz
-
-            threep_gtDt = threep_u_gtDt - threep_d_gtDt
-
-        else:
-
-            print "GPU format not supported for nucleon, yet."
-
-            exit()
-
-    else: # Particle is meson
-
-        if dataFormat == "gpu":
-
-            threep_gxDx = rw.getDatasets( threepDir, configList, threep_template, \
-                                          "tsink_" + str( ts ), "oneD", "dir_00", \
-                                          "up", "threep" )[ :, 0, 0, ..., 0, 1, 0 ]
-
-            threep_gyDy = rw.getDatasets( threepDir, configList, threep_template, \
-                                          "tsink_" + str( ts ), "oneD", "dir_01", \
-                                          "up", "threep" )[ :, 0, 0, ..., 0, 2, 0 ]
+    threep_gxDx = threeps[0]
+    threep_gyDy = threeps[1]
+    threep_gzDz = threeps[2]
+    threep_gtDt = threeps[3]
     
-            threep_gzDz = rw.getDatasets( threepDir, configList, threep_template, \
-                                          "tsink_" + str( ts ), "oneD", "dir_02", \
-                                          "up", "threep" )[ :, 0, 0, ..., 0, 3, 0 ]
+    threep_s_gxDx = []
+    threep_s_gyDy = []
+    threep_s_gzDz = []
+    threep_s_gtDt = []
 
-            threep_gtDt = rw.getDatasets( threepDir, configList, threep_template, \
-                                            "tsink_" + str( ts ), "oneD", "dir_03", \
-                                            "up", "threep" )[ :, 0, 0, ..., 0, 4, 0 ]
+    if particle == "kaon":
 
-            threep_s_gxDx = np.array( [] )
-            
-            threep_s_gyDy = np.array( [] )
-        
-            threep_s_gzDz = np.array( [] )
-    
-            threep_s_gtDt = np.array( [] )
+        threep_s_gxDx = threeps[4]
+        threep_s_gyDy = threeps[5]
+        threep_s_gzDz = threeps[6]
+        threep_s_gtDt = threeps[7]
 
-            if particle == "kaon":
-            
-                threep_s_gxDx = rw.getDatasets( threepDir, configList, threep_template, \
-                                                "tsink_" + str( ts ), "oneD", "dir_00", \
-                                                "strange", "threep" )[ :, 0, 0, ..., 0, 1, 0 ]
-
-                threep_s_gyDy = rw.getDatasets( threepDir, configList, threep_template, \
-                                                "tsink_" + str( ts ), "oneD", "dir_01", \
-                                                "strange", "threep" )[ :, 0, 0, ..., 0, 2, 0 ]
-    
-                threep_s_gzDz = rw.getDatasets( threepDir, configList, threep_template, \
-                                                "tsink_" + str( ts ), "oneD", "dir_02", \
-                                                "strange", "threep" )[ :, 0, 0, ..., 0, 3, 0 ]
-
-                threep_s_gtDt = rw.getDatasets( threepDir, configList, threep_template, \
-                                                "tsink_" + str( ts ), "oneD", "dir_03", \
-                                                "strange", "threep" )[ :, 0, 0, ..., 0, 4, 0 ]
-            
-        elif dataFormat == "cpu":
-
-            filename_gxDx = threep_template + str( ts ) + ".up.h5"
-
-            threep_gxDx = rw.getDatasets( threepDir, configList, filename_gxDx, \
-                                            "=der:gxDx:sym=", "msq0000", "arr" )[ :, 0, 0, :, 0 ].real
-
-            filename_gyDy = threep_template + str( ts ) + ".up.h5"
-
-            threep_gyDy = rw.getDatasets( threepDir, configList, filename_gyDy, \
-                                            "=der:gyDy:sym=", "msq0000", "arr" )[ :, 0, 0, :, 0 ].real
-
-            filename_gzDz = threep_template + str( ts ) + ".up.h5"
-
-            threep_gzDz = rw.getDatasets( threepDir, configList, filename_gzDz, \
-                                            "=der:gzDz:sym=", "msq0000", "arr" )[ :, 0, 0, :, 0 ].real
-
-            filename_gtDt = threep_template + str( ts ) + ".up.h5"
-
-            threep_gtDt = rw.getDatasets( threepDir, configList, filename_gtDt, \
-                                            "=der:g0D0:sym=", "msq0000", "arr" )[ :, 0, 0, :, 0 ].real
-
-            threep_s_gxDx = np.array( [] )
-            
-            threep_s_gyDy = np.array( [] )
-        
-            threep_s_gzDz = np.array( [] )
-    
-            threep_s_gtDt = np.array( [] )
-
-            if particle == "kaon":
-            
-                filename_s_gxDx = threep_template + str( ts ) + ".strange.h5"
-
-                threep_s_gxDx = rw.getDatasets( threepDir, configList, filename_s_gxDx, \
-                                                "=der:gxDx:sym=", "msq0000", "arr" )[ :, 0, 0, :, 0 ].real
-
-                filename_s_gyDy = threep_template + str( ts ) + ".strange.h5"
-
-                threep_s_gyDy = rw.getDatasets( threepDir, configList, filename_s_gyDy, \
-                                                "=der:gyDy:sym=", "msq0000", "arr" )[ :, 0, 0, :, 0 ].real
-
-                filename_s_gzDz = threep_template + str( ts ) + ".strange.h5"
-
-                threep_s_gzDz = rw.getDatasets( threepDir, configList, filename_s_gzDz, \
-                                                "=der:gzDz:sym=", "msq0000", "arr" )[ :, 0, 0, :, 0 ].real
-                
-                filename_s_gtDt = threep_template + str( ts ) + ".strange.h5"
-
-                threep_s_gtDt = rw.getDatasets( threepDir, configList, filename_s_gtDt, \
-                                                "=der:g0D0:sym=", "msq0000", "arr" )[ :, 0, 0, :, 0 ].real
-            
     print "Read three-point functions from HDF5 files for tsink " + str( ts )
 
     # Subtract average over directions from gtDt
@@ -538,128 +402,133 @@ if( tsf ):
 
         #for threep_neglect in 2, 3:
 
-            threep_cp = []
+    threep_cp = []
 
-            threep_err_cp = []
+    threep_err_cp = []
 
-            # fitParams[ b, param ]
+    # fitParams[ b, param ]
 
-            fitParams, chiSq = fncs.twoStateFit( twop_jk, twop_err, \
-                                                  twop_rangeStart, twop_rangeEnd, \
-                                                  threep_jk, threep_err, \
-                                                  threep_neglect )
+    fitParams, chiSq = fncs.twoStateFit( twop_jk, twop_err, \
+                                         twop_rangeStart, twop_rangeEnd, \
+                                         threep_jk, threep_err, \
+                                         threep_neglect )
 
-            #print fitParams.shape
+    #print fitParams.shape
 
-            a00 = fitParams[ :, 0 ]
+    a00 = fitParams[ :, 0 ]
           
-            a01 = fitParams[ :, 1 ]
+    a01 = fitParams[ :, 1 ]
 
-            a11 = fitParams[ :, 2 ]
+    a11 = fitParams[ :, 2 ]
           
-            c0 = fitParams[ :, 3 ]
-
-            c1 = fitParams[ :, 4 ]
+    c0 = fitParams[ :, 3 ]
+            
+    c1 = fitParams[ :, 4 ]
         
-            E0 = fitParams[ :, 5 ]
+    E0 = fitParams[ :, 5 ]
                 
-            E1 = fitParams[ :, 6 ]
+    E1 = fitParams[ :, 6 ]
 
-            # Calculate curve with constant tsink
+    # Calculate curve with constant tsink
 
-            curve = np.zeros( ( binNum, tsinkNum, 50 ) )
+    curve = np.zeros( ( binNum, tsinkNum, 50 ) )
 
-            avgX = np.zeros( binNum )
+    avgX = np.zeros( binNum )
 
-            t_i= np.zeros( ( tsinkNum, 50 ) )
+    t_i= np.zeros( ( tsinkNum, 50 ) )
 
-            for b in range( binNum ):
+    for b in range( binNum ):
 
-                for ts in range( tsinkNum ):
+        for ts in range( tsinkNum ):
 
-                    t_i[ ts, : ] = np.linspace( 0 + threep_neglect, tsink[ ts ] - threep_neglect, 50 )
+            t_i[ ts, : ] = np.linspace( 0 + threep_neglect, tsink[ ts ] - threep_neglect, 50 )
 
-                    for t in range( t_i.shape[ -1 ] ):
+            for t in range( t_i.shape[ -1 ] ):
 
-                        curve[ b, ts, t ] = -4.0 / 3.0 / mEff_fit[ b ] * Z \
-                                            * fncs.twoStateThreep( t_i[ ts, t ], tsink[ ts ], \
-                                                                   a00[ b ], a01[ b ], a11[ b ], \
-                                                                   E0[ b ], E1[ b ] ) \
-                                            / fncs.twoStateTwop( tsink[ ts ], c0[ b ], c1[ b ], \
-                                                                 E0[ b ], E1[ b ] )
+                curve[ b, ts, t ] = -4.0 / 3.0 / mEff_fit[ b ] * Z \
+                                    * fncs.twoStateThreep( t_i[ ts, t ], tsink[ ts ], \
+                                                           a00[ b ], a01[ b ], a11[ b ], \
+                                                           E0[ b ], E1[ b ] ) \
+                                    / fncs.twoStateTwop( tsink[ ts ], c0[ b ], c1[ b ], \
+                                                         E0[ b ], E1[ b ] )
 
-                        avgX[ b ] = -4.0 / 3.0 / mEff_fit[ b ] * Z * a00[ b ] / c0[ b ]
+            # End loop over insertion time
+        # End loop over tsink
 
-                # Write curve with constant insertion time = tsink / 2
+        avgX[ b ] = -4.0 / 3.0 / mEff_fit[ b ] * Z * a00[ b ] / c0[ b ]
 
-                """
-                for b in range( binNum ):
+        # Write curve with constant insertion time = tsink / 2
+
+        """
+        for b in range( binNum ):
                     
-                t_s = np.linspace( tsink[ 0 ] - 2, tsink[ -1 ] + 2, 50 )
+        t_s = np.linspace( tsink[ 0 ] - 2, tsink[ -1 ] + 2, 50 )
 
-                for t in range( t_s.shape[ 0 ] ):
+        for t in range( t_s.shape[ 0 ] ):
         
-                curve[ b, t ] = -4.0 / 3.0 / E0[ b ] * Z * \
-                fncs.twoStateThreep( t_s[ t ] / 2, t_s[ t ], \
-                a00[ b ], a01[ b ], a11[ b ], \
-                E0[ b ], E1[ b ] ) \
-                / fncs.twoStateTwop( t_s[ t ], c0[ b ], c1[ b ], \
-                E0[ b ], E1[ b] )
-                """
-            # Average over bins
+        curve[ b, t ] = -4.0 / 3.0 / E0[ b ] * Z * \
+        fncs.twoStateThreep( t_s[ t ] / 2, t_s[ t ], \
+        a00[ b ], a01[ b ], a11[ b ], \
+        E0[ b ], E1[ b ] ) \
+        / fncs.twoStateTwop( t_s[ t ], c0[ b ], c1[ b ], \
+        E0[ b ], E1[ b] )
+        """
+    # End loop over bins
+
+    # Average over bins
                     
-            curve_avg = np.average( curve, axis=0 )
+    curve_avg = np.average( curve, axis=0 )
                 
-            curve_err = np.std( curve, axis=0 ) * float( binNum - 1 ) / np.sqrt( float( binNum ) )
+    curve_err = np.std( curve, axis=0 ) * float( binNum - 1 ) / np.sqrt( float( binNum ) )
                 
-            fitParams_avg = np.average( fitParams, axis=0 )
+    fitParams_avg = np.average( fitParams, axis=0 )
 
-            fitParams_err = np.std( fitParams, axis=0 ) * float( binNum - 1 ) / np.sqrt( float( binNum ) )
+    fitParams_err = np.std( fitParams, axis=0 ) * float( binNum - 1 ) / np.sqrt( float( binNum ) )
 
-            chiSq_avg = np.average( chiSq, axis=0 )
+    chiSq_avg = np.average( chiSq, axis=0 )
 
-            chiSq_err = np.std( chiSq, axis=0 ) * float( binNum - 1 ) / np.sqrt( float( binNum ) )
+    chiSq_err = np.std( chiSq, axis=0 ) * float( binNum - 1 ) / np.sqrt( float( binNum ) )
 
-            avgX_avg = np.average( avgX )
+    avgX_avg = np.average( avgX )
 
-            avgX_err = np.std( avgX ) * float( binNum - 1 ) / np.sqrt( float( binNum ) )
+    avgX_err = np.std( avgX ) * float( binNum - 1 ) / np.sqrt( float( binNum ) )
     
-            # Write output file
+    # Write output file
 
-            range_str = "2s" + str( twop_rangeStart ) \
-                        + ".2e" + str( twop_rangeEnd ) \
-                        + ".3n" + str( threep_neglect )
+    range_str = "2s" + str( twop_rangeStart ) \
+                + ".2e" + str( twop_rangeEnd ) \
+                + ".3n" + str( threep_neglect )
 
-            for ts in range( tsinkNum ):
+    for ts in range( tsinkNum ):
 
-                curveOutputFilename \
-                    = output_template.replace( "*", \
-                                               "avgX_twoStateFit_curve_tsink" \
-                                               + str( tsink[ ts ] ) + "_" \
-                                               + range_str )
+        curveOutputFilename \
+            = output_template.replace( "*", \
+                                       "avgX_twoStateFit_curve_tsink" \
+                                       + str( tsink[ ts ] ) + "_" \
+                                       + range_str )
 
-                rw.writeAvgDataFile_wX( curveOutputFilename, t_i[ ts ], curve_avg[ ts ], curve_err[ ts ] )
+        rw.writeAvgDataFile_wX( curveOutputFilename, t_i[ ts ], curve_avg[ ts ], curve_err[ ts ] )
 
-                avgXOutputFilename \
-                    = output_template.replace( "*", \
-                                               "avgX_twoStateFit_" \
-                                               + range_str )
+        avgXOutputFilename \
+            = output_template.replace( "*", \
+                                       "avgX_twoStateFit_" \
+                                       + range_str )
 
-                rw.writeFitDataFile( avgXOutputFilename, avgX_avg, avgX_err, 0, 0 )
+        rw.writeFitDataFile( avgXOutputFilename, avgX_avg, avgX_err, 0, 0 )
 
-                chiSqOutputFilename \
-                    = output_template.replace( "*", \
-                                               "avgX_twoStateFit_chiSq_" \
-                                               + range_str )
+        chiSqOutputFilename \
+            = output_template.replace( "*", \
+                                       "avgX_twoStateFit_chiSq_" \
+                                       + range_str )
 
-                rw.writeFitDataFile( chiSqOutputFilename, chiSq_avg, chiSq_err, 0, 0 )
+        rw.writeFitDataFile( chiSqOutputFilename, chiSq_avg, chiSq_err, 0, 0 )
 
-                avgXParamsOutputFilename \
-                    = output_template.replace( "*", \
-                                               "avgX_twoStateFitParams_" \
-                                               + range_str )
+        avgXParamsOutputFilename \
+            = output_template.replace( "*", \
+                                       "avgX_twoStateFitParams_" \
+                                       + range_str )
 
-                rw.writeTSFParamsFile( avgXParamsOutputFilename, fitParams_avg, fitParams_err )
+        rw.writeTSFParamsFile( avgXParamsOutputFilename, fitParams_avg, fitParams_err )
 
 # End if two-state fit
 

@@ -7,6 +7,31 @@ from scipy.optimize import leastsq, fmin, minimize
 from os import listdir as ls
 from glob import glob
 
+def initEmptyList( list_in, list_in_order ):
+
+    list_out = []
+
+    if list_in_order == 1:
+
+        list_out = [ [] for i in range( list_in ) ]
+
+    elif list_in_order == 2:
+
+        list_out = [ [ [] for j in range( len( list_in[i] ) ) ] \
+                     for i in range( len( list_in ) ) ]
+
+    elif list_in_order == 3:
+
+        list_out = [ [ [ [] for k in range( len( list_in[i][j] ) ) ] \
+                       for j in range( len( list_in[i] ) ) ] \
+                     for i in range( len( list_in ) ) ]
+
+    else:
+
+        print "Error(initEmptyList): list order not supported.\n"
+
+    return list_out
+
 #def twoStateFitCurve_constTs( a00, a01, a11, E0, E1 ):
 
 
@@ -213,11 +238,11 @@ def twopFit( twop, fitStart, fitEnd ):
 
     binNum = twop.shape[ 0 ]
 
-    print fitStart
+    #print fitStart
 
-    print fitEnd
+    #print fitEnd
 
-    print range(fitStart,fitEnd+1)
+    #print range(fitStart,fitEnd+1)
 
     t = np.array( range( fitStart, fitEnd + 1 ) )
 
@@ -228,11 +253,11 @@ def twopFit( twop, fitStart, fitEnd ):
         
         fitParams = np.array( [ G, E ] )
 
-        print t
+        #print t
 
-        print twop[ b, : ]
+        #print twop[ b, : ]
 
-        print twop[ b, fitStart : fitEnd + 1 ]
+        #print twop[ b, fitStart : fitEnd + 1 ]
 
         fit.append( minimize( twopExpErrFunction, fitParams, \
                               args = ( t, twop[ b, fitStart : fitEnd + 1 ] ), \
