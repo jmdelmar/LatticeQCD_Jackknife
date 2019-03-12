@@ -7,6 +7,70 @@ from scipy.optimize import leastsq, fmin, minimize
 from os import listdir as ls
 from glob import glob
 
+def signToString( val ):
+
+    if val >= 0:
+
+        return "+"
+
+    else:
+
+        return "-"
+
+def combineMomBoosts(threep, momSq):
+
+    if momSq == 0:
+
+        # Nothing to be done for zero-momentum boost
+
+        return threep
+
+    elif momSq == 2:
+
+        # Momentum boosts should be ordered as:
+
+        # [ +1, +1,  0],
+        # [ +1,  0, +1],
+        # [  0, +1, +1],
+        # [ +1, -1,  0],
+        # [ +1,  0, -1],
+        # [  0, +1, -1],
+        # [ -1, +1,  0],
+        # [ -1,  0, +1],
+        # [  0, -1, +1],
+        # [ -1, -1,  0],
+        # [ -1,  0, -1],
+        # [  0, -1, -1]
+
+        return threep[0, ...] + threep[1, ...] + threep[2, ...] \
+            + threep[3, ...] + threep[4, ...] + threep[5, ...] \
+            + threep[6, ...] + threep[7, ...] + threep[8, ...] \
+            + threep[9, ...] + threep[10, ...] + threep[11, ...] / 12
+
+    elif momSq == 3:
+
+        # Momentum boosts should be ordered as:
+
+        # [ +1, +1, +1],
+        # [ -1, +1, +1],
+        # [ +1, -1, +1],
+        # [ +1, +1, -1],
+        # [ +1, -1, -1],
+        # [ -1, +1, -1],
+        # [ -1, -1, +1],
+        # [ -1, -1, -1]
+
+        return threep[0, ...] + threep[1, ...] \
+            + threep[2, ...] + threep[3, ...] \
+            + threep[4, ...] + threep[5, ...] \
+            + threep[6, ...] + threep[7, ...] / 8
+
+    else:
+
+        print "Error: momentum boost squared value " \
+            + momSq + " is not supported.\n"
+
+
 def initEmptyList( list_in, list_in_order ):
 
     list_out = []
@@ -287,6 +351,66 @@ def twopExp( t, G, E ):
     
     return G**2 / 2 / E * ( np.exp( -E * t ) + np.exp( -E * ( 64 - t ) ) )
 
+"""
+def threepFit( threep, fitStart, fitEnd ):
+
+    # threep[ b, t ]
+
+    fit = []
+
+    # Check that number of bins is the same for all values of tsink
+
+    binNum = threep.shape[ 0 ]
+
+    #print fitStart
+
+    #print fitEnd
+
+    #print range(fitStart,fitEnd+1)
+
+    t = np.array( range( fitStart, fitEnd + 1 ) )
+
+    for b in range( binNum ):
+
+        G = 0.1 
+        E = 0.1 
+        
+        fitParams = np.array( [ G, E ] )
+
+        #print t
+
+        #print threep[ b, : ]
+
+        #print threep[ b, fitStart : fitEnd + 1 ]
+
+        fit.append( minimize( threepExpErrFunction, fitParams, \
+                              args = ( t, threep[ b, fitStart : fitEnd + 1 ] ), \
+                              method='Nelder-Mead', jac = False, \
+                              options = {'maxiter':100000} ).x )
+
+    # End loop over bins
+
+    return np.array( fit )
+
+
+def threepExpErrFunction( fitParams, t, threep ):
+
+    G = fitParams[ 0 ]
+          
+    E = fitParams[ 1 ]
+        
+    # threepErr[ t ]
+
+    threepErr = np.array( ( ( threepExp( t, G, E, ) \
+                            - threep ) ) ** 2 )
+
+    return np.sum( threepErr )
+
+
+def threepExp( t, G, E ):
+    
+    return G**2 / 2 / E * ( np.exp( -E * t ) + np.exp( -E * ( 64 - t ) ) )
+"""
 
 def fold( data ):
 
