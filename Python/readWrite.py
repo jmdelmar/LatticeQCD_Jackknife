@@ -444,38 +444,34 @@ def readAvgXFile( threepDir, configList, threep_template,
 
         elif dataFormat == "cpu":
 
-            filename_gxDx = threep_template + str( ts ) + ".up.h5"
+            filename = threep_template + ".up.h5"
+
+            print filename
 
             threep_gxDx = getDatasets( threepDir, \
                                           configList, \
-                                          filename_gxDx, \
+                                          filename, \
                                             "=der:gxDx:sym=", \
                                           "msq0000", \
                                           "arr" )[ :, 0, 0, :, 0 ].real
 
-            filename_gyDy = threep_template + str( ts ) + ".up.h5"
-
             threep_gyDy = getDatasets( threepDir, \
                                           configList, \
-                                          filename_gyDy, \
+                                          filename, \
                                             "=der:gyDy:sym=", \
                                           "msq0000", \
                                           "arr" )[ :, 0, 0, :, 0 ].real
 
-            filename_gzDz = threep_template + str( ts ) + ".up.h5"
-
             threep_gzDz = getDatasets( threepDir, \
                                           configList, \
-                                          filename_gzDz, \
+                                          filename, \
                                             "=der:gzDz:sym=", \
                                           "msq0000", \
                                           "arr" )[ :, 0, 0, :, 0 ].real
 
-            filename_gtDt = threep_template + str( ts ) + ".up.h5"
-
             threep_gtDt = getDatasets( threepDir, \
                                           configList, \
-                                          filename_gtDt, \
+                                          filename, \
                                             "=der:g0D0:sym=", \
                                           "msq0000", \
                                           "arr" )[ :, 0, 0, :, 0 ].real
@@ -490,38 +486,32 @@ def readAvgXFile( threepDir, configList, threep_template,
 
             if particle == "kaon":
             
-                filename_s_gxDx = threep_template + str( ts ) + ".strange.h5"
+                filename_s = threep_template + ".strange.h5"
 
                 threep_s_gxDx = getDatasets( threepDir, \
                                                 configList, \
-                                                filename_s_gxDx, \
+                                                filename_s, \
                                                 "=der:gxDx:sym=", \
                                                 "msq0000", \
                                                 "arr" )[ :, 0, 0, :, 0 ].real
 
-                filename_s_gyDy = threep_template + str( ts ) + ".strange.h5"
-
                 threep_s_gyDy = getDatasets( threepDir, \
                                                 configList, \
-                                                filename_s_gyDy, \
+                                                filename_s, \
                                                 "=der:gyDy:sym=", \
                                                 "msq0000", \
                                                 "arr" )[ :, 0, 0, :, 0 ].real
 
-                filename_s_gzDz = threep_template + str( ts ) + ".strange.h5"
-
                 threep_s_gzDz = getDatasets( threepDir, \
                                                 configList, \
-                                                filename_s_gzDz, \
+                                                filename_s, \
                                                 "=der:gzDz:sym=", \
                                                 "msq0000", \
                                                 "arr" )[ :, 0, 0, :, 0 ].real
                 
-                filename_s_gtDt = threep_template + str( ts ) + ".strange.h5"
-
                 threep_s_gtDt = getDatasets( threepDir, \
                                                 configList, \
-                                                filename_s_gtDt, \
+                                                filename_s, \
                                                 "=der:g0D0:sym=", \
                                                 "msq0000", \
                                                 "arr" )[ :, 0, 0, :, 0 ].real

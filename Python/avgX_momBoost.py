@@ -7,6 +7,8 @@ import physQuants as pq
 
 Z = 1.0
 
+L=32
+
 twopFitStart = 10
 
 twopFitEnd = 30
@@ -45,6 +47,8 @@ parser.add_argument( 't_sink', action='store', \
                      help="Comma seperated list of t sink's", \
                      type=lambda s: [int(item) for item in s.split(',')] )
 
+parser.add_argument( "mom_squared", action='store', type=int )
+
 parser.add_argument( "-o", "--output_template", action='store', type=str, default="./*.dat" )
 
 parser.add_argument( "-f", "--data_format", action='store', help="Data format. Should be 'gpu' or 'cpu'.", type=str, default="gpu" )
@@ -77,9 +81,9 @@ particle = args.particle
 
 tsink = args.t_sink
 
-tsinkNum = len( tsink )
+momSq = args.mom_squared
 
-twoStateFit = args.two_state_fit
+tsinkNum = len( tsink )
 
 output_template = args.output_template
 
@@ -184,50 +188,67 @@ threep_jk = []
 
 threep_err = []
 
+momList = []
+
+if momSq == 2:
+
+    momList = [ +1, +1,  0], \
+              [ +1,  0, +1], \
+              [  0, +1, +1], \
+              [ +1, -1,  0], \
+              [ +1,  0, -1], \
+              [  0, +1, -1], \
+              [ -1, +1,  0], \
+              [ -1,  0, +1], \
+              [  0, -1, +1], \
+              [ -1, -1,  0], \
+              [ -1,  0, -1], \
+              [  0, -1, -1]
+
+elif momSq == 3:
+
+    momList = [ +1, +1, +1], \
+              [ -1, +1, +1], \
+              [ +1, -1, +1], \
+              [ +1, +1, -1], \
+              [ +1, -1, -1], \
+              [ -1, +1, -1], \
+              [ -1, -1, +1], \
+              [ -1, -1, -1]
+
+momBoostNum = len( momList )
+
+pSq = (2*np.pi/L)**2 * momSq
+
+energy = np.sqrt( mEff_fit**2 + pSq )                                                                                                                                                              
 for ts in tsink:
     
-    momList = []
+    threep_mom = [ [] for imom in range( momBoostNum ) ]
 
-    if momSq == 2:
+    threep_s_mom = [ [] for imom in range( momBoostNum ) ]
 
-        momList = [ +1, +1,  0], \
-                  [ +1,  0, +1], \
-                  [  0, +1, +1], \
-                  [ +1, -1,  0], \
-                  [ +1,  0, -1], \
-                  [  0, +1, -1], \
-                  [ -1, +1,  0], \
-                  [ -1,  0, +1], \
-                  [  0, -1, +1], \
-                  [ -1, -1,  0], \
-                  [ -1,  0, -1], \
-                  [  0, -1, -1]
+    for imom in range( momBoostNum ):
 
-    elif momSq == 3:
-
-        momList = [ +1, +1, +1], \
-                  [ -1, +1, +1], \
-                  [ +1, -1, +1], \
-                  [ +1, +1, -1], \
-                  [ +1, -1, -1], \
-                  [ -1, +1, -1], \
-                  [ -1, -1, +1], \
-                  [ -1, -1, -1]
-
-    momBoostNum = len( momList )
-
-    threep = [ [] for imom in range( momBoostNum ) ]
-
-    for imom in range(  ):
+        if dataFormat == "cpu":
         
-        threep_template = threep_pre_template + \
-                          fncs.signToString( momList[imom,0] ) \
-                          + momList[imom,0] \
-                          + fncs.signToString( momList[imom,1] ) \
-                          + momList[imom,1] \
-                          + fncs.signToString( momList[imom,2] ) \
-                          + momList[imom,2] \
-                          + threep_suf_template
+            threep_template = threep_pre_template + \
+                              fncs.signToString( momList[imom][0] ) \
+                              + str(momList[imom][0]) + "_" \
+                              + fncs.signToString( momList[imom][1] ) \
+                              + str(momList[imom][1]) + "_" \
+                              + fncs.signToString( momList[imom][2] ) \
+                              + str(momList[imom][2])
+
+        else:
+
+            threep_template = threep_pre_template + \
+                              fncs.signToString( momList[imom][0] ) \
+                              + str(momList[imom][0]) + "_" \
+                              + fncs.signToString( momList[imom][1] ) \
+                              + str(momList[imom][1]) + "_" \
+                              + fncs.signToString( momList[imom][2] ) \
+                              + str(momList[imom][2]) \
+                              + threep_suf_template
 
         #########################
         # Three-point functions #
@@ -267,7 +288,19 @@ for ts in tsink:
                                       + threep_gyDy \
                                       + threep_gzDz )
 
+        if particle == "kaon":
+
+            threep_s_mom[ imom ] = threep_s_gtDt - \
+                                   0.25 * ( threep_s_gtDt \
+                                            + threep_s_gxDx \
+                                            + threep_s_gyDy \
+                                            + threep_s_gzDz )
+
         # End loop over momenta
+
+    threep_mom = np.array( threep_mom )
+
+    threep_s_mom = np.array( threep_s_mom )
 
     threep = fncs.combineMomBoosts( threep_mom, momSq )
 
@@ -290,7 +323,18 @@ for ts in tsink:
 
     mEff_fit_cp = np.repeat( mEff_fit, ts + 1 ).reshape( binNum, ts + 1 )
 
-    avgX = -4.0/3.0/mEff_fit_cp * threep_jk[ -1 ] / fncs.twopExp( ts, G, E )
+    pSq_cp = np.repeat( pSq, \
+                        binNum * (ts + 1) ).reshape( binNum, ts + 1 )
+                                                                                                                                                             
+    energy_cp = np.repeat( energy, \
+                           ts + 1 ).reshape( binNum, ts + 1 )
+
+    preFactor = -2.0/mEff_fit_cp**2 * energy_cp * ( energy_cp + mEff_fit_cp ) \
+                / ( 3 * energy_cp**2 + pSq_cp )
+
+    avgX = preFactor * threep_jk[-1][:,:ts+1] / fncs.twopExp( ts, G, E )
+
+    #avgX = -4.0/3.0/mEff_fit_cp * threep_jk[ -1 ] / fncs.twopExp( ts, G, E )
 
     #avgX = Z * pq.calcAvgX( threep_jk[ -1 ], twop_jk[ :, ts ], mEff_fit_avg )
 
@@ -317,6 +361,8 @@ for ts in tsink:
         ###########################
         # Repeat for strange part #
         ###########################
+
+        threep_s = fncs.combineMomBoosts( threep_s_mom, momSq )
 
         # Subtract average over directions from gtDt
 

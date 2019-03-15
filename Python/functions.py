@@ -15,7 +15,7 @@ def signToString( val ):
 
     else:
 
-        return "-"
+        return ""
 
 def combineMomBoosts(threep, momSq):
 

@@ -6,6 +6,8 @@ import functions as fncs
 import readWrite as rw
 import physQuants as pq
 
+format_list = [ "gpu", "cpu" ]
+
 #########################
 # Parse input arguments #
 #########################
@@ -20,6 +22,8 @@ parser.add_argument( "binSize", action='store', type=int )
 
 parser.add_argument( "-o", "--output", action='store', type=str, default="./*.dat" )
 
+parser.add_argument( "-f", "--data_format", action='store', help="Data format. Should be 'gpu' or 'cpu'.", type=str, default="gpu" )
+
 parser.add_argument( "-c", "--config_list", action='store', type=str, default="" )
 
 args = parser.parse_args()
@@ -31,6 +35,11 @@ filename_template = args.filename_template
 binSize = args.binSize
 
 output_template = args.output
+
+dataFormat = args.data_format
+
+assert dataFormat in format_list, "Error: Data format not supported. " \
+    + "Supported particles: " + str( format_list )
 
 configList = fncs.getConfigList( args.config_list, twopDir )
 
@@ -49,7 +58,16 @@ binNum = configNum / binSize
 # Get real part of zero-momentum two-point functions
 # twop[ c, t ]
 
-twop = rw.getDatasets( twopDir, configList, filename_template, "twop" )[ :, 0, 0, :, 0, 0 ]
+twop = []
+
+if dataFormat == "cpu":
+
+    twop = rw.getDatasets( twopDir, configList, filename_template, \
+                                            "msq0000", "arr" )[ :, 0, 0, :, 0 ].real
+
+else:
+        
+    twop = rw.getDatasets( twopDir, configList, filename_template, "twop" )[ :, 0, 0, ..., 0, 0 ]
 
 print "Read two-point functions from HDF5 files"
             
