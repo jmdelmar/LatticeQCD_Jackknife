@@ -321,7 +321,19 @@ for ts in tsink:
 
     E = np.repeat( twopFitParams[ :, 1 ], ts + 1 ).reshape( binNum, ts + 1 )
 
-    mEff_fit_cp = np.repeat( mEff_fit, ts + 1 ).reshape( binNum, ts + 1 )
+    mEff_fit_cp = np.repeat( mEff_fit, \
+                             ts + 1 ).reshape( binNum, ts + 1 )
+
+    pSq_cp = np.repeat( pSq, \
+                        binNum * (ts + 1) ).reshape( binNum, ts + 1 )
+
+    energy_cp = np.repeat( energy, \
+                           binNum * (ts + 1) ).reshape( binNum, ts + 1 )
+
+    preFactor = -2.0/mEff_fit_cp**2 * energy_cp * ( energy_cp + mEff_fit_cp ) \
+                / ( 3 * energy_cp**2 + pSq_cp )
+
+    avgX = preFactor * threep_jk[-1] / fncs.twopExp( ts, G, E )
 
     pSq_cp = np.repeat( pSq, \
                         binNum * (ts + 1) ).reshape( binNum, ts + 1 )
