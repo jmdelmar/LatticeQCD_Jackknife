@@ -7,6 +7,8 @@ import physQuants as pq
 
 Z = 1.0
 
+L=32
+
 twopFitStart = 10
 
 twopFitEnd = 30
@@ -184,49 +186,53 @@ threep_jk = []
 
 threep_err = []
 
+momList = []
+
+pSq = (2*np.pi/L)**2 * momSq
+
+energy = np.sqrt( mEff_fit**2 + pSq )
+
+if momSq == 2:
+
+    momList = [ +1, +1,  0], \
+              [ +1,  0, +1], \
+              [  0, +1, +1], \
+              [ +1, -1,  0], \
+              [ +1,  0, -1], \
+              [  0, +1, -1], \
+              [ -1, +1,  0], \
+              [ -1,  0, +1], \
+              [  0, -1, +1], \
+              [ -1, -1,  0], \
+              [ -1,  0, -1], \
+              [  0, -1, -1]
+
+elif momSq == 3:
+
+    momList = [ +1, +1, +1], \
+              [ -1, +1, +1], \
+              [ +1, -1, +1], \
+              [ +1, +1, -1], \
+              [ +1, -1, -1], \
+              [ -1, +1, -1], \
+              [ -1, -1, +1], \
+              [ -1, -1, -1]
+
+momBoostNum = len( momList )
+
 for ts in tsink:
     
-    momList = []
-
-    if momSq == 2:
-
-        momList = [ +1, +1,  0], \
-                  [ +1,  0, +1], \
-                  [  0, +1, +1], \
-                  [ +1, -1,  0], \
-                  [ +1,  0, -1], \
-                  [  0, +1, -1], \
-                  [ -1, +1,  0], \
-                  [ -1,  0, +1], \
-                  [  0, -1, +1], \
-                  [ -1, -1,  0], \
-                  [ -1,  0, -1], \
-                  [  0, -1, -1]
-
-    elif momSq == 3:
-
-        momList = [ +1, +1, +1], \
-                  [ -1, +1, +1], \
-                  [ +1, -1, +1], \
-                  [ +1, +1, -1], \
-                  [ +1, -1, -1], \
-                  [ -1, +1, -1], \
-                  [ -1, -1, +1], \
-                  [ -1, -1, -1]
-
-    momBoostNum = len( momList )
-
     threep = [ [] for imom in range( momBoostNum ) ]
 
     for imom in range(  ):
         
         threep_template = threep_pre_template + \
                           fncs.signToString( momList[imom,0] ) \
-                          + momList[imom,0] \
+                          + str(momList[imom,0]) \
                           + fncs.signToString( momList[imom,1] ) \
-                          + momList[imom,1] \
+                          + str(momList[imom,1]) \
                           + fncs.signToString( momList[imom,2] ) \
-                          + momList[imom,2] \
+                          + str(momList[imom,2]) \
                           + threep_suf_template
 
         #########################
@@ -288,9 +294,21 @@ for ts in tsink:
 
     E = np.repeat( twopFitParams[ :, 1 ], ts + 1 ).reshape( binNum, ts + 1 )
 
-    mEff_fit_cp = np.repeat( mEff_fit, ts + 1 ).reshape( binNum, ts + 1 )
+    mEff_fit_cp = np.repeat( mEff_fit, \
+                             ts + 1 ).reshape( binNum, ts + 1 )
 
-    avgX = -4.0/3.0/mEff_fit_cp * threep_jk[ -1 ] / fncs.twopExp( ts, G, E )
+    pSq_cp = np.repeat( pSq, \
+                        binNum * (ts + 1) ).reshape( binNum, ts + 1 )
+
+    energy_cp = np.repeat( energy, \
+                           binNum * (ts + 1) ).reshape( binNum, ts + 1 )
+
+    preFactor = -2.0/mEff_fit_cp**2 * energy_cp * ( energy_cp + mEff_fit_cp ) \
+                / ( 3 * energy_cp**2 + pSq_cp )
+
+    avgX = preFactor * threep_jk[-1] / fncs.twopExp( ts, G, E )
+
+    #avgX = -4.0/3.0/mEff_fit_cp * threep_jk[ -1 ] / fncs.twopExp( ts, G, E )
 
     #avgX = Z * pq.calcAvgX( threep_jk[ -1 ], twop_jk[ :, ts ], mEff_fit_avg )
 
