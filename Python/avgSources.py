@@ -126,7 +126,7 @@ if nptFunction == "2" or nptFunction == "both":
                     "Momenta lists in configuration " + configList[ c ] \
                     + " do not match"
 
-print "Read data from HDF5 files"
+print( "Read data from HDF5 files" )
 
 
 if nptFunction == "3" or nptFunction == "both":

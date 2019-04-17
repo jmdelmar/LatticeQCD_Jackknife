@@ -285,7 +285,7 @@ for b in range( binNum ):
 
         for t in range( t_i.shape[ -1 ] ):
 
-            curve[ b, ts, t ] = fncs.twoStateThreep( t_i[ ts, t ], tsink[ ts ], \
+            curve[ b, ts, t ] = fit.twoStateThreep( t_i[ ts, t ], tsink[ ts ], \
                                                      a00[ b ], a01[ b ], a11[ b ], \
                                                      E0[ b ], E1[ b ] )
 

@@ -4,12 +4,13 @@ from scipy.optimize import curve_fit
 import functions as fncs
 import readWrite as rw
 import physQuants as pq
+import lqcdjk_fitting as fit
 
 Z = 1.0
 
-twopFitStart = 10
+#twopFitStart = 10
 
-twopFitEnd = 30
+#twopFitEnd = 30
 
 particle_list = [ "pion", "kaon", "nucleon" ]
 
@@ -120,9 +121,9 @@ timestepNum, binNum = rw.detTimestepAndConfigNum( mEff_filename )
 
 if configNum % binNum != 0:
 
-    print "Number of configurations " + str( configNum ) \
-        + " not evenly divided by number of bins " + str( binNum ) \
-        + " in effective mass file " + mEff_filename + ".\n"
+    print( "Number of configurations " + str( configNum ) \
+           + " not evenly divided by number of bins " + str( binNum ) \
+           + " in effective mass file " + mEff_filename + ".\n" )
 
     exit()
 
@@ -153,7 +154,7 @@ for b in range( binNum ):
                                 mEff[ b, mEff_fitStart : mEff_fitEnd + 1 ], \
                                 0, w=mEff_err[ mEff_fitStart : mEff_fitEnd + 1 ] )
 
-print "Fit effective mass"
+print( "Fit effective mass" )
 
 # Average over bins
 
@@ -185,7 +186,7 @@ else:
         
     twop = rw.getDatasets( twopDir, configList, twop_template, "twop" )[ :, 0, 0, ..., 0, 0 ]
 
-print "Read two-point functions from HDF5 files"
+print( "Read two-point functions from HDF5 files" )
 
 # Jackknife
 # twop_jk[ b, t ]
@@ -228,7 +229,7 @@ for ts in tsink:
         threep_s_gzDz = threeps[6]
         threep_s_gtDt = threeps[7]
 
-    print "Read three-point functions from HDF5 files for tsink " + str( ts )
+    print( "Read three-point functions from HDF5 files for tsink " + str( ts ) )
 
     # Subtract average over directions from gtDt
 
@@ -245,17 +246,17 @@ for ts in tsink:
     # Calculate <x> #
     #################
 
-    twopFitParams = fncs.twopFit( twop_jk, twopFitStart, twopFitEnd )
+    #twopFitParams = fit.twopFit( twop_jk, twopFitStart, twopFitEnd )
 
-    G = np.repeat( twopFitParams[ :, 0 ], ts + 1 ).reshape( binNum, ts + 1 )
+    #G = np.repeat( twopFitParams[ :, 0 ], ts + 1 ).reshape( binNum, ts + 1 )
 
-    E = np.repeat( twopFitParams[ :, 1 ], ts + 1 ).reshape( binNum, ts + 1 )
+    #E = np.repeat( twopFitParams[ :, 1 ], ts + 1 ).reshape( binNum, ts + 1 )
 
-    mEff_fit_cp = np.repeat( mEff_fit, ts + 1 ).reshape( binNum, ts + 1 )
+    #mEff_fit_cp = np.repeat( mEff_fit, ts + 1 ).reshape( binNum, ts + 1 )
 
-    avgX = -4.0/3.0/mEff_fit_cp * threep_jk[ -1 ] / fncs.twopExp( ts, G, E )
+    #avgX = -4.0/3.0/mEff_fit_cp * threep_jk[ -1 ] / fit.twopExp( ts, G, E )
 
-    #avgX = Z * pq.calcAvgX( threep_jk[ -1 ], twop_jk[ :, ts ], mEff_fit_avg )
+    avgX = Z * pq.calcAvgX( threep_jk[ -1 ], twop_jk[ :, ts ], mEff_fit )
 
     # Average over bins
 
@@ -388,7 +389,7 @@ for ts in tsink:
 
             rw.writeFitDataFile( avgX_s_fit_outFilename, avgX_s_fit_avg, avgX_s_fit_err, fitStart[ irange ], fitEnd[ irange ] )
 
-    print "Wrote output files for tsink " + str( ts )
+    print( "Wrote output files for tsink " + str( ts ) )
 
 # End loop over tsink
 
@@ -412,10 +413,10 @@ if( tsf ):
 
     # fitParams[ b, param ]
 
-    fitParams, chiSq = fncs.twoStateFit( twop_jk, twop_err, \
+    fitParams, chiSq = fit.twoStateFit( twop_jk, twop_err, \
                                          twop_rangeStart, twop_rangeEnd, \
                                          threep_jk, threep_err, \
-                                         threep_neglect )
+                                         threep_neglect, tsink )
 
     #print fitParams.shape
 
@@ -450,10 +451,10 @@ if( tsf ):
             for t in range( t_i.shape[ -1 ] ):
 
                 curve[ b, ts, t ] = -4.0 / 3.0 / mEff_fit[ b ] * Z \
-                                    * fncs.twoStateThreep( t_i[ ts, t ], tsink[ ts ], \
+                                    * fit.twoStateThreep( t_i[ ts, t ], tsink[ ts ], \
                                                            a00[ b ], a01[ b ], a11[ b ], \
                                                            E0[ b ], E1[ b ] ) \
-                                    / fncs.twoStateTwop( tsink[ ts ], c0[ b ], c1[ b ], \
+                                    / fit.twoStateTwop( tsink[ ts ], c0[ b ], c1[ b ], \
                                                          E0[ b ], E1[ b ] )
 
             # End loop over insertion time
@@ -471,10 +472,10 @@ if( tsf ):
         for t in range( t_s.shape[ 0 ] ):
                     
         curve[ b, t ] = -4.0 / 3.0 / E0[ b ] * Z * \
-        fncs.twoStateThreep( t_s[ t ] / 2, t_s[ t ], \
+        fit.twoStateThreep( t_s[ t ] / 2, t_s[ t ], \
         a00[ b ], a01[ b ], a11[ b ], \
         E0[ b ], E1[ b ] ) \
-        / fncs.twoStateTwop( t_s[ t ], c0[ b ], c1[ b ], \
+        / fit.twoStateTwop( t_s[ t ], c0[ b ], c1[ b ], \
         E0[ b ], E1[ b] )
         """
     # End loop over bins

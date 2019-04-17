@@ -4,6 +4,7 @@ from scipy.optimize import leastsq
 import functions as fncs
 import readWrite as rw
 import physQuants as pq
+import lqcdjk_fitting as fit
 
 Z = 1.0
 
@@ -82,7 +83,7 @@ twop_err = np.std( twop_jk, axis=0 ) * float( binNum - 1 ) / np.sqrt( float( bin
 
 # fitParams[ b, param ]
 
-fitParams = fncs.twoStateFit_twop( twop_jk )
+fitParams = fit.twoStateFit_twop( twop_jk )
 
 c0 = fitParams[ :, 0 ]
 
@@ -102,7 +103,7 @@ for b in range( binNum ):
 
     for t in range( tNum ):
 
-        curve[ b, t ] = fncs.twoStateTwop( t, \
+        curve[ b, t ] = fit.twoStateTwop( t, \
                                            c0[ b ], c1[ b ], \
                                            E0[ b ], E1[ b ] )
 

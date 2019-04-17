@@ -4,6 +4,7 @@ from scipy.optimize import leastsq
 import functions as fncs
 import readWrite as rw
 import physQuants as pq
+import lqcdjk_fitting as fit
 
 Z = 1.0
 
@@ -263,9 +264,9 @@ for ts in range( tsinkNum ):
 
     threep_cp.append( threep_jk[ ts ][ :, 2:-2 ] )
 
-fitParams = fncs.twoStateFit( twop_jk, threep_cp )
+fitParams = fit.twoStateFit( twop_jk, threep_cp )
 """
-fitParams = fncs.twoStateFit( twop_jk, threep_jk )
+fitParams = fit.twoStateFit( twop_jk, threep_jk )
 
 a00 = fitParams[ :, 0 ]
           
@@ -295,7 +296,7 @@ for b in range( binNum ):
 
         for t in range( t_i.shape[ -1 ] ):
 
-            curve[ b, ts, t ] = fncs.twoStateThreep( t_i[ ts, t ], tsink[ ts ], \
+            curve[ b, ts, t ] = fit.twoStateThreep( t_i[ ts, t ], tsink[ ts ], \
                                                      a00[ b ], a01[ b ], a11[ b ], \
                                                      E0[ b ], E1[ b ] )
 

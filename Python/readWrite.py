@@ -343,7 +343,7 @@ def readAvgXFile( threepDir, configList, threep_template,
 
         else:
 
-            print "GPU format not supported for nucleon, yet."
+            print( "GPU format not supported for nucleon, yet." )
 
             exit()
 
@@ -437,16 +437,14 @@ def readAvgXFile( threepDir, configList, threep_template,
 
             else: 
 
-                print "Error (readAvgXFile): Particle " \
-                    + particle + " not supported."
+                print( "Error (readAvgXFile): Particle " \
+                    + particle + " not supported." )
 
                 exit()                
 
         elif dataFormat == "cpu":
 
             filename = threep_template + ".up.h5"
-
-            print filename
 
             threep_gxDx = getDatasets( threepDir, \
                                           configList, \
@@ -525,8 +523,8 @@ def readAvgXFile( threepDir, configList, threep_template,
 
             else: 
 
-                print "Error (readAvgXFile): Particle " \
-                    + particle + " not supported."
+                print( "Error (readAvgXFile): Particle " \
+                    + particle + " not supported." )
 
                 exit()                
 
@@ -595,8 +593,8 @@ def detTimestepAndConfigNum( filename ):
 
             else:
 
-                print "Error (detTimestepAndConfigNum): Timestep in 1st column " \
-                    + "does not behave as expected"
+                print( "Error (detTimestepAndConfigNum): Timestep in 1st column " \
+                    + "does not behave as expected" )
 
                 return -1
 
@@ -649,8 +647,8 @@ def detConfigAndTimestepNum( filename ):
 
             else:
 
-                print "Error (detTimestepAndConfigNum): Timestep in 1st column " \
-                    + "does not behave as expected"
+                print( "Error (detTimestepAndConfigNum): Timestep in 1st column " \
+                    + "does not behave as expected" )
 
                 return -1
 
@@ -726,8 +724,8 @@ def detQsqConfigNumAndTimestepNum( filename ):
 
             else:
 
-                print "Error (detTimestepAndConfigNum): Timestep in 1st column " \
-                    + "does not behave as expected"
+                print( "Error (detTimestepAndConfigNum): Timestep in 1st column " \
+                    + "does not behave as expected" )
 
                 return -1
 
@@ -752,7 +750,7 @@ def writeDataFile( filename, data ):
 
     if data.ndim != 2:
 
-        print "Error (writeDataFile): Data array does not have two dimensions"
+        print( "Error (writeDataFile): Data array does not have two dimensions" )
 
         return -1
 
@@ -764,20 +762,20 @@ def writeDataFile( filename, data ):
                 
                 output.write( str( d1 ).ljust(5) + str( data[ d0, d1 ] ) + "\n" )
                 
-    print "Wrote " + filename
+    print( "Wrote " + filename )
 
 
 def writeAvgDataFile( filename, data, error ):
 
     if data.ndim != 1:
 
-        print "Error (writeAvgDataFile): Data array has more than one dimension"
+        print( "Error (writeAvgDataFile): Data array has more than one dimension" )
 
         return -1
 
     if data.shape != error.shape or len( data ) != len( error ):
 
-        print "Error (writeAvgDataFile): Error array's length and shape does not match data array's"
+        print( "Error (writeAvgDataFile): Error array's length and shape does not match data array's" )
         
         return -1
 
@@ -787,20 +785,20 @@ def writeAvgDataFile( filename, data, error ):
 
             output.write( str( d0 ).ljust(5) + str( data[ d0 ] ).ljust(20) + str( error[ d0 ] ) + "\n" )
 
-    print "Wrote " + filename
+    print( "Wrote " + filename )
 
 
 def writeAvgDataFile_wX( filename, x, y, error ):
 
     if y.ndim != 1:
 
-        print "Error (writeAvgDataFile_wX): Data array has more than one dimension"
+        print( "Error (writeAvgDataFile_wX): Data array has more than one dimension" )
 
         return -1
 
     if y.shape != error.shape or len( y ) != len( error ):
 
-        print "Error (writeAvgDataFile_wX): Error array's length and shape does not match data array's"
+        print( "Error (writeAvgDataFile_wX): Error array's length and shape does not match data array's" )
         
         return -1
 
@@ -810,7 +808,7 @@ def writeAvgDataFile_wX( filename, x, y, error ):
 
             output.write( str( ix ).ljust(20) + str( iy ).ljust(20) + str( ierr ) + "\n" )
 
-    print "Wrote " + filename
+    print( "Wrote " + filename )
 
 
 def writeFormFactorFile( filename, data, Qsq ):
@@ -828,7 +826,7 @@ def writeFormFactorFile( filename, data, Qsq ):
 
                     output.write( str( t ).ljust(20) + str( Qsq[ q ] ).ljust(20) + str( data[ q, b, t ] ) + "\n" )
 
-    print "Wrote " + filename
+    print( "Wrote " + filename )
 
 
 def writeAvgFormFactorFile( filename, data, error, Qsq ):
@@ -850,7 +848,7 @@ def writeAvgFormFactorFile( filename, data, error, Qsq ):
                               + str( data[ q, t ] ).ljust(20) 
                               + str( error[ q, t ] ) + "\n" )
 
-    print "Wrote " + filename
+    print( "Wrote " + filename )
 
 
 def writeFitDataFile( filename, fit, err, fitStart, fitEnd ):
@@ -862,7 +860,7 @@ def writeFitDataFile( filename, fit, err, fitStart, fitEnd ):
                       + str( int( fitStart ) ).ljust( 5 ) 
                       + str( int( fitEnd ) ) + "\n" )
 
-    print "Wrote " + filename
+    print( "Wrote " + filename )
 
 
 def writeTSFParamsFile( filename, params, params_err ):
@@ -911,7 +909,7 @@ def writeTSFParamsFile( filename, params, params_err ):
                       + str( params[ 6 ] ).ljust( 20 ) 
                       + str( params_err[ 6 ] ) + "\n" )
 
-    print "Wrote " + filename
+    print( "Wrote " + filename )
 
 def writeTSFParamsFile_twop( filename, params, params_err ):
 
@@ -944,5 +942,5 @@ def writeTSFParamsFile_twop( filename, params, params_err ):
                       + str( params[ 3 ] ).ljust( 20 ) 
                       + str( params_err[ 3 ] ) + "\n" )
 
-    print "Wrote " + filename
+    print( "Wrote " + filename )
 

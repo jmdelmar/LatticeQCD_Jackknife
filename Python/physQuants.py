@@ -62,13 +62,39 @@ def calcAvgX( threep, twop_tsink, mEff ):
 
     # threep[ b, t ]
     # twop_tsink[ b ]
-    # mEff
+    # mEff[ b ]
 
     avgX = np.zeros( threep.shape )
 
     for t in range( threep.shape[ 1 ] ):
 
         avgX[ :, t ] = -4.0 / 3.0 / mEff * threep[ :, t ] / twop_tsink
+
+    return avgX
+
+
+def calcAvgX_momBoost( threep, twop_tsink, mEff, momSq, L ):
+
+    # threep[ b, t ]
+    # twop_tsink[ b ]
+    # mEff[ b ]
+    # momSq
+    # L
+
+    pSq = (2*np.pi/L)**2 * momSq
+
+    energy = np.sqrt( mEff**2 + pSq )
+    """
+    preFactor = -2.0 / mEff**2 * \
+                energy * ( energy + mEff ) \
+                / ( 3 * energy**2 + pSq )
+    """
+    preFactor = 1.0
+    avgX = np.zeros( threep.shape )
+
+    for t in range( threep.shape[ 1 ] ):
+
+        avgX[ :, t ] = preFactor * threep[ :, t ] / twop_tsink
 
     return avgX
 
