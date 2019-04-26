@@ -176,21 +176,153 @@ rw.writeFitDataFile( mEff_outputFilename, mEff_fit_avg, mEff_fit_err, mEff_fitSt
 # Two-state Fit  #
 ##################
 
-#for twop_rangeStart in range( 10, 20 ):
+for twop_rangeStart in range( 0, 6 ):
 
-    #for twop_rangeEnd in range(twop_rangeStart+4,31):
+    for twop_rangeEnd in range(10,20):
 
-        #for threep_neglect in 2, 3:
+        # fitParams[ b, param ]
+        
+        fitParams, chiSq = fit.twoStateFit_twop( twop_jk, \
+                                                 twop_rangeStart, \
+                                                 twop_rangeEnd )
 
+        c0 = fitParams[ :, 0 ]
+        c1 = fitParams[ :, 1 ]
+        E0 = fitParams[ :, 2 ]
+        E1 = fitParams[ :, 3 ]
+
+        for threep_neglect in 2,3:
+
+            fitParams, chiSq = fit.twoStateFit_threep( threep_jk, \
+                                                       threep_neglect, \
+                                                       tsink, E0, E1 )
+
+            a00 = fitParams[ :, 0 ]
+            a01 = fitParams[ :, 1 ]
+            a11 = fitParams[ :, 2 ]
+          
+            fitParams = np.stack( ( a00, a01, a11, c0, c1, E0, E1 ), axis=1 )
+
+            # Calculate curve with constant tsink
+
+            curve = np.zeros( ( binNum, tsinkNum, 50 ) )
+
+            avgX = np.zeros( binNum )
+
+            t_i= np.zeros( ( tsinkNum, 50 ) )
+
+            for b in range( binNum ):
+
+                for ts in range( tsinkNum ):
+
+                    t_i[ ts, : ] = np.linspace( threep_neglect, tsink[ ts ] - threep_neglect, 50 )
+
+                    for t in range( t_i.shape[ -1 ] ):
+
+                        curve[ b, ts, t ] = -4.0 / 3.0 / mEff_fit[ b ] * Z \
+                                            * fit.twoStateThreep( t_i[ ts, t ], tsink[ ts ], \
+                                                                   a00[ b ], a01[ b ], a11[ b ], \
+                                                                   E0[ b ], E1[ b ] ) \
+                                            / fit.twoStateTwop( tsink[ ts ], c0[ b ], c1[ b ], \
+                                                                 E0[ b ], E1[ b ] )
+
+                    # End loop over insertion time
+                # End loop over tsink
+
+                avgX[ b ] = -4.0 / 3.0 / mEff_fit[ b ] * Z * a00[ b ] / c0[ b ]
+
+                # Write curve with constant insertion time = tsink / 2
+
+                #for b in range( binNum ):
+                    
+                #t_s = np.linspace( tsink[ 0 ] - 2, tsink[ -1 ] + 2, 50 )
+
+                #for t in range( t_s.shape[ 0 ] ):
+                    
+                #curve[ b, t ] = -4.0 / 3.0 / E0[ b ] * Z * \
+                #fit.twoStateThreep( t_s[ t ] / 2, t_s[ t ], \
+                #a00[ b ], a01[ b ], a11[ b ], \
+                #E0[ b ], E1[ b ] ) \
+                #/ fit.twoStateTwop( t_s[ t ], c0[ b ], c1[ b ], \
+                #E0[ b ], E1[ b] )
+
+            # End loop over bins
+        
+            # Average over bins
+                    
+            curve_avg = np.average( curve, axis=0 )
+                
+            curve_err = np.std( curve, axis=0 ) * float( binNum - 1 ) / np.sqrt( float( binNum ) )
+                
+            fitParams_avg = np.average( fitParams, axis=0 )
+
+            fitParams_err = np.std( fitParams, axis=0 ) * float( binNum - 1 ) / np.sqrt( float( binNum ) )
+
+            chiSq_avg = np.average( chiSq, axis=0 )
+
+            chiSq_err = np.std( chiSq, axis=0 ) * float( binNum - 1 ) / np.sqrt( float( binNum ) )
+
+            avgX_avg = np.average( avgX )
+
+            avgX_err = np.std( avgX ) * float( binNum - 1 ) / np.sqrt( float( binNum ) )
+    
+            # Write output file
+
+            range_str = "2s" + str( twop_rangeStart ) \
+                        + ".2e" + str( twop_rangeEnd ) \
+                        + ".3n" + str( threep_neglect )
+
+            print( range_str + ":" )
+
+            check = ""
+
+            if mEff_fit_err < (fitParams_avg[6] - fitParams_avg[5])/2:
+
+                check = "True"
+
+            else: 
+                
+                check = "False"
+
+            print( "dm < (E1-E0)/2: " + check )
+
+            avgXOutputFilename \
+                = output_template.replace( "*", \
+                                           "avgX_twoStateFit_" \
+                                           + range_str + "_" + ts_range_str )
+                
+            rw.writeFitDataFile( avgXOutputFilename, avgX_avg, avgX_err, 0, 0 )
+
+            chiSqOutputFilename \
+                = output_template.replace( "*", \
+                                           "avgX_twoStateFit_chiSq_" \
+                                           + range_str + "_" + ts_range_str )
+            
+            rw.writeFitDataFile( chiSqOutputFilename, chiSq_avg, chiSq_err, 0, 0 )
+
+            avgXParamsOutputFilename \
+                = output_template.replace( "*", \
+                                           "avgX_twoStateFitParams_" \
+                                           + range_str + "_" + ts_range_str )
+
+            rw.writeTSFParamsFile( avgXParamsOutputFilename, fitParams_avg, fitParams_err )
+
+            for ts in range( tsinkNum ):
+
+                curveOutputFilename \
+                    = output_template.replace( "*", \
+                                               "avgX_twoStateFit_curve_tsink" \
+                                               + str( tsink[ ts ] ) + "_" \
+                                               + range_str + "_" + ts_range_str )
+
+                rw.writeAvgDataFile_wX( curveOutputFilename, t_i[ ts ], curve_avg[ ts ], curve_err[ ts ] )
+
+"""
 for twop_rangeStart in range( 5, 6 ):
 
     for twop_rangeEnd in range(14,15):
 
         for threep_neglect in 2,3:
-
-            threep_cp = []
-
-            threep_err_cp = []
 
             # fitParams[ b, param ]
 
@@ -239,24 +371,23 @@ for twop_rangeStart in range( 5, 6 ):
                     # End loop over insertion time
                 # End loop over tsink
 
-                avgX[ b ] = -4.0 / 3.0 / mEff_fit[ b ] * Z * a00[ b ] / c0[ b ]
+                #avgX[ b ] = -4.0 / 3.0 / mEff_fit[ b ] * Z * a00[ b ] / c0[ b ]
 
                 # Write curve with constant insertion time = tsink / 2
 
-                """
-                for b in range( binNum ):
+                #for b in range( binNum ):
                     
-                t_s = np.linspace( tsink[ 0 ] - 2, tsink[ -1 ] + 2, 50 )
+                #t_s = np.linspace( tsink[ 0 ] - 2, tsink[ -1 ] + 2, 50 )
 
-                for t in range( t_s.shape[ 0 ] ):
+                #for t in range( t_s.shape[ 0 ] ):
                     
-                curve[ b, t ] = -4.0 / 3.0 / E0[ b ] * Z * \
-                fit.twoStateThreep( t_s[ t ] / 2, t_s[ t ], \
-                a00[ b ], a01[ b ], a11[ b ], \
-                E0[ b ], E1[ b ] ) \
-                / fit.twoStateTwop( t_s[ t ], c0[ b ], c1[ b ], \
-                E0[ b ], E1[ b] )
-                """
+                #curve[ b, t ] = -4.0 / 3.0 / E0[ b ] * Z * \
+                #fit.twoStateThreep( t_s[ t ] / 2, t_s[ t ], \
+                #a00[ b ], a01[ b ], a11[ b ], \
+                #E0[ b ], E1[ b ] ) \
+                #/ fit.twoStateTwop( t_s[ t ], c0[ b ], c1[ b ], \
+                #E0[ b ], E1[ b] )
+
             # End loop over bins
         
             # Average over bins
@@ -313,4 +444,5 @@ for twop_rangeStart in range( 5, 6 ):
                                                + range_str + "_" + ts_range_str )
 
                 rw.writeAvgDataFile_wX( curveOutputFilename, t_i[ ts ], curve_avg[ ts ], curve_err[ ts ] )
+"""
 

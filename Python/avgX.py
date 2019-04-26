@@ -193,7 +193,8 @@ print( "Read two-point functions from HDF5 files" )
 
 twop_jk = fncs.jackknife( twop, binSize )
 
-twop_err = np.std( twop_jk, axis=0 ) * float( binNum - 1 ) / np.sqrt( float( binNum ) )
+twop_err = np.std( twop_jk, axis=0 ) \
+           * float( binNum - 1 ) / np.sqrt( float( binNum ) )
 
 threep_jk = []
 

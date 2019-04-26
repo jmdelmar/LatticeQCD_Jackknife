@@ -69,20 +69,20 @@ def combineMomBoosts(threep, momSq):
             + momSq + " is not supported.\n" )
 
 
-def initEmptyList( list_in, list_in_order ):
+def initEmptyList( list_in, list_out_order ):
 
     list_out = []
 
-    if list_in_order == 1:
+    if list_out_order == 1:
 
         list_out = [ [] for i in range( list_in ) ]
 
-    elif list_in_order == 2:
+    elif list_out_order == 2:
 
         list_out = [ [ [] for j in range( len( list_in[i] ) ) ] \
                      for i in range( len( list_in ) ) ]
 
-    elif list_in_order == 3:
+    elif list_out_order == 3:
 
         list_out = [ [ [ [] for k in range( len( list_in[i][j] ) ) ] \
                        for j in range( len( list_in[i] ) ) ] \
