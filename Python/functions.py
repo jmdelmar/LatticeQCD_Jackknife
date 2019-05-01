@@ -289,16 +289,20 @@ def check_sources( filenames, sourceNum ):
 def jackknife( vals, binSize ):
 
     configNum = len( vals )
-    binNum = configNum / binSize
 
-    vals_jk =[]
+    assert configNum % binSize == 0, "Number of configurations " \
+        + str( configNum ) + " not evenly divided by number of bins " \
+        + str( binNum ) + " in effective mass file " + mEff_filename + ".\n"
 
-    for bins in range( binNum ):
+    binNum = configNum // binSize
 
-        vals_jk.append( [] )
+    vals_jk = initEmptyList( binNum, 1 )
 
-        temp = np.vstack( ( vals[ : bins * binSize, : ], vals[ ( bins + 1 ) * binSize :, : ] ) )
+    for b in range( binNum ):
 
-        vals_jk[ bins ] = np.average( temp, axis=0 )
+        temp = np.vstack( ( vals[ : b * binSize, : ], \
+                            vals[ ( b + 1 ) * binSize :, : ] ) )
+
+        vals_jk[ b ] = np.average( temp, axis=0 )
 
     return np.array( vals_jk )

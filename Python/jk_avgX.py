@@ -241,10 +241,6 @@ for ts in tsink:
 
         # End loop over momenta
 
-    threep_mom = np.array( threep_mom )
-
-    threep_s_mom = np.array( threep_s_mom )
-
     threep = np.average( threep_mom, axis=0 )
 
     # Jackknife
