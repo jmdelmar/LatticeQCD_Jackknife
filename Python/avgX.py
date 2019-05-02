@@ -540,7 +540,7 @@ if args.two_state_fit:
 
         for t in range( t_s.shape[ -1 ] ):
 
-            curve[ b, t ] = fit.twoStateTwop( t, c0[ b ], c1[ b ], \
+            curve[ b, t ] = fit.twoStateTwop( t_s[ t ], c0[ b ], c1[ b ], \
                                               E0[ b ], E1[ b ] )
 
         # End loop over tsink
