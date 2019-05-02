@@ -393,22 +393,9 @@ def twoStateErrorFunction_twop( fitParams, tsink, twop, twop_err ):
     E0 = fitParams[ 2 ]
     E1 = fitParams[ 3 ]
 
-    """
-    twopErr = np.array( twoStateTwop( tsink_twop, c0, c1, E0, E1 ) \
-                        - twop )
-
-    twopErr = np.array( ( twoStateTwop( tsink_twop, c0, c1, E0, E1 ) \
-                          - twop ) ** 2 )
-
-    twopErr = np.array( ( ( twoStateTwop( tsink_twop, c0, c1, E0, E1 ) \
-                            - twop ) / twop ) ** 2 )
-    twopErr = np.array( ( ( twoStateTwop( tsink, c0, c1, E0, E1 ) \
-                            - twop ) / twop_err ) ** 2 )
-    """
     twopErr = np.array( ( twoStateTwop( tsink, c0, c1, E0, E1 ) \
                           - twop ) / twop_err )
     
-    #return np.sum( twopErr )
     return twopErr
     
 
@@ -418,8 +405,6 @@ def twoStateErrorFunction_threep( fitParams, ti, tsink, \
     a00 = fitParams[ 0 ]
     a01 = fitParams[ 1 ]
     a11 = fitParams[ 2 ]
-
-    #print( "a00: " + str(a00) + ", a01: " + str(a01) + ", a11: " + str(a11) + ", c0: " + str(c0) + ", c1: " + str(c1) + ", E0: " + str(E0) + ", E1: " + str(E1) )
 
     # threepErr[ ts * ti ]
 
@@ -431,31 +416,11 @@ def twoStateErrorFunction_threep( fitParams, ti, tsink, \
         for t, threep_ti, threep_err_ti \
             in zip( ti_ts, threep_ts, threep_err_ts ):
 
-            #print( "ti: " + str(t) + ", ts: " + str(ts)  )
-
-            #print( "data: " + str(threep_ti) )
-
-            #print( "function: " + str(twoStateThreep( t, ts, a00, a01, a11, E0, E1 ) ) )
-            """
-            threepErr.append( twoStateThreep( t, ts, a00, a01, a11, E0, E1 ) \
-                              - threep_ti )
-
-            threepErr.append( ( twoStateThreep( t, ts, a00, a01, a11, E0, E1 ) \
-                                - threep_ti ) ** 2 )
-
-            threepErr.append( ( ( twoStateThreep( t, ts, a00, a01, a11, E0, E1 ) \
-                                  - threep_ti ) / threep_ti ) ** 2 )
-            threepErr.append( ( ( twoStateThreep( t, ts, \
-                                                  a00, a01, a11, \
-                                                  E0, E1 ) \
-                                  - threep_ti ) / threep_err_ti ) ** 2 )
-            """
             threepErr.append( ( twoStateThreep( t, ts, \
                                                 a00, a01, a11, \
                                                 E0, E1 ) \
                                 - threep_ti ) / threep_err_ti )
 
-    #return np.sum( threepErr )
     return np.array( threepErr )
     
 
