@@ -486,49 +486,62 @@ for ts in tsink:
     
 # End loop over tsink
 
+##################
+# Two-state Fit  #
+##################
+
 if args.two_state_fit:
 
     print( "Will perform the two-state fit" )
 
-    ##################
-    # Two-state Fit  #
-    ##################
+    #twop_rangeEnd = 20
 
-    twop_rangeEnd = 20
+    T = 64
 
     goodFit = False
 
-    for twop_rangeStart in range( 1, 4 ):
+    twop_rangeStart = 1
+    twop_rangeEnd = 20
 
-        # fitParams[ b, param ]
+    #for twop_rangeStart in range( 1, 2 ):
 
-        fitParams, chiSq = fit.twoStateFit_twop( twop_jk, \
-                                                 twop_rangeStart, \
-                                                 twop_rangeEnd )
+        #for twop_rangeEnd in range( 20, 21 ):
 
-        c0 = fitParams[ :, 0 ]
-        c1 = fitParams[ :, 1 ]
-        E0 = fitParams[ :, 2 ]
-        E1 = fitParams[ :, 3 ]
+            # fitParams[ b, param ]
 
-        E0_avg = np.average( E0 )
+    fitParams, chiSq = fit.twoStateFit_twop( twop_jk, \
+                                             twop_rangeStart, \
+                                             twop_rangeEnd, T )
 
-        E0_err = np.std( E0 ) * float( binNum - 1 ) / np.sqrt( float( binNum ) )
+    c0 = fitParams[ :, 0 ]
+    c1 = fitParams[ :, 1 ]
+    E0 = fitParams[ :, 2 ]
+    E1 = fitParams[ :, 3 ]
 
-        # Check that the two-state fit is good,
-        # i.e. dm < Delta m / 2
+    E0_avg = np.average( E0 )
 
-        if E0_err < np.abs( mEff_fit_avg - E0_avg ) / 2 \
-           or mEff_fit_err < np.abs( mEff_fit_avg - E0_avg ) / 2:
+    E0_err = np.std( E0 ) * float( binNum - 1 ) / np.sqrt( float( binNum ) )
+
+    # Check that the two-state fit is good,
+    # i.e. dm < Delta m / 2
+    
+    #print(np.average(fitParams,axis=0))
+    #print(mEff_fit_avg)
+    #print(E0_avg)
+    #print(E0_err)
+    """
+    if E0_err < np.abs( mEff_fit_avg - E0_avg ) / 2 \
+       or mEff_fit_err < np.abs( mEff_fit_avg - E0_avg ) / 2:
             
-            goodFit = True
+        goodFit = True
 
-            break
+                break
+    """
+        # End loop over fit end
+    # End loop over fit start
 
-    # End loop over fit end
-
-    assert goodFit == True, "Error: a good two-state fit which satisfies " \
-        "the condition dm < Delta m / 2 was not found."
+    #assert goodFit == True, "Error: a good two-state fit which satisfies " \
+        #"the condition dm < Delta m / 2 was not found."
 
     # Calculate twop curve
 
@@ -540,7 +553,7 @@ if args.two_state_fit:
 
         for t in range( t_s.shape[ -1 ] ):
 
-            curve[ b, t ] = fit.twoStateTwop( t_s[ t ], c0[ b ], c1[ b ], \
+            curve[ b, t ] = fit.twoStateTwop( t_s[ t ], T, c0[ b ], c1[ b ], \
                                               E0[ b ], E1[ b ] )
 
         # End loop over tsink
@@ -575,7 +588,7 @@ if args.two_state_fit:
 
         fitParams, chiSq = fit.twoStateFit_threep( threep_jk, \
                                                    threep_neglect, \
-                                                   tsink, E0, E1 )
+                                                   tsink, E0, E1, T )
 
         a00 = fitParams[ :, 0 ]
         a01 = fitParams[ :, 1 ]
@@ -600,10 +613,10 @@ if args.two_state_fit:
                 for t in range( t_i.shape[ -1 ] ):
 
                     curve[ b, ts, t ] = -4.0 / 3.0 / mEff_fit[ b ] * Z \
-                                        * fit.twoStateThreep( t_i[ ts, t ], tsink[ ts ], \
+                                        * fit.twoStateThreep( t_i[ ts, t ], tsink[ ts ], T, \
                                                               a00[ b ], a01[ b ], a11[ b ], \
                                                               E0[ b ], E1[ b ] ) \
-                                        / fit.twoStateTwop( tsink[ ts ], c0[ b ], c1[ b ], \
+                                        / fit.twoStateTwop( tsink[ ts ], T, c0[ b ], c1[ b ], \
                                                             E0[ b ], E1[ b ] )
 
                 # End loop over insertion time
