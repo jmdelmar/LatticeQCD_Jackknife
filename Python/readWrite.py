@@ -47,7 +47,15 @@ def getFileNames( configDir, configList, fn_template ):
         
         filename[c] = glob( configDir + "/" + configList[c] + "/" + fn_template )
 
-        filename[c] = sorted( filename[c] )
+        if filename[c]:
+
+            filename[c] = sorted( filename[c] )
+
+        else:
+
+            print( "WARNING: No files matching " \
+                   + fn_template + " were found "\
+                   "in " + configDir + "/" + configList[c] )
 
     return filename
 
@@ -85,6 +93,12 @@ def getDatasetNames( filename, *keyword ):
 
                         dsetname[c][fn] = list(filter( lambda name: kw in name, dsetname[c][fn] ))
 
+                    if not dsetname[c][fn]:
+                        
+                        print( "WARNING: No datasets containing all keywords " \
+                               + ", ".join( keyword ) + " in file " \
+                               + filename[c][fn] )
+
             # Close file
 
             # Ensure that the top groups match across all 
@@ -114,13 +128,9 @@ def getDatasets( configDir, configList, fn_template, *keyword ):
     
     filename = getFileNames( configDir, configList, fn_template )
 
-    #print( filename )
-
     configNum = len( filename )
 
     dsetname = getDatasetNames( filename, *keyword )
-
-    #print( dsetname )
 
     data = fncs.initEmptyList( dsetname, 3 )
 

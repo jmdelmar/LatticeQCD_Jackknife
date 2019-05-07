@@ -99,15 +99,15 @@ def fold( data ):
 
     timestepNum = data.shape[ -1 ]
 
-    out = np.zeros( data.shape[ :-1 ] + ( timestepNum / 2 + 1, ) )
+    out = np.zeros( data.shape[ :-1 ] + ( timestepNum // 2 + 1, ) )
 
     out[ ..., 0 ] = data[ ..., 0 ]
 
-    for t in range( 1, timestepNum / 2 ):
+    for t in range( 1, timestepNum // 2 ):
         
         out[ ..., t ] = ( data[ ..., t ] + data[ ..., -t ] ) / 2
 
-    out[ ..., timestepNum / 2 ] = data[ ..., timestepNum / 2 ]
+    out[ ..., timestepNum // 2 ] = data[ ..., timestepNum // 2 ]
 
     return out
 
