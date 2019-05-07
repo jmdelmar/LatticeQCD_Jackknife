@@ -69,7 +69,7 @@ else:
         
     twop = rw.getDatasets( twopDir, configList, filename_template, "twop" )[ :, 0, 0, ..., 0, 0 ]
 
-print "Read two-point functions from HDF5 files"
+print( "Read two-point functions from HDF5 files" )
             
 #############
 # Jackknife #
@@ -117,7 +117,7 @@ rw.writeDataFile( outputFilename, twop_jk )
 
 rw.writeAvgDataFile( avgOutputFilename, twop_avg, twop_err )
 
-print "Wrote two-point function files"
+print( "Wrote two-point function files" )
 
 # Effective mass
 
@@ -129,5 +129,5 @@ rw.writeDataFile( outputFilename, mEff )
 
 rw.writeAvgDataFile( avgOutputFilename, mEff_avg, mEff_err )
 
-print "Wrote effective mass files"
+print( "Wrote effective mass files" )
             
