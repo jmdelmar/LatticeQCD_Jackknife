@@ -5,6 +5,13 @@ import re
 from os import listdir as ls
 from glob import glob
 
+def calcError( vals, binNum ):
+
+    return np.std( vals, axis=0 ) \
+        * float( binNum - 1 ) \
+        * float( binNum ) ** -0.5
+
+
 def signToString( val ):
 
     if val >= 0:

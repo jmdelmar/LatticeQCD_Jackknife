@@ -67,7 +67,7 @@ def calcAvgX( threep, twop_tsink, mEff ):
     avgX = np.zeros( threep.shape )
 
     for t in range( threep.shape[ 1 ] ):
-
+           
         avgX[ :, t ] = -4.0 / 3.0 / mEff * threep[ :, t ] / twop_tsink
 
     return avgX

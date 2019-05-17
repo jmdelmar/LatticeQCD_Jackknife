@@ -25,11 +25,12 @@ def twoStateFit_twop( twop, twop_rangeStart, twop_rangeEnd, T ):
 
     twop_avg = np.average( twop_to_fit, axis=0 )
 
-    twop_err = np.std( twop_to_fit, axis=0 ) \
-               * float( binNum - 1 ) / np.sqrt( float( binNum ) )
-               
-    tsink = np.concatenate( ( range( twop_rangeStart, twop_rangeEnd + 1 ), \
-                              range( T - twop_rangeEnd, T - twop_rangeStart + 1 ) ) )
+    twop_err = fncs.calcError( twop_to_fit, binNum )
+    
+    tsink = np.concatenate( ( range( twop_rangeStart, \
+                                     twop_rangeEnd + 1 ), \
+                              range( T - twop_rangeEnd, \
+                                     T - twop_rangeStart + 1 ) ) )
 
     # Find fit parameters of mean values to use as initial guess
 
@@ -40,25 +41,22 @@ def twoStateFit_twop( twop, twop_rangeStart, twop_rangeEnd, T ):
 
     fitParams = np.array( [ c0, c1, E0, E1 ] )
 
-    min_avg = least_squares( twoStateErrorFunction_twop, fitParams, \
+    leastSq_avg = least_squares( twoStateErrorFunction_twop, fitParams, \
                              args = ( tsink, T, twop_avg, twop_err ), \
                              method="lm" )
 
-    fitParams = min_avg.x
+    fitParams = leastSq_avg.x
 
     for b in range( binNum ):
 
-        # twop_cp
-
-        twop_cp = twop_to_fit[ b, : ]
-
-        min = least_squares( twoStateErrorFunction_twop, fitParams, \
-                             args = ( tsink, T, twop_cp, twop_err ), \
+        leastSq = least_squares( twoStateErrorFunction_twop, fitParams, \
+                             args = ( tsink, T, twop_to_fit[ b, : ], \
+                                      twop_err ), \
                              method="lm" )
 
-        fit[ b ] = min.x
+        fit[ b ] = leastSq.x
 
-        chi_sq[ b ] = min.cost
+        chi_sq[ b ] = leastSq.cost
 
     # End loop over bins
 
@@ -113,8 +111,8 @@ def twoStateFit_threep( threep, neglect, tsink, E0, E1, T ):
 
         ti[ ts ] = np.concatenate( ( range( neglect, \
                                       tsink[ ts ] - neglect + 1 ), \
-                               range( T - ( tsink[ ts ] - neglect ), \
-                                      T - neglect + 1 ) ) )
+                                     range( T - ( tsink[ ts ] - neglect ), \
+                                            T - neglect + 1 ) ) )
     
         threep_avg[ ts ] = np.average( threep_to_fit[ ts ], \
                                        axis=0 )
@@ -131,13 +129,13 @@ def twoStateFit_threep( threep, neglect, tsink, E0, E1, T ):
 
     fitParams = np.array( [ a00, a01, a11 ] )
 
-    min_avg = least_squares( twoStateErrorFunction_threep, fitParams, \
+    leastSq_avg = least_squares( twoStateErrorFunction_threep, fitParams, \
                              args = ( ti, tsink, T, \
                                       threep_avg, threep_err, \
                                       E0_avg, E1_avg ), \
                              method="lm" )
 
-    fitParams = min_avg.x
+    fitParams = leastSq_avg.x
 
     for b in range( binNum ):
 
@@ -149,15 +147,15 @@ def twoStateFit_threep( threep, neglect, tsink, E0, E1, T ):
 
             threep_cp[ ts ] = threep_to_fit[ ts ][ b, : ]
             
-        min = least_squares( twoStateErrorFunction_threep, fitParams, \
+        leastSq = least_squares( twoStateErrorFunction_threep, fitParams, \
                              args = ( ti, tsink, T, \
                                       threep_cp, threep_err, \
                                       E0[ b ], E1[ b ] ), \
                              method="lm" )
 
-        fit[ b ] = min.x
+        fit[ b ] = leastSq.x
 
-        chi_sq[ b ] = min.cost
+        chi_sq[ b ] = leastSq.cost
 
     # End loop over bins
 
@@ -299,7 +297,7 @@ def twoStateFit( twop, twop_err, twop_rangeStart, twop_rangeEnd, \
 
     fitParams = np.array( [ a00, a01, a11, c0, c1, E0, E1 ] )
     
-    min_avg = minimize( twoStateErrorFunction, fitParams, \
+    leastSq_avg = minimize( twoStateErrorFunction, fitParams, \
                         args = ( tsink_twop, ti, tsink, \
                                  twop_avg, twop_err, \
                                  threep_avg, threep_err ), \
@@ -463,48 +461,60 @@ def twoStateErrorFunction( fitParams, tsink_twop, ti, tsink, twop, twop_err, thr
     #return np.concatenate( ( twopErr, threepErr ) )
 """
 
-def twopFit( twop, fitStart, fitEnd ):
+def twopFit( twop, fitStart, fitEnd, T ):
 
     # twop[ b, t ]
 
-    fit = []
-
-    # Check that number of bins is the same for all values of tsink
+    twop_to_fit = np.concatenate( ( twop[ :, fitStart : \
+                                          fitEnd + 1 ], \
+                                    twop[ :, T - fitEnd : \
+                                          T - fitStart + 1 ] ), \
+                                  axis=1 )
 
     binNum = twop.shape[ 0 ]
 
-    #print fitStart
+    fit = fncs.initEmptyList( binNum, 1 )
 
-    #print fitEnd
+    chi_sq = fncs.initEmptyList( binNum, 1 )
 
-    #print range(fitStart,fitEnd+1)
+    twop_avg = np.average( twop_to_fit, axis=0 )
 
-    t = np.array( range( fitStart, fitEnd + 1 ) )
+    twop_err = fncs.calcError( twop_to_fit, binNum )
+    
+    t = np.concatenate( ( range( fitStart, fitEnd + 1 ), \
+                          range( T - fitEnd, T-fitStart + 1 ) ) )
+
+    # Find fit parameters of mean values to use as initial guess
+
+    G = 0.1 
+    E = 0.1 
+        
+    fitParams = np.array( [ G, E ] )
+
+    leastSq_avg = least_squares( twopExpErrFunction, fitParams, \
+                             args = ( t, T, twop_avg, twop_err ), \
+                             method="lm" )
+    
+
+    fitParams = leastSq_avg.x
 
     for b in range( binNum ):
 
-        G = 0.1 
-        E = 0.1 
-        
-        fitParams = np.array( [ G, E ] )
+        leastSq = least_squares( twopExpErrFunction, fitParams, \
+                                 args = ( t, T, twop_to_fit[ b, : ], \
+                                          twop_err ), \
+                                 method="lm" )
+    
+        fit[ b ] = leastSq.x
 
-        #print t
-
-        #print twop[ b, : ]
-
-        #print twop[ b, fitStart : fitEnd + 1 ]
-
-        fit.append( minimize( twopExpErrFunction, fitParams, \
-                              args = ( t, twop[ b, fitStart : fitEnd + 1 ] ), \
-                              method='Nelder-Mead', jac = False, \
-                              options = {'maxiter':100000} ).x )
+        chi_sq[ b ] = leastSq.cost
 
     # End loop over bins
 
-    return np.array( fit )
+    return np.array( fit ), np.array( chi_sq )
 
 
-def twopExpErrFunction( fitParams, t, twop ):
+def twopExpErrFunction( fitParams, t, T, twop, twop_err ):
 
     G = fitParams[ 0 ]
           
@@ -512,75 +522,13 @@ def twopExpErrFunction( fitParams, t, twop ):
         
     # twopErr[ t ]
 
-    twopErr = np.array( ( ( twopExp( t, G, E, ) \
-                            - twop ) ) ** 2 )
+    twopErr = np.array( ( twopExp( t, T, G, E, ) \
+                          - twop ) / twop_err )
 
-    return np.sum( twopErr )
+    return twopErr
 
 
-def twopExp( t, G, E ):
+def twopExp( t, T, G, E ):
     
-    return G**2 / 2 / E * ( np.exp( -E * t ) + np.exp( -E * ( 64 - t ) ) )
-
-
-"""
-def threepFit( threep, fitStart, fitEnd ):
-
-    # threep[ b, t ]
-
-    fit = []
-
-    # Check that number of bins is the same for all values of tsink
-
-    binNum = threep.shape[ 0 ]
-
-    #print fitStart
-
-    #print fitEnd
-
-    #print range(fitStart,fitEnd+1)
-
-    t = np.array( range( fitStart, fitEnd + 1 ) )
-
-    for b in range( binNum ):
-
-        G = 0.1 
-        E = 0.1 
-        
-        fitParams = np.array( [ G, E ] )
-
-        #print t
-
-        #print threep[ b, : ]
-
-        #print threep[ b, fitStart : fitEnd + 1 ]
-
-        fit.append( minimize( threepExpErrFunction, fitParams, \
-                              args = ( t, threep[ b, fitStart : fitEnd + 1 ] ), \
-                              method='Nelder-Mead', jac = False, \
-                              options = {'maxiter':100000} ).x )
-
-    # End loop over bins
-
-    return np.array( fit )
-
-
-def threepExpErrFunction( fitParams, t, threep ):
-
-    G = fitParams[ 0 ]
-          
-    E = fitParams[ 1 ]
-        
-    # threepErr[ t ]
-
-    threepErr = np.array( ( ( threepExp( t, G, E, ) \
-                            - threep ) ) ** 2 )
-
-    return np.sum( threepErr )
-
-
-def threepExp( t, G, E ):
-    
-    return G**2 / 2 / E * ( np.exp( -E * t ) + np.exp( -E * ( 64 - t ) ) )
-"""
+    return G**2 / 2 / E * ( np.exp( -E * t ) + np.exp( -E * ( T - t ) ) )
 

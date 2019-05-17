@@ -756,8 +756,8 @@ def writeDataFile( filename, data ):
 
             for d1 in range( len( data[ d0 ] ) ):
                 
-                output.write( str( d1 ).ljust(5) + str( data[ d0, d1 ] ) + "\n" )
-                
+                output.write( "{:<5d}{:<20.15}\n".format( d1, data[ d0, d1 ] ) )
+
     print( "Wrote " + filename )
 
 
@@ -779,7 +779,7 @@ def writeAvgDataFile( filename, data, error ):
 
         for d0 in range( len( data ) ):
 
-            output.write( str( d0 ).ljust(5) + str( data[ d0 ] ).ljust(20) + str( error[ d0 ] ) + "\n" )
+            output.write( "{:<5d}{:<25.15}{:<25.15}\n".format( d0, data[ d0 ], error[ d0 ] ) )
 
     print( "Wrote " + filename )
 
@@ -802,7 +802,7 @@ def writeAvgDataFile_wX( filename, x, y, error ):
 
         for ix, iy, ierr in zip( x, y, error ):
 
-            output.write( str( ix ).ljust(20) + str( iy ).ljust(20) + str( ierr ) + "\n" )
+            output.write( "{:<20.15f}{:<20.15f}{:.15f}\n".format( ix, iy, ierr) )
 
     print( "Wrote " + filename )
 

@@ -1,0 +1,20 @@
+import time
+import numpy as np
+
+for i in range( 1, 11 ):
+
+    time0 = time.time()
+
+    sqrt0 = 1 / np.sqrt( 10.0 * i )
+
+    print( "1/sqrt(" + str(10 * i) + ")=" \
+           + str(sqrt0) + " calculated in " \
+           + str(time.time() - time0) + " sec." )
+
+    time1 = time.time()
+
+    sqrt1 = ( 10.0 * i ) ** -0.5
+
+    print( "1/sqrt(" + str(10 * i) + ")=" \
+           + str(sqrt1) + " calculated in " \
+           + str(time.time() - time1) + " sec." )

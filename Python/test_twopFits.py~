@@ -8,9 +8,7 @@ import lqcdjk_fitting as fit
 
 Z = 1.0
 
-#twopFitStart = 10
-
-#twopFitEnd = 30
+T = 64
 
 particle_list = [ "pion", "kaon", "nucleon" ]
 
@@ -127,51 +125,6 @@ assert configNum % binNum == 0, "Number of configurations " \
 
 binSize = int( configNum / binNum )
 
-####################
-# Effective masses #
-####################
-
-# Read from file
-# mEff[ b, t ]
-
-mEff = rw.readDataFile( mEff_filename, timestepNum, binNum )
-
-# Read error from file
-# mEff_err[ t ]
-
-mEff_err = np.std( mEff, axis=0 ) \
-           * float( binNum - 1 ) \
-           / np.sqrt( float( binNum ) )
-
-# Fit
-# mEff_fit [ b ]
-
-mEff_fit = np.zeros( binNum )
-
-for b in range( binNum ):
-
-    mEff_fit[ b ] = np.polyfit( range( mEff_fitStart, \
-                                       mEff_fitEnd + 1 ), \
-                                mEff[ b, \
-                                      mEff_fitStart \
-                                      : mEff_fitEnd + 1 ], 0, \
-                                w=mEff_err[ mEff_fitStart \
-                                               : mEff_fitEnd + 1 ] )
-
-print( "Fit effective mass" )
-
-# Average over bins
-
-mEff_fit_avg = np.average( mEff_fit )
-
-mEff_fit_err = np.std( mEff_fit ) * float( binNum - 1 ) / np.sqrt( float( binNum ) )
-
-# Write fitted effective mass file
-
-mEff_outputFilename = output_template.replace( "*", "mEff_fit" )
-
-rw.writeFitDataFile( mEff_outputFilename, mEff_fit_avg, mEff_fit_err, mEff_fitStart, mEff_fitEnd )
-
 #######################
 # Two-point functions #
 #######################
@@ -197,8 +150,86 @@ print( "Read two-point functions from HDF5 files" )
 
 twop_jk = fncs.jackknife( twop, binSize )
 
-twop_err = np.std( twop_jk, axis=0 ) \
-           * float( binNum - 1 ) / np.sqrt( float( binNum ) )
+twop_avg = np.average( twop_jk, axis=0 )
+
+twop_err = fncs.calcError( twop_jk, binNum )
+
+############################
+# Fold two-point functions #
+############################
+
+twop_fold = fncs.fold( twop_jk )
+
+##################
+# Effective mass #
+##################
+
+# mEff[ b, t ]
+
+mEff = pq.mEffFromSymTwop( twop_fold )
+
+# mEff_avg[ t ]
+
+mEff_avg = np.average( mEff, axis=0 )
+
+# mEff_err[ t ]
+
+mEff_err = fncs.calcError( mEff, binNum )
+
+# Fit
+# mEff_fit [ b ]
+
+mEff_fitEnd
+
+for mEff_fitStart in range( 1, 20 ):
+
+    mEff_fit = np.zeros( binNum )
+
+    for b in range( binNum ):
+
+        mEff_fit[ b ] = np.polyfit( range( mEff_fitStart, \
+                                           mEff_fitEnd + 1 ), \
+                                    mEff[ b, \
+                                          mEff_fitStart \
+                                          : mEff_fitEnd + 1 ], 0, \
+                                    w=mEff_err[ mEff_fitStart \
+                                                : mEff_fitEnd + 1 ] )
+
+    # Average over bins
+
+    mEff_fit_avg = np.average( mEff_fit )
+
+    mEff_fit_err = fncs.calcError( mEff_fit, binNum )
+
+    twopFitEnd = 30
+
+    for twopFitStart in range( 1, 20 ):
+
+        twopFitParams, twoFit_chiSq = fit.twopFit( twop_jk, twopFitStart, \
+                                                   twopFitEnd, T )
+
+        G = twopFitParams[ :, 0 ]
+        E = twopFitParams[ :, 1 ]
+
+        E_avg = np.average( E, axis=0 )
+        E_err = fncs.calcError( E, binNum )
+
+        print( "\nmEff fit start=" + str(mEff_fit_avg) + ", twop fit start=" + str(twopFitStart) + ":" )
+        print( "mEff={.5}+/-{.3}".format( mEff_fit_avg, mEff_fit_err ) )
+        print( "E={.5}+/-{.3}".format( E_avg, E_err ) )
+        print( "E_err < np.abs( mEff_fit_avg - E_avg ) / 2: " \
+               + str(E_err < np.abs( mEff_fit_avg - E_avg ) / 2) )
+        print( "mEff_fit_err < np.abs( mEff_fit_avg - E_avg ) / 2: "\
+               + str(mEff_fit_err < np.abs( mEff_fit_avg - E_avg ) / 2) )
+"""
+    if E_err < np.abs( mEff_fit_avg - E_avg ) / 2 \
+       or mEff_fit_err < np.abs( mEff_fit_avg - E_avg ) / 2:
+            
+        goodFit = True
+
+        break
+
+twop_err = fncs.calcError( twop_jk, binNum )
 
 threep_jk = []
 
@@ -329,13 +360,11 @@ for ts in tsink:
     
     threep_jk.append( fncs.jackknife( threep, binSize ) )
 
-    threep_err.append( np.std( threep_jk[ -1 ], axis=0 ) * float( binNum - 1 ) / np.sqrt( float( binNum ) ) )
+    threep_err.append( fncs.calcError( threep_jk[ -1 ], binNum ) )
 
     #################
     # Calculate <x> #
     #################
-
-    #twopFitParams = fit.twopFit( twop_jk, twopFitStart, twopFitEnd )
 
     #G = np.repeat( twopFitParams[ :, 0 ], ts + 1 ).reshape( binNum, ts + 1 )
 
@@ -351,7 +380,7 @@ for ts in tsink:
 
     avgX_avg = np.average( avgX, axis=0 )
 
-    avgX_err = np.std( avgX, axis=0 ) * float( binNum - 1 ) / np.sqrt( float( binNum ) )
+    avgX_err = fncs.calcError( avgX, binNum )
 
     ######################
     # Write output files #
@@ -391,8 +420,8 @@ for ts in tsink:
 
         avgX_fit_avg = np.average( avgX_fit )
 
-        avgX_fit_err = np.std( avgX_fit ) * float( binNum - 1 ) / np.sqrt( float( binNum ) )
-        
+        avgX_fit_err = fncs.calcError( avgX_fit, binNum )
+
         # Write output files
 
         avgX_fit_outFilename = ""
@@ -432,7 +461,7 @@ for ts in tsink:
 
         avgX_s_avg = np.average( avgX_s, axis=0 )
 
-        avgX_s_err = np.std( avgX_s, axis=0 ) * float( binNum - 1 ) / np.sqrt( float( binNum ) )
+        avgX_s_err = fncs.calcError( avgX_s, binNum )
 
         ######################
         # Write output files #
@@ -468,7 +497,7 @@ for ts in tsink:
 
             avgX_s_fit_avg = np.average( avgX_s_fit )
 
-            avgX_s_fit_err = np.std( avgX_s_fit ) * float( binNum - 1 ) / np.sqrt( float( binNum ) )
+            avgX_s_fit_err = fncs.calcError( avgX_s_fit, binNum )
 
             # Write output files
 
@@ -496,8 +525,6 @@ if args.two_state_fit:
 
     #twop_rangeEnd = 20
 
-    T = 64
-
     goodFit = False
 
     twop_rangeStart = 1
@@ -520,7 +547,7 @@ if args.two_state_fit:
 
     E0_avg = np.average( E0 )
 
-    E0_err = np.std( E0 ) * float( binNum - 1 ) / np.sqrt( float( binNum ) )
+    E0_err = fncs.calcError( E0, binNum )
 
     # Check that the two-state fit is good,
     # i.e. dm < Delta m / 2
@@ -529,14 +556,16 @@ if args.two_state_fit:
     #print(mEff_fit_avg)
     #print(E0_avg)
     #print(E0_err)
-    """
+"""
+"""
     if E0_err < np.abs( mEff_fit_avg - E0_avg ) / 2 \
        or mEff_fit_err < np.abs( mEff_fit_avg - E0_avg ) / 2:
             
         goodFit = True
 
                 break
-    """
+"""
+"""
         # End loop over fit end
     # End loop over fit start
 
@@ -561,11 +590,11 @@ if args.two_state_fit:
 
     chiSq_avg = np.average( chiSq, axis=0 )
 
-    chiSq_err = np.std( chiSq, axis=0 ) * float( binNum - 1 ) / np.sqrt( float( binNum ) )
-                
+    chiSq_err = fncs.calcError( chiSq, binNum )
+
     curve_avg = np.average( curve, axis=0 )
                 
-    curve_err = np.std( curve, axis=0 ) * float( binNum - 1 ) / np.sqrt( float( binNum ) )
+    curve_err = fncs.calcError( curve, binNum )
 
     range_str = "2s" + str( twop_rangeStart ) \
                 + ".2e" + str( twop_rangeEnd )
@@ -662,28 +691,20 @@ if args.two_state_fit:
                     
         curve_avg = np.average( curve, axis=0 )
                 
-        curve_err = np.std( curve, axis=0 ) \
-                    * float( binNum - 1 ) \
-                    / np.sqrt( float( binNum ) )
-                
+        curve_err = fncs.calcError( curve, binNum )
+
         fitParams_avg = np.average( fitParams, axis=0 )
 
-        fitParams_err = np.std( fitParams, axis=0 ) \
-                        * float( binNum - 1 ) \
-                        / np.sqrt( float( binNum ) )
+        fitParams_err = fncs.calcError( fitParams, binNum )
 
         chiSq_avg = np.average( chiSq, axis=0 )
 
-        chiSq_err = np.std( chiSq, axis=0 ) \
-                    * float( binNum - 1 ) \
-                    / np.sqrt( float( binNum ) )
-                
+        chiSq_err = fncs.calcError( chiSq, binNum )
+
         avgX_avg = np.average( avgX )
 
-        avgX_err = np.std( avgX ) \
-                   * float( binNum - 1 ) \
-                   / np.sqrt( float( binNum ) )
-    
+        avgX_err = fncs.calcError( avgX, binNum )
+
         # Write output file
 
         range_str = "2s" + str( twop_rangeStart ) \
@@ -733,3 +754,4 @@ if args.two_state_fit:
     # End loop over number of neglected three-point functions
 
 # CJL To Do: Add kaon two-state fit
+"""

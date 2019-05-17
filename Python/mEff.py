@@ -79,7 +79,7 @@ twop_jk = fncs.jackknife( twop, binSize )
 
 twop_avg = np.average( twop_jk, axis=0 )
 
-twop_err = np.std( twop_jk, axis=0 ) * float( binNum - 1 ) / math.sqrt( float( binNum ) )
+twop_err = fncs.calcError( twop_jk, binNum )
 
 ############################
 # Fold two-point functions #
