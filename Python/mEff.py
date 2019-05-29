@@ -6,6 +6,8 @@ import functions as fncs
 import readWrite as rw
 import physQuants as pq
 
+format_list = [ "gpu", "cpu" ]
+
 #########################
 # Parse input arguments #
 #########################
@@ -20,6 +22,8 @@ parser.add_argument( "binSize", action='store', type=int )
 
 parser.add_argument( "-o", "--output", action='store', type=str, default="./*.dat" )
 
+parser.add_argument( "-f", "--data_format", action='store', help="Data format. Should be 'gpu' or 'cpu'.", type=str, default="gpu" )
+
 parser.add_argument( "-c", "--config_list", action='store', type=str, default="" )
 
 args = parser.parse_args()
@@ -31,6 +35,11 @@ filename_template = args.filename_template
 binSize = args.binSize
 
 output_template = args.output
+
+dataFormat = args.data_format
+
+assert dataFormat in format_list, "Error: Data format not supported. " \
+    + "Supported particles: " + str( format_list )
 
 configList = fncs.getConfigList( args.config_list, twopDir )
 
@@ -49,9 +58,18 @@ binNum = configNum / binSize
 # Get real part of zero-momentum two-point functions
 # twop[ c, t ]
 
-twop = rw.getDatasets( twopDir, configList, filename_template, "twop" )[ :, 0, 0, :, 0, 0 ]
+twop = []
 
-print "Read two-point functions from HDF5 files"
+if dataFormat == "cpu":
+
+    twop = rw.getDatasets( twopDir, configList, filename_template, \
+                                            "msq0000", "arr" )[ :, 0, 0, :, 0 ].real
+
+else:
+        
+    twop = rw.getDatasets( twopDir, configList, filename_template, "twop" )[ :, 0, 0, ..., 0, 0 ]
+
+print( "Read two-point functions from HDF5 files" )
             
 #############
 # Jackknife #
@@ -61,7 +79,7 @@ twop_jk = fncs.jackknife( twop, binSize )
 
 twop_avg = np.average( twop_jk, axis=0 )
 
-twop_err = np.std( twop_jk, axis=0 ) * float( binNum - 1 ) / math.sqrt( float( binNum ) )
+twop_err = fncs.calcError( twop_jk, binNum )
 
 ############################
 # Fold two-point functions #
@@ -95,11 +113,11 @@ outputFilename = output_template.replace( "*", "twop" )
 
 avgOutputFilename = output_template.replace( "*", "twop_avg" )
 
-rw.writeDataFile( twop_jk, outputFilename )
+rw.writeDataFile( outputFilename, twop_jk )
 
-rw.writeAvgDataFile( twop_avg, twop_err, avgOutputFilename )
+rw.writeAvgDataFile( avgOutputFilename, twop_avg, twop_err )
 
-print "Wrote two-point function files"
+print( "Wrote two-point function files" )
 
 # Effective mass
 
@@ -107,9 +125,9 @@ outputFilename = output_template.replace( "*", "mEff" )
 
 avgOutputFilename = output_template.replace( "*", "mEff_avg" )
 
-rw.writeDataFile( mEff, outputFilename )
+rw.writeDataFile( outputFilename, mEff )
 
-rw.writeAvgDataFile( mEff_avg, mEff_err, avgOutputFilename )
+rw.writeAvgDataFile( avgOutputFilename, mEff_avg, mEff_err )
 
-print "Wrote effective mass files"
+print( "Wrote effective mass files" )
             

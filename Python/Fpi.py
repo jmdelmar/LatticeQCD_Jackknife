@@ -9,7 +9,7 @@ import physQuants as pq
 
 Zv = 0.728
 
-latticeSpacing = 0.098
+latticeSpacing = 0.093
 
 latticeDim = 32
 
@@ -260,7 +260,7 @@ for ts in tsink:
 
     mEff_outputFilename = output_template.replace( "*", "mEff_fit" )
 
-    rw.writeFitDatafile( mEff_outputFilename, mEff_fit_avg, mEff_fit_err, mEff_fitStart, mEff_fitEnd )
+    rw.writeFitDataFile( mEff_outputFilename, mEff_fit_avg, mEff_fit_err, mEff_fitStart, mEff_fitEnd )
 
     print "Wrote output files for tsink " + str( ts )
 

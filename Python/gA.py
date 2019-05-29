@@ -9,7 +9,7 @@ Z = 0.8
 
 particle_list = [ "pion", "kaon" ]
 
-# TO DO: add support for kaon IS and nulceon
+# TO DO: add support for nulceon
 
 #########################
 # Parse input arguments #
@@ -201,10 +201,6 @@ for ts in tsink:
 
     threep = ( threep_g5gx + threep_g5gy + threep_g5gz ) / 3.0 
 
-    print "threep:"
-
-    print threep
-    
     # Jackknife
     # threep_jk[ b, t ]
     
@@ -219,10 +215,6 @@ for ts in tsink:
 
     gA = Z * pq.calcgA( threep_jk, twop_jk[ :, ts ] )
 
-    print "gA:"
-
-    print gA
-
     # Average over bins
     # gA_avg[ t ]
 
@@ -234,7 +226,7 @@ for ts in tsink:
 
     gA_outFilename = output_template.replace( "*", "gA_tsink" + str( ts ) )
 
-    rw.writeAvgDataFile( gA_avg, gA_err, gA_outFilename )
+    rw.writeAvgDataFile( gA_outFilename, gA_avg, gA_err )
 
     print "Wrote output files for tsink " + str( ts )
 

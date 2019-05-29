@@ -87,5 +87,5 @@ Fpi_fit_err = np.std( Fpi_fit, axis=1 ) * float( binNum - 1 ) / math.sqrt( float
 
 # Fitted effective mass
 
-rw.writeAvgDataFile_wX( Qsq, Fpi_fit_avg, Fpi_fit_err, output )
+rw.writeAvgDataFile_wX( output, Qsq, Fpi_fit_avg, Fpi_fit_err )
 

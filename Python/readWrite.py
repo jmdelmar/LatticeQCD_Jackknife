@@ -2,6 +2,7 @@ import h5py
 import numpy as np
 from os import listdir as ls
 from glob import glob
+import functions as fncs
 
 def getSourcePositions( srcGroupName ):
 
@@ -32,86 +33,118 @@ def readFormFactorFile( filename, QsqNum, binNum, timestepNum ):
 
     return data[ ..., -1 ]
 
+def getFileNames( configDir, configList, fn_template ):
+    
+    configNum = len( configList )
+
+    filename = fncs.initEmptyList( configNum, 1 )
+
+    # Loop through config indices
+
+    for c in range( configNum ):
+        
+        # Get filenames in specific configs directory which follow template
+        
+        filename[c] = glob( configDir + "/" + configList[c] + "/" + fn_template )
+
+        if filename[c]:
+
+            filename[c] = sorted( filename[c] )
+
+        else:
+
+            print( "WARNING: No files matching " \
+                   + fn_template + " were found "\
+                   "in " + configDir + "/" + configList[c] )
+
+    return filename
+
+def getDatasetNames( filename, *keyword ):
+    
+    configNum = len( filename )
+
+    # Initialize list of lists with shape [ configNum ][ fileNum ]
+
+    dsetname = fncs.initEmptyList( filename, 2 )
+
+    # Loop through config indices
+
+    for c in range( configNum ):
+        
+        # Loop through indices of file names in specific config directory
+
+        for fn in range( len( filename[c] ) ): 
+
+            with h5py.File( filename[c][fn], "r" ) as dataFile:
+                
+                # Put all datasets into list
+                
+                dataFile.visititems( lambda name,obj: \
+                                     dsetname[c][fn].append(name) \
+                                     if type( obj ) is h5py.Dataset \
+                                     else None )
+
+                if keyword:
+
+                    # Filter any datasets from list which do not contain 
+                    # all of the keywords
+
+                    for kw in keyword:
+
+                        dsetname[c][fn] = list(filter( lambda name: kw in name, dsetname[c][fn] ))
+
+                    if not dsetname[c][fn]:
+                        
+                        print( "WARNING: No datasets containing all keywords " \
+                               + ", ".join( keyword ) + " in file " \
+                               + filename[c][fn] )
+
+            # Close file
+
+            # Ensure that the top groups match across all 
+            # files in sub-directory
+            
+            topGroup_0 = dsetname[c][fn][0].split( "/", 1 )
+
+            for name in dsetname[c][fn]:
+
+                topGroups = name.split( "/", 1 )
+            
+                assert ( topGroups[0] == topGroup_0[0] ), \
+                    "Top groups in configuration " + configList[ c ] \
+                    + " do not match" 
+
+        # End loop over filenames
+
+    #End loop over configurations
+
+    return dsetname
+
+
 # Reads HDF5 datsets containing the given keyword(s) if
 # given and returns them as a numpy array. 
 
 def getDatasets( configDir, configList, fn_template, *keyword ):
     
-    data = []
+    filename = getFileNames( configDir, configList, fn_template )
+
+    configNum = len( filename )
+
+    dsetname = getDatasetNames( filename, *keyword )
+
+    data = fncs.initEmptyList( dsetname, 3 )
 
     # Loop through config indexes
 
-    for c in range( len( configList ) ):
+    for c in range( len( dsetname ) ):
         
-        data.append( [] )
+        for fn in range( len( dsetname[c] ) ): 
 
-        # Get filenames in specific configs directory which follow template
+            with h5py.File( filename[c][fn], "r" ) as dataFile:
 
-        #print configDir + "/" + configList[c] + "/" + fn_template
+                for ds in range( len( dsetname[c][fn] ) ):
 
-        filename = glob( configDir + "/" + configList[c] + "/" + fn_template )
-
-        filename = sorted( filename )
-
-        # Loop through indexes of file names in specific config directory
-
-        for fn in range( len( filename ) ): 
-
-            data[c].append( [] )
-
-            with h5py.File( filename[fn], "r" ) as dataFile:
-
-                dsetname = []
-        
-                if keyword:
-
-                    # Put all datasets which contain the first keyword into list
-                    
-                    dataFile.visititems( lambda name, obj: \
-                                         dsetname.append( name ) \
-                                         if type( obj ) is h5py.Dataset \
-                                         and keyword[0] in name \
-                                         else None )
-
-                    # Fileter any datasets from list which do not contain 
-                    # all of the keywords
-
-                    for kw in keyword:
-
-                        dsetname_filtered = []
-                        
-                        for ds in dsetname:
-
-                            if kw in ds:
-
-                                dsetname_filtered.append( ds )
-
-                        dsetname = dsetname_filtered
-
-                else:
-
-                    # Put all datasets into list
-                
-                    dataFile.visititems( lambda name,obj: \
-                                         dsetname.append(name) \
-                                         if type( obj ) is h5py.Dataset \
-                                         else None )
-
-                topGroup_0 = dsetname[0].split( "/", 1 )
-
-                data[ c ][ fn ].append( np.array( dataFile[ dsetname[ 0 ] ] ) )
-
-                for name in dsetname[1:]:
-
-                    topGroups = name.split( "/", 1 )
-
-                    # Ensure that the top groups match across all files in sub-directory
-
-                    assert ( topGroups[0] == topGroup_0[0] ), \
-                        "Top groups in configuration " + configList[ c ] \
-                        + " do not match" 
-                    
-                    data[ c ][ fn ].append( np.array( dataFile[ name ] ) )
+                    data[ c ][ fn ][ ds ] = np.array( dataFile[ dsetname[ c ][ fn ][ ds ] ] )
 
                 # End loop over datasets
 
@@ -122,6 +155,56 @@ def getDatasets( configDir, configList, fn_template, *keyword ):
     # End loop over configs
 
     return np.array( data )
+
+
+# Reads HDF5 datsets containing the given keyword(s) if
+# given and returns them as a numpy array. Also returns
+# a list of the group/dataset names of each dataset
+
+def getDatasets_wNames( configDir, configList, fn_template, *keyword ):
+
+    filename = getFileNames( configDir, configList, fn_template )
+
+    configNum = len( filename )
+
+    datasetName = getDatasetNames( filename, *keyword )
+
+    data = fncs.initEmptyList( datasetName, 3 )
+
+    # Loop through config indexes
+
+    for c in range( len( configList ) ):
+        
+        fileNum = len( filename[ c ] )
+    
+        sources = set()
+
+        for fn in range( fileNum ): 
+
+            with h5py.File( filename[ c ][ fn ], "r" ) as dataFile:
+
+                for ds in range( len( datasetName[c][fn] ) ):
+
+                    data[ c ][ fn ][ ds ] = np.array( dataFile[ datasetName[ c ][ fn ][ ds ] ] )
+
+                    groups = datasetName[c][fn][ds].split( "/" )
+
+                    sources.add( groups[1] )
+
+                # End loop over datasets
+
+            # Close file
+
+        # End loop over files in sub-directory
+
+        # Ensure that the source (2nd) group is unique to each file in sub-directory
+
+        assert len( sources ) == fileNum, \
+            "Source groups in configuration %s are not unique to file" % configList[ c ]
+
+    # End loop over configs
+
+    return np.array( data ), datasetName
 
 
 def getHDF5File( configDir, configList, fn_template, *keyword ):
@@ -162,129 +245,284 @@ def getHDF5File_wNames( configDir, configList, fn_template, *keyword ):
     return dataset, datasetName
 
 
-# Reads HDF5 datsets containing the given keyword(s) if
-# given and returns them as a numpy array. Also returns
-# a list of the group/dataset names of each dataset
+# Get the real part of gxDx, gyDy, gzDz, and gtDt
+# three-point functions at zero-momentum
 
-def getDatasets_wNames( configDir, configList, fn_template, *keyword ):
+def readAvgXFile( threepDir, configList, threep_template, 
+                   ts, particle, dataFormat ):
 
-    dataset = []
+    if particle == "nucleon":
 
-    datasetName = []
+        if dataFormat == "cpu":
 
-    # Loop through config indexes
+            filename_u_gxDx = threep_template + str( ts ) + ".up.h5"
 
-    for c in range( len( configList ) ):
+            threep_u_gxDx = getDatasets( threepDir, \
+                                            configList, \
+                                            filename_u_gxDx, \
+                                            "=der:gxDx:sym=", \
+                                            "msq0000", \
+                                            "arr" )[ :, 0, 0, :, 0 ].real
+
+            filename_u_gyDy = threep_template + str( ts ) + ".up.h5"
+
+            threep_u_gyDy = getDatasets( threepDir, \
+                                            configList, \
+                                            filename_u_gyDy, \
+                                            "=der:gyDy:sym=", \
+                                            "msq0000", \
+                                            "arr" )[ :, 0, 0, :, 0 ].real
+
+            filename_u_gzDz = threep_template + str( ts ) + ".up.h5"
+
+            threep_u_gzDz = getDatasets( threepDir, \
+                                            configList, \
+                                            filename_u_gzDz, \
+                                            "=der:gzDz:sym=", \
+                                            "msq0000", \
+                                            "arr" )[ :, 0, 0, :, 0 ].real
+
+            filename_u_gtDt = threep_template + str( ts ) + ".up.h5"
+
+            threep_u_gtDt = getDatasets( threepDir, \
+                                            configList, \
+                                            filename_u_gtDt, \
+                                            "=der:g0D0:sym=", \
+                                            "msq0000", \
+                                            "arr" )[ :, 0, 0, :, 0 ].real
+
+            filename_d_gxDx = threep_template + str( ts ) + ".dn.h5"
+
+            threep_d_gxDx = getDatasets( threepDir, \
+                                            configList, \
+                                            filename_d_gxDx, \
+                                            "=der:gxDx:sym=", \
+                                            "msq0000", \
+                                            "arr" )[ :, 0, 0, :, 0 ].real
+
+            filename_d_gyDy = threep_template + str( ts ) + ".dn.h5"
+
+            threep_d_gyDy = getDatasets( threepDir, \
+                                            configList, \
+                                            filename_d_gyDy, \
+                                            "=der:gyDy:sym=", \
+                                            "msq0000", \
+                                            "arr" )[ :, 0, 0, :, 0 ].real
+
+            filename_d_gzDz = threep_template + str( ts ) + ".dn.h5"
+
+            threep_d_gzDz = getDatasets( threepDir, \
+                                            configList, \
+                                            filename_d_gzDz, \
+                                            "=der:gzDz:sym=", \
+                                            "msq0000", \
+                                            "arr" )[ :, 0, 0, :, 0 ].real
+
+            filename_d_gtDt = threep_template + str( ts ) + ".dn.h5"
+
+            threep_d_gtDt = getDatasets( threepDir, \
+                                            configList, \
+                                            filename_d_gtDt, \
+                                            "=der:g0D0:sym=", \
+                                            "msq0000", \
+                                            "arr" )[ :, 0, 0, :, 0 ].real
+            
+            threep_gxDx = threep_u_gxDx - threep_d_gxDx
+
+            threep_gyDy = threep_u_gyDy - threep_d_gyDy
+
+            threep_gzDz = threep_u_gzDz - threep_d_gzDz
+
+            threep_gtDt = threep_u_gtDt - threep_d_gtDt
+
+            return [ threep_gxDx, threep_gyDy, threep_gzDz, threep_gtDt ]
+
+        else:
+
+            print( "GPU format not supported for nucleon, yet." )
+
+            exit()
+
+    else: # Particle is meson
+
+        if dataFormat == "gpu":
+
+            threep_gxDx = getDatasets( threepDir, \
+                                          configList, \
+                                          threep_template, \
+                                          "tsink_" + str( ts ), \
+                                          "oneD", \
+                                          "dir_00", \
+                                          "up", \
+                                          "threep" )[ :, 0, 0, ..., 0, 1, 0 ]
+
+            threep_gyDy = getDatasets( threepDir, \
+                                          configList, \
+                                          threep_template, \
+                                          "tsink_" + str( ts ), \
+                                          "oneD", \
+                                          "dir_01", \
+                                          "up", \
+                                          "threep" )[ :, 0, 0, ..., 0, 2, 0 ]
+    
+            threep_gzDz = getDatasets( threepDir, \
+                                          configList, \
+                                          threep_template, \
+                                          "tsink_" + str( ts ), \
+                                          "oneD", \
+                                          "dir_02", \
+                                          "up", \
+                                          "threep" )[ :, 0, 0, ..., 0, 3, 0 ]
+
+            threep_gtDt = getDatasets( threepDir, configList, threep_template, \
+                                            "tsink_" + str( ts ), "oneD", "dir_03", \
+                                            "up", "threep" )[ :, 0, 0, ..., 0, 4, 0 ]
+
+            threep_s_gxDx = np.array( [] )
+            
+            threep_s_gyDy = np.array( [] )
         
-        dataset.append( [] )
+            threep_s_gzDz = np.array( [] )
+    
+            threep_s_gtDt = np.array( [] )
+
+            if particle == "kaon":
+            
+                threep_s_gxDx = getDatasets( threepDir, \
+                                                configList, \
+                                                threep_template, \
+                                                "tsink_" + str( ts ), \
+                                                "oneD", \
+                                                "dir_00", \
+                                                "strange", \
+                                                "threep" )[ :, 0, 0, ..., 0, 1, 0 ]
+
+                threep_s_gyDy = getDatasets( threepDir, \
+                                                configList, \
+                                                threep_template, \
+                                                "tsink_" + str( ts ), \
+                                                "oneD", \
+                                                "dir_01", \
+                                                "strange", \
+                                                "threep" )[ :, 0, 0, ..., 0, 2, 0 ]
+    
+                threep_s_gzDz = getDatasets( threepDir, \
+                                                configList, \
+                                                threep_template, \
+                                                "tsink_" + str( ts ), \
+                                                "oneD", \
+                                                "dir_02", \
+                                                "strange", \
+                                                "threep" )[ :, 0, 0, ..., 0, 3, 0 ]
+
+                threep_s_gtDt = getDatasets( threepDir, \
+                                                configList, \
+                                                threep_template, \
+                                                "tsink_" + str( ts ), \
+                                                "oneD", \
+                                                "dir_03", \
+                                                "strange", \
+                                                "threep" )[ :, 0, 0, ..., 0, 4, 0 ]
+            
+                return [ threep_gxDx, threep_gyDy, threep_gzDz, threep_gtDt, \
+                         threep_s_gxDx, threep_s_gyDy, threep_s_gzDz, threep_s_gtDt ]
+
+            elif particle == "pion": 
+
+                return [ threep_gxDx, threep_gyDy, threep_gzDz, threep_gtDt ]
+
+            else: 
+
+                print( "Error (readAvgXFile): Particle " \
+                    + particle + " not supported." )
+
+                exit()                
+
+        elif dataFormat == "cpu":
+
+            filename = threep_template + ".up.h5"
+
+            threep_gxDx = getDatasets( threepDir, \
+                                          configList, \
+                                          filename, \
+                                            "=der:gxDx:sym=", \
+                                          "msq0000", \
+                                          "arr" )[ :, 0, 0, :, 0 ].real
+
+            threep_gyDy = getDatasets( threepDir, \
+                                          configList, \
+                                          filename, \
+                                            "=der:gyDy:sym=", \
+                                          "msq0000", \
+                                          "arr" )[ :, 0, 0, :, 0 ].real
+
+            threep_gzDz = getDatasets( threepDir, \
+                                          configList, \
+                                          filename, \
+                                            "=der:gzDz:sym=", \
+                                          "msq0000", \
+                                          "arr" )[ :, 0, 0, :, 0 ].real
+
+            threep_gtDt = getDatasets( threepDir, \
+                                          configList, \
+                                          filename, \
+                                            "=der:g0D0:sym=", \
+                                          "msq0000", \
+                                          "arr" )[ :, 0, 0, :, 0 ].real
+
+            threep_s_gxDx = np.array( [] )
+            
+            threep_s_gyDy = np.array( [] )
         
-        datasetName.append( [] )
-        
-        # Get filenames in config sub-directory which follow template
+            threep_s_gzDz = np.array( [] )
+    
+            threep_s_gtDt = np.array( [] )
 
-        filename = glob( configDir + "/" + configList[c] + "/" + fn_template )
+            if particle == "kaon":
+            
+                filename_s = threep_template + ".strange.h5"
 
-        filename = sorted( filename )
+                threep_s_gxDx = getDatasets( threepDir, \
+                                                configList, \
+                                                filename_s, \
+                                                "=der:gxDx:sym=", \
+                                                "msq0000", \
+                                                "arr" )[ :, 0, 0, :, 0 ].real
 
-        fileNum = len( filename )
+                threep_s_gyDy = getDatasets( threepDir, \
+                                                configList, \
+                                                filename_s, \
+                                                "=der:gyDy:sym=", \
+                                                "msq0000", \
+                                                "arr" )[ :, 0, 0, :, 0 ].real
 
-        sources = set()
-
-        for fn in range( fileNum ): 
-
-            dataset[ c ].append( [] )
-
-            datasetName[ c ].append( [] )
-
-            dsetName_tmp = []
-
-            with h5py.File( filename[ fn ], "r" ) as dataFile:
-
-                if keyword:
-
-                    # Put all datasets which contain the first keyword into list
-                    
-                    dataFile.visititems( lambda name, obj: \
-                                          dsetName_tmp.append( name ) \
-                                          if type( obj ) is h5py.Dataset \
-                                          and keyword[0] in name \
-                                          else None )
-
-                    # Filter any datasets from list which do not contain 
-                    # all of the keywords
-
-                    for kw in keyword:
-
-                        dsetName_tmp_filtered = []
-                        
-                        for ds in dsetName_tmp:
-
-                            if kw in ds:
-
-                                dsetName_tmp_filtered.append( ds )
-
-                        dsetName_tmp = dsetName_tmp_filtered
-
-                else:
-
-                    # Put all datasets into list
+                threep_s_gzDz = getDatasets( threepDir, \
+                                                configList, \
+                                                filename_s, \
+                                                "=der:gzDz:sym=", \
+                                                "msq0000", \
+                                                "arr" )[ :, 0, 0, :, 0 ].real
                 
-                    dataFile.visititems( lambda name,obj: \
-                                          dsetName_tmp.append(name) \
-                                          if type( obj ) is h5py.Dataset \
-                                          else None )
+                threep_s_gtDt = getDatasets( threepDir, \
+                                                configList, \
+                                                filename_s, \
+                                                "=der:g0D0:sym=", \
+                                                "msq0000", \
+                                                "arr" )[ :, 0, 0, :, 0 ].real
+            
+                return [ threep_gxDx, threep_gyDy, threep_gzDz, threep_gtDt, \
+                    threep_s_gxDx, threep_s_gyDy, threep_s_gzDz, threep_s_gtDt ]
 
-                #print dsetName_tmp
+            elif particle == "pion": 
 
-                groups_0 = dsetName_tmp[0].split( "/" )
+                return [ threep_gxDx, threep_gyDy, threep_gzDz, threep_gtDt ]
 
-                sources.add( groups_0[1] )
+            else: 
 
-                datasetName[ c ][ fn ].append( groups_0 )
+                print( "Error (readAvgXFile): Particle " \
+                    + particle + " not supported." )
 
-                dataset[ c ][ fn ].append( np.array( dataFile[ dsetName_tmp[ 0 ] ] ) )
-                
-                for name in dsetName_tmp[1:]:
-
-                    groups = name.split( "/" )
-
-                    # Ensure that the top groups match across all files in sub-directory
-
-                    assert ( groups[0] == groups_0[0] ), \
-                        "Top groups in configuration " + configList[ c ] \
-                        + " do not match" 
-                    
-                    sources.add( groups[1] )
-
-                    datasetName[ c ][ fn ].append( groups )
-
-                    dataset[ c ][ fn ].append( np.array( dataFile[ name ] ) )
-
-                # End loop over datasets
-
-            # Close file
-
-        # End loop over files in sub-directory
-
-        # Ensure that the source (2nd) group is unique to each file in sub-directory
-
-        assert len( sources ) == fileNum, \
-            "Source groups in configuration %s are not unique to file" % configList[ c ]
-
-        # Ensure that the groups below the source group match across all files in sub-directory
-
-        for fn in range( 1, fileNum ): 
-
-            for ds in range( len ( datasetName[ c ][ fn ] ) ):
-
-                assert datasetName[ c ][ 0 ][ ds ][ 2: ] == \
-                             datasetName[ c ][ fn ][ ds ][ 2: ], \
-                "Groups below source group in configuration " \
-                + configList[ c ] + " do not match"
-
-    # End loop over configs
-
-    return np.array( dataset ), datasetName
+                exit()                
 
 
 def readDataFile( filename, timestepNum, binNum ):
@@ -351,8 +589,8 @@ def detTimestepAndConfigNum( filename ):
 
             else:
 
-                print "Error (detTimestepAndConfigNum): Timestep in 1st column " \
-                    + "does not behave as expected"
+                print( "Error (detTimestepAndConfigNum): Timestep in 1st column " \
+                    + "does not behave as expected" )
 
                 return -1
 
@@ -405,8 +643,8 @@ def detConfigAndTimestepNum( filename ):
 
             else:
 
-                print "Error (detTimestepAndConfigNum): Timestep in 1st column " \
-                    + "does not behave as expected"
+                print( "Error (detTimestepAndConfigNum): Timestep in 1st column " \
+                    + "does not behave as expected" )
 
                 return -1
 
@@ -482,8 +720,8 @@ def detQsqConfigNumAndTimestepNum( filename ):
 
             else:
 
-                print "Error (detTimestepAndConfigNum): Timestep in 1st column " \
-                    + "does not behave as expected"
+                print( "Error (detTimestepAndConfigNum): Timestep in 1st column " \
+                    + "does not behave as expected" )
 
                 return -1
 
@@ -504,11 +742,11 @@ def detQsqConfigNumAndTimestepNum( filename ):
     return np.array( Qsq ), configNum, timestepNum
 
 
-def writeDataFile( data, filename ):
+def writeDataFile( filename, data ):
 
     if data.ndim != 2:
 
-        print "Error (writeDataFile): Data array does not have two dimensions"
+        print( "Error (writeDataFile): Data array does not have two dimensions" )
 
         return -1
 
@@ -518,20 +756,22 @@ def writeDataFile( data, filename ):
 
             for d1 in range( len( data[ d0 ] ) ):
                 
-                output.write( str( d1 ).ljust(5) + str( data[ d0, d1 ] ) + "\n" )
+                output.write( "{:<5d}{:<20.15}\n".format( d1, data[ d0, d1 ] ) )
+
+    print( "Wrote " + filename )
 
 
-def writeAvgDataFile( data, error, filename ):
+def writeAvgDataFile( filename, data, error ):
 
     if data.ndim != 1:
 
-        print "Error (writeAvgDataFile): Data array has more than one dimension"
+        print( "Error (writeAvgDataFile): Data array has more than one dimension" )
 
         return -1
 
     if data.shape != error.shape or len( data ) != len( error ):
 
-        print "Error (writeAvgDataFile): Error array's length and shape does not match data array's"
+        print( "Error (writeAvgDataFile): Error array's length and shape does not match data array's" )
         
         return -1
 
@@ -539,20 +779,22 @@ def writeAvgDataFile( data, error, filename ):
 
         for d0 in range( len( data ) ):
 
-            output.write( str( d0 ).ljust(5) + str( data[ d0 ] ).ljust(20) + str( error[ d0 ] ) + "\n" )
+            output.write( "{:<5d}{:<25.15}{:<25.15}\n".format( d0, data[ d0 ], error[ d0 ] ) )
+
+    print( "Wrote " + filename )
 
 
-def writeAvgDataFile_wX( x, y, error, filename ):
+def writeAvgDataFile_wX( filename, x, y, error ):
 
     if y.ndim != 1:
 
-        print "Error (writeAvgDataFile): Data array has more than one dimension"
+        print( "Error (writeAvgDataFile_wX): Data array has more than one dimension" )
 
         return -1
 
     if y.shape != error.shape or len( y ) != len( error ):
 
-        print "Error (writeAvgDataFile): Error array's length and shape does not match data array's"
+        print( "Error (writeAvgDataFile_wX): Error array's length and shape does not match data array's" )
         
         return -1
 
@@ -560,7 +802,9 @@ def writeAvgDataFile_wX( x, y, error, filename ):
 
         for ix, iy, ierr in zip( x, y, error ):
 
-            output.write( str( ix ).ljust(5) + str( iy ).ljust(20) + str( ierr ) + "\n" )
+            output.write( "{:<20.15f}{:<20.15f}{:.15f}\n".format( ix, iy, ierr) )
+
+    print( "Wrote " + filename )
 
 
 def writeFormFactorFile( filename, data, Qsq ):
@@ -576,7 +820,9 @@ def writeFormFactorFile( filename, data, Qsq ):
                 
                 for t in range( data.shape[ 2 ] ):
 
-                    output.write( str( t ).ljust(5) + str( Qsq[ q ] ).ljust(5) + str( data[ q, b, t ] ) + "\n" )
+                    output.write( str( t ).ljust(20) + str( Qsq[ q ] ).ljust(20) + str( data[ q, b, t ] ) + "\n" )
+
+    print( "Wrote " + filename )
 
 
 def writeAvgFormFactorFile( filename, data, error, Qsq ):
@@ -598,8 +844,10 @@ def writeAvgFormFactorFile( filename, data, error, Qsq ):
                               + str( data[ q, t ] ).ljust(20) 
                               + str( error[ q, t ] ) + "\n" )
 
+    print( "Wrote " + filename )
 
-def writeFitDatafile( filename, fit, err, fitStart, fitEnd ):
+
+def writeFitDataFile( filename, fit, err, fitStart, fitEnd ):
 
     with open( filename, "w" ) as output:
 
@@ -607,3 +855,88 @@ def writeFitDatafile( filename, fit, err, fitStart, fitEnd ):
                       + str( err ).ljust( 20 ) 
                       + str( int( fitStart ) ).ljust( 5 ) 
                       + str( int( fitEnd ) ) + "\n" )
+
+    print( "Wrote " + filename )
+
+
+def writeTSFParamsFile( filename, params, params_err ):
+
+    assert len( params ) == 7, "Error (writeTwoStateFitParams): " \
+        + "number of fit parameters should be 7."
+
+    assert len( params ) == len( params_err ), \
+        "Error (writeTwoStateFitParams): " \
+        + "number of parameters and number of parameter errors do not match."
+
+    with open( filename, "w" ) as output:
+
+        # A00
+        output.write( "A00".ljust( 5 ) 
+                      + str( params[ 0 ] ).ljust( 20 ) 
+                      + str( params_err[ 0 ] ) + "\n" )
+
+        # A01
+        output.write( "A01".ljust( 5 ) 
+                      + str( params[ 1 ] ).ljust( 20 ) 
+                      + str( params_err[ 1 ] ) + "\n" )
+
+        # A11
+        output.write( "A11".ljust( 5 ) 
+                      + str( params[ 2 ] ).ljust( 20 ) 
+                      + str( params_err[ 2 ] ) + "\n" )
+
+        # c0
+        output.write( "c0".ljust( 5 ) 
+                      + str( params[ 3 ] ).ljust( 20 ) 
+                      + str( params_err[ 3 ] ) + "\n" )
+
+        # c1
+        output.write( "c1".ljust( 5 ) 
+                      + str( params[ 4 ] ).ljust( 20 ) 
+                      + str( params_err[ 4 ] ) + "\n" )
+
+        # E0
+        output.write( "E0".ljust( 5 ) 
+                      + str( params[ 5 ] ).ljust( 20 ) 
+                      + str( params_err[ 5 ] ) + "\n" )
+
+        # E1
+        output.write( "E1".ljust( 5 ) 
+                      + str( params[ 6 ] ).ljust( 20 ) 
+                      + str( params_err[ 6 ] ) + "\n" )
+
+    print( "Wrote " + filename )
+
+def writeTSFParamsFile_twop( filename, params, params_err ):
+
+    assert len( params ) == 4, "Error (writeTwoStateFitParams): " \
+        + "number of fit parameters should be 4."
+
+    assert len( params ) == len( params_err ), \
+        "Error (writeTwoStateFitParams): " \
+        + "number of parameters and number of parameter errors do not match."
+
+    with open( filename, "w" ) as output:
+
+        # c0
+        output.write( "c0".ljust( 5 ) 
+                      + str( params[ 0 ] ).ljust( 20 ) 
+                      + str( params_err[ 0 ] ) + "\n" )
+
+        # c1
+        output.write( "c1".ljust( 5 ) 
+                      + str( params[ 1 ] ).ljust( 20 ) 
+                      + str( params_err[ 1 ] ) + "\n" )
+
+        # E0
+        output.write( "E0".ljust( 5 ) 
+                      + str( params[ 2 ] ).ljust( 20 ) 
+                      + str( params_err[ 2 ] ) + "\n" )
+
+        # E1
+        output.write( "E1".ljust( 5 ) 
+                      + str( params[ 3 ] ).ljust( 20 ) 
+                      + str( params_err[ 3 ] ) + "\n" )
+
+    print( "Wrote " + filename )
+

@@ -2,133 +2,119 @@ import math
 import h5py
 import numpy as np
 import re
-from scipy.optimize import leastsq
 from os import listdir as ls
 from glob import glob
 
-def twoStateFit( twop, threep ):
+def calcError( vals, binNum ):
 
-    # twop[ ts ][ b ]
-
-    # threep[ ts ][ b, t ]
-    
-    fit = []
-
-    # Check that number of bins is the same for all values of tsink
-
-    binNum = []
-
-    for ts in range( len( threep ) ):
- 
-        binNum.append( threep[ ts ].shape[ 0 ] )
-
-        assert binNum[ ts ] == binNum [ 0 ], "Number of bins not the same for every value of tsink."
-
-    for b in range( binNum[ 0 ] ):
-
-        # ti[ ts ][ t ], ...
-
-        a00 = 1.0 
-        a01 = 1.0 
-        a11 = 1.0 
-        c0 = 1.0 
-        c1 = 1.0 
-        E0 = 1.0 
-        E1 = 1.0 
-
-        fitParams = np.array( [ a00, a01, a11, c0, c1, E0, E1 ] )
-
-        ti = []
-        tsink = [] 
-        twop_cp = [] 
-        threep_cp = []
-
-        for ts in range( len( threep ) ):
- 
-            tNum = threep[ ts ].shape[ -1 ]
-
-            ti.append( np.array( range( tNum ) ) )
-
-            tsink.append( ( tNum - 1 ) * np.ones( tNum ) )
-
-            twop_cp.append( twop[ ts ][ b ] * np.ones( tNum ) )
-
-            threep_cp.append( threep[ ts ][ b ] )
-
-        fit.append( leastsq( twoStateErrorFunction, fitParams, \
-                             args = ( ti[0], ti[1], tsink[0], tsink[1], twop_cp[0], twop_cp[1], threep_cp[0], threep_cp[1] ) )[0] )
-
-    return fit
+    return np.std( vals, axis=0 ) \
+        * float( binNum - 1 ) \
+        * float( binNum ) ** -0.5
 
 
-def twoStateThreep( ti, ts, a00, a01, a11, E0, E1 ):
+def signToString( val ):
 
-    return a00 * np.exp( -E0 * ts ) \
-        + a01 * np.exp( -E0 * ( ts - ti ) - E1 * ti ) \
-        + a01 * np.exp( -E1 * ( ts - ti ) - E0 * ti ) \
-        + a11 * np.exp( -E1 * ts )
+    if val >= 0:
+
+        return "+"
+
+    else:
+
+        return ""
+
+def combineMomBoosts(threep, momSq):
+
+    if momSq == 0:
+
+        # Nothing to be done for zero-momentum boost
+
+        return threep
+
+    elif momSq == 2:
+
+        # Momentum boosts should be ordered as:
+
+        # [ +1, +1,  0],
+        # [ +1,  0, +1],
+        # [  0, +1, +1],
+        # [ +1, -1,  0],
+        # [ +1,  0, -1],
+        # [  0, +1, -1],
+        # [ -1, +1,  0],
+        # [ -1,  0, +1],
+        # [  0, -1, +1],
+        # [ -1, -1,  0],
+        # [ -1,  0, -1],
+        # [  0, -1, -1]
+
+        return threep[0, ...] + threep[1, ...] + threep[2, ...] \
+            + threep[3, ...] + threep[4, ...] + threep[5, ...] \
+            + threep[6, ...] + threep[7, ...] + threep[8, ...] \
+            + threep[9, ...] + threep[10, ...] + threep[11, ...] / 12
+
+    elif momSq == 3:
+
+        # Momentum boosts should be ordered as:
+
+        # [ +1, +1, +1],
+        # [ -1, +1, +1],
+        # [ +1, -1, +1],
+        # [ +1, +1, -1],
+        # [ +1, -1, -1],
+        # [ -1, +1, -1],
+        # [ -1, -1, +1],
+        # [ -1, -1, -1]
+
+        return threep[0, ...] + threep[1, ...] \
+            + threep[2, ...] + threep[3, ...] \
+            + threep[4, ...] + threep[5, ...] \
+            + threep[6, ...] + threep[7, ...] / 8
+
+    else:
+
+        print( "Error: momentum boost squared value " \
+            + momSq + " is not supported.\n" )
 
 
-def twoStateTwop( ts, c0, c1, E0, E1 ):
+def initEmptyList( list_in, list_out_order ):
 
-    return c0 * np.exp( -E0 * ts ) + c1 * np.exp( -E1 * ts )
+    list_out = []
 
+    if list_out_order == 1:
 
-#def twoStateErrorFunction( fitParams, ti, tsink, twop, threep ):
+        list_out = [ [] for i in range( list_in ) ]
 
-def twoStateErrorFunction( fitParams, ti0, ti1, tsink0, tsink1, twop0, twop1, threep0, threep1 ):
+    elif list_out_order == 2:
 
-    a00 = fitParams[ 0 ]
-          
-    a01 = fitParams[ 1 ]
-          
-    a11 = fitParams[ 2 ]
-          
-    c0 = fitParams[ 3 ]
-          
-    c1 = fitParams[ 4 ]
-        
-    E0 = fitParams[ 5 ]
-                
-    E1 = fitParams[ 6 ]
+        list_out = [ [ [] for j in range( len( list_in[i] ) ) ] \
+                     for i in range( len( list_in ) ) ]
 
-    """
-    for ts in range( len( threep ) ):
+    elif list_out_order == 3:
 
-        err.append( twoStateTwop( tsink[ ts ], c0, c1, E0, E1 ) \
-                    - twop[ ts ] )
-        
-        err.append( twoStateThreep( ti[ ts ], tsink[ ts ], a00, a01, a11, E0, E1 ) \
-                    - threep[ ts ] )
-    """
-    err0 = twoStateTwop( tsink0, c0, c1, E0, E1 ) \
-                - twop0
-        
-    err1 = twoStateThreep( ti0, tsink0, a00, a01, a11, E0, E1 ) \
-                - threep0
+        list_out = [ [ [ [] for k in range( len( list_in[i][j] ) ) ] \
+                       for j in range( len( list_in[i] ) ) ] \
+                     for i in range( len( list_in ) ) ]
 
-    err2 = twoStateTwop( tsink1, c0, c1, E0, E1 ) \
-                - twop1
+    else:
 
-    err3 = twoStateThreep( ti1, tsink1, a00, a01, a11, E0, E1 ) \
-                - threep1
+        print( "Error(initEmptyList): list order not supported.\n" )
 
-    return np.concatenate( ( err0, err1, err2, err3 ) )
+    return list_out
 
 
 def fold( data ):
 
     timestepNum = data.shape[ -1 ]
 
-    out = np.zeros( data.shape[ :-1 ] + ( timestepNum / 2 + 1, ) )
+    out = np.zeros( data.shape[ :-1 ] + ( timestepNum // 2 + 1, ) )
 
     out[ ..., 0 ] = data[ ..., 0 ]
 
-    for t in range( 1, timestepNum / 2 ):
+    for t in range( 1, timestepNum // 2 ):
         
         out[ ..., t ] = ( data[ ..., t ] + data[ ..., -t ] ) / 2
 
-    out[ ..., timestepNum / 2 ] = data[ ..., timestepNum / 2 ]
+    out[ ..., timestepNum // 2 ] = data[ ..., timestepNum // 2 ]
 
     return out
 
@@ -143,12 +129,12 @@ def getConfigList( configListFilename, configDir ):
 
                 configList = configFile.read().splitlines()
 
-            print "Configuration list read"
+            print( "Configuration list read" )
 
         else:
 
-            print "WARNING: Given configuration does not exist. " \
-                + "Will use all configurations in configuration directory."
+            print( "WARNING: Given configuration does not exist. " \
+                + "Will use all configurations in configuration directory." )
             
             configList = ls( configDir )
 
@@ -160,7 +146,7 @@ def getConfigList( configListFilename, configDir ):
 
                     configFile.write( str( config ) + "\n" )
 
-            print "Configuration list written"
+            print( "Configuration list written" )
 
     else:
 
@@ -172,8 +158,8 @@ def getConfigList( configListFilename, configDir ):
 
         if glob( configFilename ):
 
-            print "WARNING: Configuration list already exists in this directory. " \
-                + "Will not overwrite."
+            print( "WARNING: Configuration list already exists in this directory. " \
+                + "Will not overwrite." )
 
         else:
 
@@ -183,9 +169,9 @@ def getConfigList( configListFilename, configDir ):
 
                     configFile.write( str( config ) + "\n" )
 
-            print "Configuration list written"
+            print( "Configuration list written" )
 
-    print "Number of configurations: " + str( len( configList ) )
+    print( "Number of configurations: " + str( len( configList ) ) )
 
     return configList
 
@@ -264,7 +250,9 @@ def check_sources( filenames, sourceNum ):
     # Check that the number of files is the same as the given number of sources
 
     if len( filenames ) is not sourceNum:
-        print "check_sources: number of sources is " + str( len( filenames ) ) + ", should be " + str( sourceNum )
+        print( "check_sources: number of sources is " \
+               + str( len( filenames ) ) + ", should be " \
+               + str( sourceNum ) )
         check = False
         
     # Check that all of the source positions are unique
@@ -287,7 +275,7 @@ def check_sources( filenames, sourceNum ):
                 matches += 1
 
         if matches > 1:
-            print "check_sources: source positions are not all unique"
+            print( "check_sources: source positions are not all unique" )
             check = False
                 
     # Check that all of the secondary groups are actually source dirctories
@@ -300,7 +288,7 @@ def check_sources( filenames, sourceNum ):
     for src in sourcePos:
         # if the source position does not match either format
         if re.match( srcPosFormat2, src ) is None and re.match( srcPosFormat3, src ) is None:
-            print "check_sources: second-level group %s not of the proper form" % src
+            print( "check_sources: second-level group " + src + " not of the proper form" )
             check = False
 
     return check
@@ -308,16 +296,20 @@ def check_sources( filenames, sourceNum ):
 def jackknife( vals, binSize ):
 
     configNum = len( vals )
-    binNum = configNum / binSize
 
-    vals_jk =[]
+    assert configNum % binSize == 0, "Number of configurations " \
+        + str( configNum ) + " not evenly divided by number of bins " \
+        + str( binNum ) + " in effective mass file " + mEff_filename + ".\n"
 
-    for bins in range( binNum ):
+    binNum = configNum // binSize
 
-        vals_jk.append( [] )
+    vals_jk = initEmptyList( binNum, 1 )
 
-        temp = np.vstack( ( vals[ : bins * binSize, : ], vals[ ( bins + 1 ) * binSize :, : ] ) )
+    for b in range( binNum ):
 
-        vals_jk[ bins ] = np.average( temp, axis=0 )
+        temp = np.vstack( ( vals[ : b * binSize, : ], \
+                            vals[ ( b + 1 ) * binSize :, : ] ) )
+
+        vals_jk[ b ] = np.average( temp, axis=0 )
 
     return np.array( vals_jk )
