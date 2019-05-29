@@ -154,6 +154,9 @@ twop_avg = np.average( twop_jk, axis=0 )
 
 twop_err = fncs.calcError( twop_jk, binNum )
 
+avgOutputFilename = output_template.replace( "*", "twop_avg" )
+rw.writeAvgDataFile( avgOutputFilename, twop_avg, twop_err )
+
 ############################
 # Fold two-point functions #
 ############################
@@ -171,17 +174,15 @@ mEff = pq.mEffFromSymTwop( twop_fold )
 # mEff_avg[ t ]
 
 mEff_avg = np.average( mEff, axis=0 )
-
-# mEff_err[ t ]
-
 mEff_err = fncs.calcError( mEff, binNum )
+
+avgOutputFilename = output_template.replace( "*", "mEff_avg" )
+rw.writeAvgDataFile( avgOutputFilename, mEff_avg, mEff_err )
 
 # Fit
 # mEff_fit [ b ]
 
-mEff_fitEnd
-
-for mEff_fitStart in range( 1, 20 ):
+for mEff_fitStart in range( 1, 15 ):
 
     mEff_fit = np.zeros( binNum )
 
@@ -201,26 +202,154 @@ for mEff_fitStart in range( 1, 20 ):
 
     mEff_fit_err = fncs.calcError( mEff_fit, binNum )
 
-    twopFitEnd = 30
+    if args.two_state_fit:
 
-    for twopFitStart in range( 1, 20 ):
+        #twop_rangeEnd = 20
 
-        twopFitParams, twoFit_chiSq = fit.twopFit( twop_jk, twopFitStart, \
-                                                   twopFitEnd, T )
+        tsf_rangeEnd = 20
+        
+        for tsf_rangeStart in range( 1, 5 ):
 
-        G = twopFitParams[ :, 0 ]
-        E = twopFitParams[ :, 1 ]
+            # fitParams[ b, param ]
 
-        E_avg = np.average( E, axis=0 )
-        E_err = fncs.calcError( E, binNum )
+            fitParams, chiSq = fit.twoStateFit_twop( twop_jk, \
+                                                     tsf_rangeStart, \
+                                                     tsf_rangeEnd, T )
 
-        print( "\nmEff fit start=" + str(mEff_fit_avg) + ", twop fit start=" + str(twopFitStart) + ":" )
-        print( "mEff={:.5}+/-{:.3}".format( mEff_fit_avg, mEff_fit_err ) )
-        print( "E={:.5}+/-{:.3}".format( E_avg, E_err ) )
-        print( "E_err < np.abs( mEff_fit_avg - E_avg ) / 2: " \
-               + str(E_err < np.abs( mEff_fit_avg - E_avg ) / 2) )
-        print( "mEff_fit_err < np.abs( mEff_fit_avg - E_avg ) / 2: "\
-               + str(mEff_fit_err < np.abs( mEff_fit_avg - E_avg ) / 2) )
+            c0 = fitParams[ :, 0 ]
+            c1 = fitParams[ :, 1 ]
+            E0 = fitParams[ :, 2 ]
+            E1 = fitParams[ :, 3 ]
+
+            E0_avg = np.average( E0 )
+            E0_err = fncs.calcError( E0, binNum )
+
+            relDiff = np.abs( mEff_fit_avg - E0_avg ) \
+                      / ( 0.5* ( mEff_fit_avg + E0_avg ) )
+
+            print( "\nmEff fit start={:d}, tsf fit start={:d}:".format( mEff_fitStart, \
+                                                                        tsf_rangeStart ) )
+            print( "mEff={:.5}+/-{:.3}".format( mEff_fit_avg, mEff_fit_err ) )
+            print( "E0={:.5}+/-{:.3}".format( E0_avg, E0_err ) )
+            print( "relDiff: " + str(relDiff) )
+            print( "E0_err/2 > | mEff_fit_avg - E0_avg | / 0.5*(mEff_fit_avg+E0_avg): "
+                   + str(0.5*E0_err > relDiff) )
+            print( "mEff_fit_err/2 > | mEff_fit_avg - E0_avg | / 0.5*(mEff_fit_avg+E0_avg): "
+                   + str(0.5*mEff_fit_err > relDiff) )
+
+            if 0.5*E0_err > relDiff and 0.5*mEff_fit_err > relDiff:
+
+                # Calculate fitted curve
+
+                curve = np.zeros( ( binNum, 50 ) )
+
+                t_s = np.concatenate( ( np.linspace( tsf_rangeStart, \
+                                                     tsf_rangeEnd, 25 ), \
+                                        np.linspace( T - tsf_rangeEnd, \
+                                                     T- tsf_rangeStart, 25 ) ) )
+
+                for b in range( binNum ):
+
+                    for t in range( t_s.shape[ -1 ] ):
+
+                        curve[ b, t ] = fit.twoStateTwop( t_s[ t ], T, c0[ b ], c1[ b ], \
+                                                          E0[ b ], E1[ b ] )
+                        
+                    # End loop over tsink
+                # End loop over bins
+
+                chiSq_avg = np.average( chiSq, axis=0 )
+                chiSq_err = fncs.calcError( chiSq, binNum )
+                
+                curve_avg = np.average( curve, axis=0 )
+                curve_err = fncs.calcError( curve, binNum )
+                
+                c0_avg = np.average( c0 )
+                c0_err = fncs.calcError( c0, binNum )
+                
+                c1_avg = np.average( c1 )
+                c1_err = fncs.calcError( c1, binNum )
+            
+                E1_avg = np.average( E1 )
+                E1_err = fncs.calcError( E1, binNum )
+            
+                # Write output files
+
+                tsf_range_str = "2s" + str( tsf_rangeStart ) \
+                                + ".2e" + str( tsf_rangeEnd )
+
+                mEff_range_str = "2s" + str( mEff_fitStart ) \
+                                 + ".2e" + str( mEff_fitEnd )
+
+                mEff_outputFilename = output_template.replace( "*", "mEff_fit_" + mEff_range_str )
+                rw.writeFitDataFile( mEff_outputFilename, mEff_fit_avg, \
+                                     mEff_fit_err, mEff_fitStart, mEff_fitEnd )
+
+                curveOutputFilename \
+                    = output_template.replace( "*", \
+                                               "twop_twoStateFit_curve_" \
+                                               + tsf_range_str )
+                rw.writeAvgDataFile_wX( curveOutputFilename, t_s, curve_avg, curve_err )
+
+                chiSqOutputFilename \
+                    = output_template.replace( "*", \
+                                               "twop_twoStateFit_chiSq_" \
+                                               + tsf_range_str )
+                rw.writeFitDataFile( chiSqOutputFilename, chiSq_avg, chiSq_err, 0, 0 )
+
+                fitParams_avg = np.array( [ 0.0, 0.0, 0.0, c0_avg, c1_avg, E0_avg, E1_avg ] )
+                fitParams_err = np.array( [ 0.0, 0.0, 0.0, c0_err, c1_err, E0_err, E1_err ] )
+
+                tsfParamsOutputFilename \
+                    = output_template.replace( "*", \
+                                               "twop_twoStateFitParams_" \
+                                               + tsf_range_str )
+                rw.writeTSFParamsFile( tsfParamsOutputFilename, \
+                                       fitParams_avg, fitParams_err )
+                """
+                print( "\nmEff fit start={:i}, twop fit start={:i}, tsf fit start={:i}:", 
+                       mEff_fitStart, twopFitStart, tsf_rangeStart )
+                print( "mEff={:.5}+/-{:.3}".format( mEff_fit_avg, mEff_fit_err ) )
+                print( "E={:.5}+/-{:.3}".format( E_avg, E_err ) )
+                print( "E0={:.5}+/-{:.3}".format( E0_avg, E0_err ) )
+                print( "relDiff_mEff_E0: " + str(relDiff_mEff_E0) )
+                print( "relDiff_E_E0: " + str(relDiff_E_E0) )
+                print( "E0_err/2 > | mEff_fit_avg - E_avg | / 0.5*(mEff_fit_avg+E_avg): "
+                       + str(0.5*E0_err > relDiff_mEff_E0) )
+                print( "mEff_fit_err/2 > | mEff_fit_avg - E_avg | / 0.5*(mEff_fit_avg+E_avg): "
+                       + str(0.5*mEff_fit_err > relDiff_mEff_E0) )
+                print( "E0_err/2 > | mEff_fit_avg - E_avg | / 0.5*(mEff_fit_avg+E_avg): "
+                       + str(0.5*E0_err > relDiff_E_E0) )
+                print( "E_err/2 > | mEff_fit_avg - E_avg | / 0.5*(mEff_fit_avg+E_avg): "
+                       + str(0.5*E_err > relDiff_E_E0) )
+                """
+    else:
+
+        twopFitEnd = 20
+
+        for twopFitStart in range( 1, 20 ):
+
+            twopFitParams, twoFit_chiSq = fit.twopFit( twop_jk, twopFitStart, \
+                                                       twopFitEnd, T )
+                
+            G = twopFitParams[ :, 0 ]
+            E = twopFitParams[ :, 1 ]
+            
+            E_avg = np.average( E, axis=0 )
+            E_err = fncs.calcError( E, binNum )
+
+            relDiff = np.abs( mEff_fit_avg - E_avg ) / ( 0.5* ( mEff_fit_avg + E_avg ) )
+        
+            if 0.5*E_err > relDiff and 0.5*mEff_fit_err > relDiff:
+
+                print( "\nmEff fit start=" + str(mEff_fitStart) + ", twop fit start=" + str(twopFitStart) + ":" )
+                print( "mEff={:.5}+/-{:.3}".format( mEff_fit_avg, mEff_fit_err ) )
+                print( "E={:.5}+/-{:.3}".format( E_avg, E_err ) )
+                #print( "E_err/2 > | mEff_fit_avg - E_avg | / 0.5*(mEff_fit_avg+E_avg): "
+                #       + str(0.5*E_err > relDiff) )
+                #print( "mEff_fit_err/2 > | mEff_fit_avg - E_avg | / 0.5*(mEff_fit_avg+E_avg): "
+                #       + str(0.5*mEff_fit_err > relDiff) )
+
 """
     if E_err < np.abs( mEff_fit_avg - E_avg ) / 2 \
        or mEff_fit_err < np.abs( mEff_fit_avg - E_avg ) / 2:
