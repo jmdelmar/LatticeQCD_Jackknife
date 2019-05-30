@@ -306,11 +306,11 @@ def twoStateThreep( ti, tsink, T, a00, a01, a11, E0, E1 ):
     else:
         
         return a00 * np.exp( -E0 * ( T - tsink ) ) \
-            a01 * np.exp( -E0 * ( ti - tsink ) \
+            + a01 * np.exp( -E0 * ( ti - tsink ) \
                             - E1 * ( T - ti ) ) \
-            a01 * np.exp( -E1 * ( ti - tsink ) \
+            + a01 * np.exp( -E1 * ( ti - tsink ) \
                             - E0 * ( T - ti ) ) \
-            a11 * np.exp( -E1 * ( T - tsink ) )
+            + a11 * np.exp( -E1 * ( T - tsink ) )
         
 
 def twoStateTwop( tsink, T, c0, c1, E0, E1 ):

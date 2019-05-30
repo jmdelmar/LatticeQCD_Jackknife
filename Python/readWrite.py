@@ -1,3 +1,4 @@
+from time import time
 import h5py
 import numpy as np
 from os import listdir as ls
@@ -59,6 +60,14 @@ def getFileNames( configDir, configList, fn_template ):
 
     return filename
 
+
+def filterDsetname( dsetnameList, dsetname, keyword ):
+
+    if all( kw in dsetname for kw in keyword ):
+        dsetnameList.append( dsetname )
+
+    return
+
 def getDatasetNames( filename, *keyword ):
     
     configNum = len( filename )
@@ -77,27 +86,30 @@ def getDatasetNames( filename, *keyword ):
 
             with h5py.File( filename[c][fn], "r" ) as dataFile:
                 
-                # Put all datasets into list
-                
-                dataFile.visititems( lambda name,obj: \
-                                     dsetname[c][fn].append(name) \
-                                     if type( obj ) is h5py.Dataset \
-                                     else None )
-
                 if keyword:
-
-                    # Filter any datasets from list which do not contain 
-                    # all of the keywords
-
-                    for kw in keyword:
-
-                        dsetname[c][fn] = list(filter( lambda name: kw in name, dsetname[c][fn] ))
-
+                    
+                    # Use filterDsetname() to check if all keywords are
+                    # in dsetname[c][fn]
+                    
+                    dataFile.visititems( lambda name,obj: \
+                                         filterDsetname( dsetname[c][fn], \
+                                                         name, keyword ) \
+                                         if type( obj ) is h5py.Dataset \
+                                         else None )
                     if not dsetname[c][fn]:
                         
                         print( "WARNING: No datasets containing all keywords " \
                                + ", ".join( keyword ) + " in file " \
                                + filename[c][fn] )
+
+                else:
+
+                    # Put all datasets into list
+
+                    dataFile.visititems( lambda name,obj: \
+                                         dsetname[c][fn].append(name) \
+                                         if type( obj ) is h5py.Dataset \
+                                         else None )
 
             # Close file
 
@@ -137,7 +149,7 @@ def getDatasets( configDir, configList, fn_template, *keyword ):
     # Loop through config indexes
 
     for c in range( len( dsetname ) ):
-        
+
         for fn in range( len( dsetname[c] ) ): 
 
             with h5py.File( filename[c][fn], "r" ) as dataFile:
@@ -147,11 +159,8 @@ def getDatasets( configDir, configList, fn_template, *keyword ):
                     data[ c ][ fn ][ ds ] = np.array( dataFile[ dsetname[ c ][ fn ][ ds ] ] )
 
                 # End loop over datasets
-
             # Close file
-
         # End loop over files in sub-directory
-
     # End loop over configs
 
     return np.array( data )
@@ -441,7 +450,7 @@ def readAvgXFile( threepDir, configList, threep_template,
         elif dataFormat == "cpu":
 
             filename = threep_template + ".up.h5"
-
+            
             threep_gxDx = getDatasets( threepDir, \
                                           configList, \
                                           filename, \
