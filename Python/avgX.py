@@ -1,4 +1,5 @@
 from sys import stderr
+import time
 import numpy as np
 import argparse as argp
 from scipy.optimize import curve_fit
@@ -6,12 +7,9 @@ import functions as fncs
 import readWrite as rw
 import physQuants as pq
 import lqcdjk_fitting as fit
+from mpi4py import MPI
 
 Z = 1.0
-
-#twopFitStart = 10
-
-#twopFitEnd = 30
 
 particle_list = [ "pion", "kaon", "nucleon" ]
 
@@ -69,6 +67,12 @@ args = parser.parse_args()
 #########
 # Setup #
 #########
+
+# Set MPI values
+
+comm = MPI.COMM_WORLD
+procNum = comm.Get_size()
+rank = comm.Get_rank()
 
 # Input directories and filename templates
 
@@ -149,8 +153,7 @@ dataFormat = args.data_format
 # Get configurations from given list or from given 
 # threep directory if list not given
 
-configList = fncs.getConfigList( args.config_list, threepDir )
-
+configList = np.array( fncs.getConfigList( args.config_list, threepDir ) )
 configNum = len( configList )
 
 # Check inputs
@@ -165,9 +168,47 @@ assert dataFormat in format_list, \
 
 assert configNum % binSize == 0, "Number of configurations " \
     + str( configNum ) + " not evenly divided by bin size " \
-    + str( binSize ) + ".\n"
+    + str( binSize ) + "."
 
-binNum = configNum // binSize
+assert configNum % procNum == 0, "Number of configurations " \
+    + str( configNum ) + " not evenly divided by number of processes " \
+    + str( procNum ) + "."
+
+# Number of configurations on each process
+
+procSize = configNum // procNum
+
+# Total number of bins across processes
+
+binNum_glob = configNum // binSize
+
+# Global index of confs for each process
+
+iconf = np.array( [ np.array( [ r * procSize + cl \
+                                for cl in range( procSize ) ], dtype=int )
+                    for r in range( procNum ) ] )
+
+# List of configurations on this process
+
+configList_loc = configList[ iconf[ rank ] ]
+
+# Global index of first conf of bins for each process
+
+binStart = np.array( [ np.array( [ cl for cl in iconf[ r ] \
+                                   if cl % binSize == 0 ], dtype=int )
+                       for r in range( procNum ) ] )
+
+# Global bin index for each process
+
+bin_glob = binStart // binSize
+
+# Number of bins for each process
+
+binNum = [ len( binStart[ r ] ) for r in range( procNum ) ]
+
+# Number of bins for this process
+
+binNum_loc = binNum[ rank ]
 
 #######################
 # Two-point functions #
@@ -176,201 +217,233 @@ binNum = configNum // binSize
 # Get the real part of two-point functions
 # twop[ c, t ]
 
-twop = []
+twop_loc = []
+
+t0 = time.time()
 
 if dataFormat == "cpu":
 
-    twop = rw.getDatasets( twopDir, configList, twop_template, \
+    twop_loc = rw.getDatasets( twopDir, configList_loc, twop_template, \
                                             "msq0000", "arr" )[ :, 0, 0, :, 0 ].real
 
 else:
         
-    twop = rw.getDatasets( twopDir, configList, twop_template, "twop" )[ :, 0, 0, ..., 0, 0 ]
+    twop_loc = rw.getDatasets( twopDir, configList_loc, twop_template, "twop" )[ :, 0, 0, ..., 0, 0 ]
 
-print( "Read two-point functions from HDF5 files" )
+twop_loc = np.asarray( twop_loc, order='c' )
 
-T = twop.shape[ -1 ]
+T = twop_loc.shape[ -1 ]
 
-# Jackknife two-point functions
-# twop_jk[ b, t ]
+if rank == 0:
 
-twop_jk = fncs.jackknife( twop, binSize )
+    twop = np.zeros( ( configNum, T ) )
 
-twop_err = np.std( twop_jk, axis=0 ) \
-           * float( binNum - 1 ) / np.sqrt( float( binNum ) )
+else:
 
-############################
-# Fold two-point functions #
-############################
+    twop = None
+"""
+for p in range( procNum ):
 
-twop_fold = fncs.fold( twop_jk )
+    if p == rank:
 
-##################
-# Effective mass #
-##################
+        print( "rank {}: {}".format( rank, twop_loc ) )
 
-# mEff[ b, t ]
+    comm.Barrier()
 
-mEff = pq.mEffFromSymTwop( twop_fold )
+    print( twop )
 
-# mEff_avg[ t ]
+exit()
+"""
+comm.Gather( twop_loc, twop, root=0 )
 
-mEff_avg = np.average( mEff, axis=0 )
-mEff_err = fncs.calcError( mEff, binNum )
+if rank == 0:
 
-avgOutputFilename = output_template.replace( "*", "mEff_avg" )
-rw.writeAvgDataFile( avgOutputFilename, mEff_avg, mEff_err )
+    print( "Read two-point functions from HDF5 files in {:.3} seconds".format( time.time() - t0 ) )
 
-# Fit the effective mass and two-point functions 
+    # Jackknife two-point functions
+    # twop_jk[ b, t ]
 
-try:
+    twop_jk = fncs.jackknife( twop, binSize )
+    twop_err = fncs.calcError( twop_jk, binNum_glob )
+
+    ############################
+    # Fold two-point functions #
+    ############################
+
+    twop_fold = fncs.fold( twop_jk )
+
+    ##################
+    # Effective mass #
+    ##################
+
+    # mEff[ b, t ]
+
+    mEff = pq.mEffFromSymTwop( twop_fold )
+
+    # mEff_avg[ t ]
+
+    mEff_avg = np.average( mEff, axis=0 )
+    mEff_err = fncs.calcError( mEff, binNum_glob )
+
+    avgOutputFilename = output_template.replace( "*", "mEff_avg" )
+    rw.writeAvgDataFile( avgOutputFilename, mEff_avg, mEff_err )
+
+    # Fit the effective mass and two-point functions 
+
+    try:
     
-    fitResults = fit.mEffTwopFit( mEff, twop_jk, rangeEnd, tsf )
+        fitResults = fit.mEffTwopFit( mEff, twop_jk, rangeEnd, tsf )
 
-except fit.lqcdjk_BadFitError as error:
+    except fit.lqcdjk_BadFitError as error:
 
-    print( error, file=stderr )
+        print( error, file=stderr )
 
-    exit()
+        exit()
 
-fitParams = fitResults[ 0 ]
-chiSq = fitResults[ 1 ]
-mEff_fit = fitResults[ 2 ]
-rangeStart = fitResults[ 3 ]
-mEff_rangeStart = fitResults[ 4 ]
+    fitParams = fitResults[ 0 ]
+    chiSq = fitResults[ 1 ]
+    mEff_fit = fitResults[ 2 ]
+    rangeStart = fitResults[ 3 ]
+    mEff_rangeStart = fitResults[ 4 ]
 
-if tsf:
+    if tsf:
 
-    c0 = fitParams[ :, 0 ]
-    c1 = fitParams[ :, 1 ]
-    E0 = fitParams[ :, 2 ]
-    E1 = fitParams[ :, 3 ]
+        c0 = fitParams[ :, 0 ]
+        c1 = fitParams[ :, 1 ]
+        E0 = fitParams[ :, 2 ]
+        E1 = fitParams[ :, 3 ]
 
-    # Calculate fitted curve
+        # Calculate fitted curve
 
-    curve = np.zeros( ( binNum, 50 ) )
+        curve = np.zeros( ( binNum_glob, 50 ) )
 
-    t_s = np.concatenate( ( np.linspace( rangeStart, \
-                                         rangeEnd, 25 ), \
-                            np.linspace( T - rangeEnd, \
-                                         T- rangeStart, 25 ) ) )
+        t_s = np.concatenate( ( np.linspace( rangeStart, \
+                                             rangeEnd, 25 ), \
+                                np.linspace( T - rangeEnd, \
+                                             T- rangeStart, 25 ) ) )
                     
-    for b in range( binNum ):
+        for b in range( binNum_glob ):
 
-        for t in range( t_s.shape[ -1 ] ):
+            for t in range( t_s.shape[ -1 ] ):
 
-            curve[ b, t ] = fit.twoStateTwop( t_s[ t ], T, c0[ b ], c1[ b ], \
-                                              E0[ b ], E1[ b ] )
+                curve[ b, t ] = fit.twoStateTwop( t_s[ t ], T, c0[ b ], c1[ b ], \
+                                                  E0[ b ], E1[ b ] )
                         
-        # End loop over tsink
-    # End loop over bins
+            # End loop over tsink
+        # End loop over bins
 
-    curve_avg = np.average( curve, axis=0 )
-    curve_err = fncs.calcError( curve, binNum )
+        curve_avg = np.average( curve, axis=0 )
+        curve_err = fncs.calcError( curve, binNum_glob )
                 
-    chiSq_avg = np.average( chiSq, axis=0 )
-    chiSq_err = fncs.calcError( chiSq, binNum )
+        chiSq_avg = np.average( chiSq, axis=0 )
+        chiSq_err = fncs.calcError( chiSq, binNum_glob )
+    
+        c0_avg = np.average( c0 )
+        c0_err = fncs.calcError( c0, binNum_glob )
                 
-    c0_avg = np.average( c0 )
-    c0_err = fncs.calcError( c0, binNum )
-                
-    c1_avg = np.average( c1 )
-    c1_err = fncs.calcError( c1, binNum )
+        c1_avg = np.average( c1 )
+        c1_err = fncs.calcError( c1, binNum_glob )
             
-    E1_avg = np.average( E1 )
-    E1_err = fncs.calcError( E1, binNum )
+        E1_avg = np.average( E1 )
+        E1_err = fncs.calcError( E1, binNum_glob )
             
-    # Write output files
+        # Write output files
 
-    tsf_range_str = "2s" + str( rangeStart ) \
-                    + ".2e" + str( rangeEnd )
+        tsf_range_str = "2s" + str( rangeStart ) \
+                        + ".2e" + str( rangeEnd )
 
-    curveOutputFilename \
-        = output_template.replace( "*", \
-                                   "twop_twoStateFit_curve_" \
-                                   + tsf_range_str )
-    rw.writeAvgDataFile_wX( curveOutputFilename, \
-                            t_s, curve_avg, curve_err )
+        curveOutputFilename \
+            = output_template.replace( "*", \
+                                       "twop_twoStateFit_curve_" \
+                                       + tsf_range_str )
+        rw.writeAvgDataFile_wX( curveOutputFilename, \
+                                t_s, curve_avg, curve_err )
 
-    chiSqOutputFilename \
-        = output_template.replace( "*", \
-                                   "twop_twoStateFit_chiSq_" \
-                                   + tsf_range_str )
-    rw.writeFitDataFile( chiSqOutputFilename, \
-                         chiSq_avg, chiSq_err, rangeStart, rangeEnd )
+        chiSqOutputFilename \
+            = output_template.replace( "*", \
+                                       "twop_twoStateFit_chiSq_" \
+                                       + tsf_range_str )
+        rw.writeFitDataFile( chiSqOutputFilename, \
+                             chiSq_avg, chiSq_err, rangeStart, rangeEnd )
 
-else: # One-state fit
+    else: # One-state fit
 
-    G = fitParams[ :, 0 ]
-    E = fitParams[ :, 1 ]
+        G = fitParams[ :, 0 ]
+        E = fitParams[ :, 1 ]
 
-    # Calculate fitted curve
+        # Calculate fitted curve
 
-    curve = np.zeros( ( binNum, 50 ) )
+        curve = np.zeros( ( binNum_glob, 50 ) )
 
-    t_s = np.concatenate( ( np.linspace( rangeStart, \
-                                         rangeEnd, 25 ), \
-                            np.linspace( T - rangeEnd, \
-                                         T- rangeStart, 25 ) ) )
+        t_s = np.concatenate( ( np.linspace( rangeStart, \
+                                             rangeEnd, 25 ), \
+                                np.linspace( T - rangeEnd, \
+                                             T- rangeStart, 25 ) ) )
 
-    for b in range( binNum ):
+        for b in range( binNum_glob ):
 
-        for t in range( t_s.shape[ -1 ] ):
-
-            curve[ b, t ] = fit.oneStateTwop( t_s[ t ], T, \
-                                              G[ b ], E[ b ] )
+            for t in range( t_s.shape[ -1 ] ):
+                
+                curve[ b, t ] = fit.oneStateTwop( t_s[ t ], T, \
+                                                  G[ b ], E[ b ] )
                         
-        # End loop over tsink
-    # End loop over bins
+            # End loop over tsink
+        # End loop over bins
 
-    curve_avg = np.average( curve, axis=0 )
-    curve_err = fncs.calcError( curve, binNum )
+        curve_avg = np.average( curve, axis=0 )
+        curve_err = fncs.calcError( curve, binNum_glob )
             
-    chiSq_avg = np.average( chiSq, axis=0 )
-    chiSq_err = fncs.calcError( chiSq, binNum )
+        chiSq_avg = np.average( chiSq, axis=0 )
+        chiSq_err = fncs.calcError( chiSq, binNum_glob )
             
-    G_avg = np.average( G )
-    G_err = fncs.calcError( G, binNum )
+        G_avg = np.average( G )
+        G_err = fncs.calcError( G, binNum_glob )
                 
-    # Write output files
+        # Write output files
 
-    twopFit_str = "2s" + str( rangeStart ) \
-                  + ".2e" + str( rangeEnd )
+        twopFit_str = "2s" + str( rangeStart ) \
+                      + ".2e" + str( rangeEnd )
 
-    curveOutputFilename \
-        = output_template.replace( "*", \
-                                   "twop_fit_curve_" \
-                                   + twopFit_str )
-    rw.writeAvgDataFile_wX( curveOutputFilename, t_s, curve_avg, curve_err )
+        curveOutputFilename \
+            = output_template.replace( "*", \
+                                       "twop_fit_curve_" \
+                                       + twopFit_str )
+        rw.writeAvgDataFile_wX( curveOutputFilename, t_s, curve_avg, curve_err )
 
-    chiSqOutputFilename \
-        = output_template.replace( "*", \
-                                   "twop_fit_chiSq_" \
-                                   + twopFit_str )
-    rw.writeFitDataFile( chiSqOutputFilename, chiSq_avg, chiSq_err, rangeStart, rangeEnd )
+        chiSqOutputFilename \
+            = output_template.replace( "*", \
+                                       "twop_fit_chiSq_" \
+                                       + twopFit_str )
+        rw.writeFitDataFile( chiSqOutputFilename, chiSq_avg, chiSq_err, rangeStart, rangeEnd )
 
-# End if not two-state fit
+    # End if not two-state fit
 
-mEff_fit_avg = np.average( mEff_fit, axis=0 )
-mEff_fit_err = fncs.calcError( mEff_fit, binNum )
+    mEff_fit_avg = np.average( mEff_fit, axis=0 )
+    mEff_fit_err = fncs.calcError( mEff_fit, binNum_glob )
 
-mEff_range_str = "2s" + str( mEff_rangeStart ) \
-                 + ".2e" + str( rangeEnd )
+    mEff_range_str = "2s" + str( mEff_rangeStart ) \
+                     + ".2e" + str( rangeEnd )
 
-mEff_outputFilename = output_template.replace( "*", "mEff_fit_" + mEff_range_str )
-rw.writeFitDataFile( mEff_outputFilename, mEff_fit_avg, \
-                     mEff_fit_err, mEff_rangeStart, rangeEnd )
+    mEff_outputFilename = output_template.replace( "*", "mEff_fit_" + mEff_range_str )
+    rw.writeFitDataFile( mEff_outputFilename, mEff_fit_avg, \
+                         mEff_fit_err, mEff_rangeStart, rangeEnd )
 
 #########################
 # Three-point functions #
 #########################
 
+threep_loc = fncs.initEmptyList( tsinkNum, 1 )
 threep_jk = fncs.initEmptyList( tsinkNum, 1 )
+
+t0 = time.time()
 
 for ts, its in zip( tsink, range( tsinkNum ) ) :
     
-    threep_mom = fncs.initEmptyList( momBoostNum, 1 )
-    threep_s_mom = fncs.initEmptyList( momBoostNum, 1 )
+    t0_ts =time.time()
+
+    threep_mom = np.zeros( ( procSize, T, momBoostNum ) )
+    #threep_mom = fncs.initEmptyList( momBoostNum, 1 )
+    #threep_s_mom = fncs.initEmptyList( momBoostNum, 1 )
 
     for imom in range( momBoostNum ):
 
@@ -400,8 +473,8 @@ for ts, its in zip( tsink, range( tsinkNum ) ) :
         # three-point functions at zero-momentum
         # threep[ c, t ]
 
-        threeps = rw.readAvgXFile( threepDir, configList, threep_template, \
-                                   ts, particle, dataFormat)
+        threeps = rw.readAvgXFile( threepDir, configList_loc, \
+                                   threep_template, ts, particle, dataFormat)
 
         threep_gxDx = threeps[0]
         threep_gyDy = threeps[1]
@@ -420,16 +493,18 @@ for ts, its in zip( tsink, range( tsinkNum ) ) :
             threep_s_gzDz = threeps[6]
             threep_s_gtDt = threeps[7]
 
-        print( "Read three-point functions from HDF5 files for tsink " + str( ts ) )
+        if rank == 0:
+
+            print( "Read three-point functions from HDF5 files for tsink {} in {:.3} seconds.".format( ts, time.time() - t0_ts ) )
 
         # Subtract average over directions from gtDt
 
-        threep_mom[ imom ] = threep_gtDt - \
-                             0.25 * ( threep_gtDt \
-                                      + threep_gxDx \
-                                      + threep_gyDy \
-                                      + threep_gzDz )
-
+        threep_mom[ ..., imom ] = threep_gtDt - \
+                                  0.25 * ( threep_gtDt \
+                                           + threep_gxDx \
+                                           + threep_gyDy \
+                                           + threep_gzDz )
+        """
         if particle == "kaon":
 
             threep_s_mom[ imom ] = threep_s_gtDt - \
@@ -437,10 +512,40 @@ for ts, its in zip( tsink, range( tsinkNum ) ) :
                                             + threep_s_gxDx \
                                             + threep_s_gyDy \
                                             + threep_s_gzDz )
-
+        """
     # End loop over momenta
 
-    threep = np.average( threep_mom, axis=0 )
+    threep_loc[ its ] = np.average( threep_mom, axis=-1 )
+
+threep_loc = np.asarray( threep_loc, order='c' )
+
+if rank == 0:
+    
+    print( "Read three-point functions in {:.3} seconds.".format( time.time() - t0 ) )
+    
+    threep = np.zeros( ( tsinkNum, configNum, T ) )
+
+else:
+
+    threep = None
+
+for p in range( procNum ):
+
+    if p == rank:
+
+        print( "rank {}: {}".format( rank, threep_loc ) )
+
+    comm.Barrier()
+
+comm.Gather( threep_loc, threep, root=0 )
+
+if rank == 0:
+
+    print( threep )
+
+exit()
+
+if rank == 0:
 
     # Jackknife
     # threep_jk[ ts, b, t ]
@@ -448,7 +553,7 @@ for ts, its in zip( tsink, range( tsinkNum ) ) :
     threep_jk[ its ] = fncs.jackknife( threep, binSize )
 
     threep_avg = np.average( threep_jk[ its ], axis = 0 )
-    threep_err = fncs.calcError( threep_jk[ its ], binNum )
+    threep_err = fncs.calcError( threep_jk[ its ], binNum_glob )
 
     avgOutputFilename = output_template.replace( "*", "threep_u_tsink" + str( ts ) )
     rw.writeAvgDataFile( avgOutputFilename, threep_avg, threep_err )

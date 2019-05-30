@@ -126,10 +126,10 @@ def getConfigList( configListFilename, configDir ):
         if glob( configListFilename ):
 
             with open( configListFilename, "r" ) as configFile:
-
+                
                 configList = configFile.read().splitlines()
 
-            print( "Configuration list read" )
+                #print( "Configuration list read" )
 
         else:
 
@@ -171,7 +171,7 @@ def getConfigList( configListFilename, configDir ):
 
             print( "Configuration list written" )
 
-    print( "Number of configurations: " + str( len( configList ) ) )
+    #print( "Number of configurations: " + str( len( configList ) ) )
 
     return configList
 
