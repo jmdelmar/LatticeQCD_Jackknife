@@ -293,23 +293,47 @@ def check_sources( filenames, sourceNum ):
 
     return check
 
+
+def jackknifeBin( vals, binSize, ibin ):
+
+    return np.average( np.vstack( ( vals[ : ibin * binSize, \
+                                          ... ], \
+                                    vals[ ( ibin + 1 ) * binSize :, \
+                                          ... ] ) ), \
+                       axis=0 )
+
+
+def jackknifeBinSubset( vals, binSize, bin_glob ):
+
+    assert len( vals ) % binSize == 0, "Number of configurations " \
+        + str( len( vals ) ) + " not evenly divided by bin size " \
+        + str( binSize ) + " (functions.jackknifeBinSubset).\n"
+
+    binNum_loc = len( bin_glob )
+
+    vals_jk = initEmptyList( binNum_loc, 1 )
+
+    for b in range( binNum_loc ):
+
+        vals_jk[ b ] = jackknifeBin( vals, binSize, bin_glob[ b ] )
+
+    return np.array( vals_jk )
+        
+
 def jackknife( vals, binSize ):
 
     configNum = len( vals )
 
     assert configNum % binSize == 0, "Number of configurations " \
-        + str( configNum ) + " not evenly divided by number of bins " \
-        + str( binNum ) + " in effective mass file " + mEff_filename + ".\n"
+        + str( configNum ) + " not evenly divided by bin size " \
+        + str( binSize ) + " (functions.jackknife).\n"
 
     binNum = configNum // binSize
 
     vals_jk = initEmptyList( binNum, 1 )
 
     for b in range( binNum ):
-
-        temp = np.vstack( ( vals[ : b * binSize, : ], \
-                            vals[ ( b + 1 ) * binSize :, : ] ) )
-
-        vals_jk[ b ] = np.average( temp, axis=0 )
+        
+        vals_jk[ b ] = jackknifeBin( vals, binSize, b )
 
     return np.array( vals_jk )

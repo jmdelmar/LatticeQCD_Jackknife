@@ -31,7 +31,6 @@ def mEffTwopFit( mEff, twop, rangeEnd, tsf ):
         # Average over bins
 
         mEff_fit_avg = np.average( mEff_fit )
-
         mEff_fit_err = fncs.calcError( mEff_fit, binNum )
 
         if tsf:
@@ -96,6 +95,7 @@ def mEffTwopFit( mEff, twop, rangeEnd, tsf ):
                               + "and range end." )
 
     return -1
+
 
 def twoStateFit_twop( twop, twop_rangeStart, twop_rangeEnd, T ):
 
