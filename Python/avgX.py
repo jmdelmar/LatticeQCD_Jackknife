@@ -196,8 +196,7 @@ T = twop.shape[ -1 ]
 
 twop_jk = fncs.jackknife( twop, binSize )
 
-twop_err = np.std( twop_jk, axis=0 ) \
-           * float( binNum - 1 ) / np.sqrt( float( binNum ) )
+twop_err = fncs.calcError( twop_jk, binNum )
 
 ############################
 # Fold two-point functions #
