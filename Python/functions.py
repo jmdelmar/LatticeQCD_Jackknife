@@ -315,6 +315,8 @@ def jackknifeBinSubset( vals, binSize, bin_glob ):
 
     for b in range( binNum_loc ):
 
+        
+
         vals_jk[ b ] = jackknifeBin( vals, binSize, bin_glob[ b ] )
 
     return np.array( vals_jk )
