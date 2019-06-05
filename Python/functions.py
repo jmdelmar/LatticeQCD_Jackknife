@@ -5,11 +5,19 @@ import re
 from os import listdir as ls
 from glob import glob
 
-def calcError( vals, binNum ):
+def calcError( vals, binNum, **kwargs ):
 
-    return np.std( vals, axis=0 ) \
-        * float( binNum - 1 ) \
-        * float( binNum ) ** -0.5
+    if kwargs:
+
+        return np.std( vals, **kwargs ) \
+            * float( binNum - 1 ) \
+            * float( binNum ) ** -0.5
+
+    else:
+
+        return np.std( vals, axis=0 ) \
+            * float( binNum - 1 ) \
+            * float( binNum ) ** -0.5
 
 
 def signToString( val ):

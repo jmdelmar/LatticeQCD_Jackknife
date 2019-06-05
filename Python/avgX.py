@@ -747,8 +747,18 @@ if tsf and rank == 0:
 
     for threep_neglect in 2,3:
 
+        ti_to_fit = fncs.initEmptyList( tsinkNum, 1 )
+
+        for ts in range( tsinkNum ):
+
+            ti_to_fit[ ts ] = np.concatenate( ( range( threep_neglect, \
+                                                       tsink[ ts ] - threep_neglect + 1 ), \
+                                                range( tsink[ ts ] + threep_neglect + 5, \
+                                                       T - threep_neglect - 5 + 1 ) ) )
+
+
         fitParams, chiSq = fit.twoStateFit_threep( threep_jk, \
-                                                   threep_neglect, \
+                                                   ti_to_fit, \
                                                    tsink, E0, E1, T )
 
         a00 = fitParams[ :, 0 ]
