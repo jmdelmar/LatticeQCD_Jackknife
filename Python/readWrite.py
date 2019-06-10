@@ -1,3 +1,4 @@
+from time import time
 import h5py
 import numpy as np
 from os import listdir as ls
@@ -59,6 +60,14 @@ def getFileNames( configDir, configList, fn_template ):
 
     return filename
 
+
+def filterDsetname( dsetnameList, dsetname, keyword ):
+
+    if all( kw in dsetname for kw in keyword ):
+        dsetnameList.append( dsetname )
+
+    return
+
 def getDatasetNames( filename, *keyword ):
     
     configNum = len( filename )
@@ -77,27 +86,30 @@ def getDatasetNames( filename, *keyword ):
 
             with h5py.File( filename[c][fn], "r" ) as dataFile:
                 
-                # Put all datasets into list
-                
-                dataFile.visititems( lambda name,obj: \
-                                     dsetname[c][fn].append(name) \
-                                     if type( obj ) is h5py.Dataset \
-                                     else None )
-
                 if keyword:
-
-                    # Filter any datasets from list which do not contain 
-                    # all of the keywords
-
-                    for kw in keyword:
-
-                        dsetname[c][fn] = list(filter( lambda name: kw in name, dsetname[c][fn] ))
-
+                    
+                    # Use filterDsetname() to check if all keywords are
+                    # in dsetname[c][fn]
+                    
+                    dataFile.visititems( lambda name,obj: \
+                                         filterDsetname( dsetname[c][fn], \
+                                                         name, keyword ) \
+                                         if type( obj ) is h5py.Dataset \
+                                         else None )
                     if not dsetname[c][fn]:
                         
                         print( "WARNING: No datasets containing all keywords " \
                                + ", ".join( keyword ) + " in file " \
                                + filename[c][fn] )
+
+                else:
+
+                    # Put all datasets into list
+
+                    dataFile.visititems( lambda name,obj: \
+                                         dsetname[c][fn].append(name) \
+                                         if type( obj ) is h5py.Dataset \
+                                         else None )
 
             # Close file
 
@@ -147,7 +159,7 @@ def getDatasets( configDir, configList, fn_template, *keyword, **kwargs ):
     # Loop through config indexes
 
     for c in range( len( dsetname ) ):
-        
+
         for fn in range( len( dsetname[c] ) ): 
 
             with h5py.File( filename[c][fn], "r" ) as dataFile:
@@ -158,11 +170,8 @@ def getDatasets( configDir, configList, fn_template, *keyword, **kwargs ):
                     data[ c ][ fn ][ ds ] = np.array( dataFile[ dsetname[ c ][ fn ][ ds ] ] )
 
                 # End loop over datasets
-
             # Close file
-
         # End loop over files in sub-directory
-
     # End loop over configs
 
     return np.array( data )
@@ -462,10 +471,6 @@ def readAvgXFile( threepDir, configList, threep_template,
 
             dsetname_post = "/msq0000/arr"
             
-            #print([ dsetname_pre \
-            #        + dsetname_insertion[ 0 ] \
-            #        + dsetname_post ])
-            
             threep_gtDt = getDatasets( threepDir, \
                                        configList, \
                                        filename, \
@@ -490,35 +495,7 @@ def readAvgXFile( threepDir, configList, threep_template,
                                        dsetname=[ dsetname_pre \
                                        + dsetname_insertion[ 3 ] \
                                        + dsetname_post ] )[ :, 0, 0, :, 0 ].real
-            """
-            threep_gtDt = getDatasets( threepDir, \
-                                          configList, \
-                                          filename, \
-                                            "=der:g0D0:sym=", \
-                                          "msq0000", \
-                                          "arr" )[ :, 0, 0, :, 0 ].real
-            threep_gxDx = getDatasets( threepDir, \
-                                          configList, \
-                                          filename, \
-                                            "=der:gxDx:sym=", \
-                                          "msq0000", \
-                                          "arr" )[ :, 0, 0, :, 0 ].real
 
-            threep_gyDy = getDatasets( threepDir, \
-                                          configList, \
-                                          filename, \
-                                            "=der:gyDy:sym=", \
-                                          "msq0000", \
-                                          "arr" )[ :, 0, 0, :, 0 ].real
-
-            threep_gzDz = getDatasets( threepDir, \
-                                          configList, \
-                                          filename, \
-                                            "=der:gzDz:sym=", \
-                                          "msq0000", \
-                                          "arr" )[ :, 0, 0, :, 0 ].real
-
-            """
             threep_s_gxDx = np.array( [] )
             
             threep_s_gyDy = np.array( [] )
@@ -531,34 +508,33 @@ def readAvgXFile( threepDir, configList, threep_template,
             
                 filename_s = threep_template + ".strange.h5"
 
-                threep_s_gxDx = getDatasets( threepDir, \
-                                                configList, \
-                                                filename_s, \
-                                                "=der:gxDx:sym=", \
-                                                "msq0000", \
-                                                "arr" )[ :, 0, 0, :, 0 ].real
+                dsetname_s_pre = "/thrp/ave16/dt{}/strange/".format( ts )
 
-                threep_s_gyDy = getDatasets( threepDir, \
-                                                configList, \
-                                                filename_s, \
-                                                "=der:gyDy:sym=", \
-                                                "msq0000", \
-                                                "arr" )[ :, 0, 0, :, 0 ].real
-
-                threep_s_gzDz = getDatasets( threepDir, \
-                                                configList, \
-                                                filename_s, \
-                                                "=der:gzDz:sym=", \
-                                                "msq0000", \
-                                                "arr" )[ :, 0, 0, :, 0 ].real
-                
                 threep_s_gtDt = getDatasets( threepDir, \
-                                                configList, \
-                                                filename_s, \
-                                                "=der:g0D0:sym=", \
-                                                "msq0000", \
-                                                "arr" )[ :, 0, 0, :, 0 ].real
-            
+                                             configList, \
+                                             filename, \
+                                             dsetname=[ dsetname_s_pre \
+                                                        + dsetname_insertion[ 0 ] \
+                                             + dsetname_post ] )[ :, 0, 0, :, 0 ].real
+                threep_s_gxDx = getDatasets( threepDir, \
+                                             configList, \
+                                             filename, \
+                                             dsetname=[ dsetname_s_pre \
+                                                        + dsetname_insertion[ 1 ] \
+                                                        + dsetname_post ] )[ :, 0, 0, :, 0 ].real
+                threep_s_gyDy= getDatasets( threepDir, \
+                                            configList, \
+                                            filename, \
+                                            dsetname=[ dsetname_s_pre \
+                                                       + dsetname_insertion[ 2 ] \
+                                                       + dsetname_post ] )[ :, 0, 0, :, 0 ].real
+                threep_s_gzDz = getDatasets( threepDir, \
+                                             configList, \
+                                             filename, \
+                                             dsetname=[ dsetname_s_pre \
+                                                        + dsetname_insertion[ 3 ] \
+                                                        + dsetname_post ] )[ :, 0, 0, :, 0 ].real
+
                 return [ threep_gxDx, threep_gyDy, threep_gzDz, threep_gtDt, \
                     threep_s_gxDx, threep_s_gyDy, threep_s_gzDz, threep_s_gtDt ]
 

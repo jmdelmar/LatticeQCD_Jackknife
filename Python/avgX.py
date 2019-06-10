@@ -242,12 +242,9 @@ comm.Allgather( twop_loc, twop )
 mpi_fncs.mpiPrint( "Read two-point functions from HDF5 files " \
                    + "in {:.3} seconds".format( time.time() - t0 ), rank )
 
-# Jackknife two-point functions
-# twop_jk[ b, t ]
-
-############################
-# Fold two-point functions #
-############################
+##########################################
+# Jackknife and fold two-point functions #
+##########################################
 
 # Time dimension length after fold
 
