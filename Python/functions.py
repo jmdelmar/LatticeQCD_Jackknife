@@ -5,11 +5,19 @@ import re
 from os import listdir as ls
 from glob import glob
 
-def calcError( vals, binNum ):
+def calcError( vals, binNum, **kwargs ):
 
-    return np.std( vals, axis=0 ) \
-        * float( binNum - 1 ) \
-        * float( binNum ) ** -0.5
+    if kwargs:
+
+        return np.std( vals, **kwargs ) \
+            * float( binNum - 1 ) \
+            * float( binNum ) ** -0.5
+
+    else:
+
+        return np.std( vals, axis=0 ) \
+            * float( binNum - 1 ) \
+            * float( binNum ) ** -0.5
 
 
 def signToString( val ):
@@ -126,10 +134,10 @@ def getConfigList( configListFilename, configDir ):
         if glob( configListFilename ):
 
             with open( configListFilename, "r" ) as configFile:
-
+                
                 configList = configFile.read().splitlines()
 
-            print( "Configuration list read" )
+                #print( "Configuration list read" )
 
         else:
 
@@ -171,7 +179,7 @@ def getConfigList( configListFilename, configDir ):
 
             print( "Configuration list written" )
 
-    print( "Number of configurations: " + str( len( configList ) ) )
+    #print( "Number of configurations: " + str( len( configList ) ) )
 
     return configList
 
@@ -293,23 +301,49 @@ def check_sources( filenames, sourceNum ):
 
     return check
 
+
+def jackknifeBin( vals, binSize, ibin ):
+
+    return np.average( np.vstack( ( vals[ : ibin * binSize, \
+                                          ... ], \
+                                    vals[ ( ibin + 1 ) * binSize :, \
+                                          ... ] ) ), \
+                       axis=0 )
+
+
+def jackknifeBinSubset( vals, binSize, bin_glob ):
+
+    assert len( vals ) % binSize == 0, "Number of configurations " \
+        + str( len( vals ) ) + " not evenly divided by bin size " \
+        + str( binSize ) + " (functions.jackknifeBinSubset).\n"
+
+    binNum_loc = len( bin_glob )
+
+    vals_jk = initEmptyList( binNum_loc, 1 )
+
+    for b in range( binNum_loc ):
+
+        
+
+        vals_jk[ b ] = jackknifeBin( vals, binSize, bin_glob[ b ] )
+
+    return np.array( vals_jk )
+        
+
 def jackknife( vals, binSize ):
 
     configNum = len( vals )
 
     assert configNum % binSize == 0, "Number of configurations " \
-        + str( configNum ) + " not evenly divided by number of bins " \
-        + str( binNum ) + " in effective mass file " + mEff_filename + ".\n"
+        + str( configNum ) + " not evenly divided by bin size " \
+        + str( binSize ) + " (functions.jackknife).\n"
 
     binNum = configNum // binSize
 
     vals_jk = initEmptyList( binNum, 1 )
 
     for b in range( binNum ):
-
-        temp = np.vstack( ( vals[ : b * binSize, : ], \
-                            vals[ ( b + 1 ) * binSize :, : ] ) )
-
-        vals_jk[ b ] = np.average( temp, axis=0 )
+        
+        vals_jk[ b ] = jackknifeBin( vals, binSize, b )
 
     return np.array( vals_jk )

@@ -158,10 +158,9 @@ def twoStateFit_twop( twop, twop_rangeStart, twop_rangeEnd, T ):
     return np.array( fit ), np.array( chi_sq )
 
 
-def twoStateFit_threep( threep, neglect, tsink, E0, E1, T ):
+def twoStateFit_threep( threep, ti_to_fit, tsink, E0, E1, T ):
 
-    # threep[ ts ][ b, t ]
-    # threep_err[ ts ][ t ]
+    # threep[ ts, b, t ]
 
     tsinkNum = len( tsink )
 
@@ -171,50 +170,32 @@ def twoStateFit_threep( threep, neglect, tsink, E0, E1, T ):
 
     threep_to_fit = fncs.initEmptyList( tsinkNum, 1 )
 
+    for ts in range( tsinkNum ):
+ 
+        threep_to_fit[ ts ] = threep[ ts ].take( ti_to_fit[ ts ], axis=-1 )
+
     # fit[b]
 
-    binNum = threep[ 0 ].shape[ 0 ]
+    binNum = threep.shape[ 1 ]
 
     fit = fncs.initEmptyList( binNum, 1 )
 
     chi_sq = fncs.initEmptyList( binNum, 1 )
 
-    # threep_avg[ts][t]
+    # threep_avg[ts, t]
 
-    threep_avg = fncs.initEmptyList( tsinkNum, 1 )
+    threep_to_fit_avg = fncs.initEmptyList( tsinkNum, 1 )
+    threep_to_fit_err = fncs.initEmptyList( tsinkNum, 1 )
+    
+    for ts in range( tsinkNum ):
 
-    threep_err = fncs.initEmptyList( tsinkNum, 1 )
+        threep_to_fit_avg[ ts ] = np.average( threep_to_fit[ ts ], \
+                                              axis=0 )
+        threep_to_fit_err[ ts ] = fncs.calcError( threep_to_fit[ ts ], \
+                                                  binNum )
 
     E0_avg = np.average( E0 )
     E1_avg = np.average( E1 )
-
-    # ti[ts][t]
-
-    ti = fncs.initEmptyList( tsinkNum, 1 )
-
-    for ts in range( tsinkNum ):
- 
-        assert threep[ ts ].shape[ 0 ] == binNum, \
-            "Number of bins not the same for " \
-            + "every value of tsink."
-
-        threep_to_fit[ ts ] = np.concatenate( ( threep[ ts ][ :, neglect \
-                                                              : tsink[ ts ] - neglect + 1 ], \
-                                                threep[ ts ][ :, tsink[ ts ] + neglect + 5 \
-                                                              : T - neglect - 5 + 1 ] ), \
-                                              axis=1 )
-
-        ti[ ts ] = np.concatenate( ( range( neglect, \
-                                      tsink[ ts ] - neglect + 1 ), \
-                                     range( tsink[ ts ] + neglect + 5, \
-                                            T - neglect - 5 + 1 ) ) )
-    
-        threep_avg[ ts ] = np.average( threep_to_fit[ ts ], \
-                                       axis=0 )
-                           
-        threep_err[ ts ] = np.std( threep_to_fit[ ts ], \
-                                   axis=0 ) \
-            * float( binNum - 1 ) / np.sqrt( float( binNum ) )
 
     # Find fit parameters of mean values to use as initial guess
 
@@ -225,10 +206,11 @@ def twoStateFit_threep( threep, neglect, tsink, E0, E1, T ):
     fitParams = np.array( [ a00, a01, a11 ] )
 
     leastSq_avg = least_squares( twoStateErrorFunction_threep, fitParams, \
-                             args = ( ti, tsink, T, \
-                                      threep_avg, threep_err, \
-                                      E0_avg, E1_avg ), \
-                             method="lm" )
+                                 args = ( ti_to_fit, tsink, T, \
+                                          threep_to_fit_avg, \
+                                          threep_to_fit_err, \
+                                          E0_avg, E1_avg ), \
+                                 method="lm" )
 
     fitParams = leastSq_avg.x
 
@@ -238,13 +220,12 @@ def twoStateFit_threep( threep, neglect, tsink, E0, E1, T ):
 
         for ts in range( tsinkNum ):
 
-            #threep_cp[ ts ][ ti ]
-
             threep_cp[ ts ] = threep_to_fit[ ts ][ b, : ]
-            
+
         leastSq = least_squares( twoStateErrorFunction_threep, fitParams, \
-                             args = ( ti, tsink, T, \
-                                      threep_cp, threep_err, \
+                             args = ( ti_to_fit, tsink, T, \
+                                      threep_cp, \
+                                      threep_to_fit_err, \
                                       E0[ b ], E1[ b ] ), \
                              method="lm" )
 

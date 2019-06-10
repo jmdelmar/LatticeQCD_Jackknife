@@ -136,13 +136,23 @@ def getDatasetNames( filename, *keyword ):
 # Reads HDF5 datsets containing the given keyword(s) if
 # given and returns them as a numpy array. 
 
-def getDatasets( configDir, configList, fn_template, *keyword ):
+def getDatasets( configDir, configList, fn_template, *keyword, **kwargs ):
     
     filename = getFileNames( configDir, configList, fn_template )
 
     configNum = len( filename )
 
-    dsetname = getDatasetNames( filename, *keyword )
+    if "dsetname" in kwargs:
+
+        dsetname = [ [ kwargs[ "dsetname" ] \
+                       for fn in range( len( filename[ c ] ) ) ] \
+                     for c in range( configNum ) ]
+        
+    else:
+
+        dsetname = getDatasetNames( filename, *keyword )
+
+    #print( dsetname )
 
     data = fncs.initEmptyList( dsetname, 3 )
 
@@ -156,6 +166,7 @@ def getDatasets( configDir, configList, fn_template, *keyword ):
 
                 for ds in range( len( dsetname[c][fn] ) ):
 
+                    #print( dataFile[ dsetname[ c ][ fn ][ ds ] ] )
                     data[ c ][ fn ][ ds ] = np.array( dataFile[ dsetname[ c ][ fn ][ ds ] ] )
 
                 # End loop over datasets
@@ -258,7 +269,7 @@ def getHDF5File_wNames( configDir, configList, fn_template, *keyword ):
 # three-point functions at zero-momentum
 
 def readAvgXFile( threepDir, configList, threep_template, 
-                   ts, particle, dataFormat ):
+                   ts, particle, dataFormat, **kwargs ):
 
     if particle == "nucleon":
 
@@ -450,34 +461,40 @@ def readAvgXFile( threepDir, configList, threep_template,
         elif dataFormat == "cpu":
 
             filename = threep_template + ".up.h5"
+
+            dsetname_pre = "/thrp/ave16/dt{}/up/".format( ts )
+
+            dsetname_insertion = [ "=der:g0D0:sym=", \
+                                   "=der:gxDx:sym=", \
+                                   "=der:gyDy:sym=", \
+                                   "=der:gzDz:sym=" ]
+
+            dsetname_post = "/msq0000/arr"
             
-            threep_gxDx = getDatasets( threepDir, \
-                                          configList, \
-                                          filename, \
-                                            "=der:gxDx:sym=", \
-                                          "msq0000", \
-                                          "arr" )[ :, 0, 0, :, 0 ].real
-
-            threep_gyDy = getDatasets( threepDir, \
-                                          configList, \
-                                          filename, \
-                                            "=der:gyDy:sym=", \
-                                          "msq0000", \
-                                          "arr" )[ :, 0, 0, :, 0 ].real
-
-            threep_gzDz = getDatasets( threepDir, \
-                                          configList, \
-                                          filename, \
-                                            "=der:gzDz:sym=", \
-                                          "msq0000", \
-                                          "arr" )[ :, 0, 0, :, 0 ].real
-
             threep_gtDt = getDatasets( threepDir, \
-                                          configList, \
-                                          filename, \
-                                            "=der:g0D0:sym=", \
-                                          "msq0000", \
-                                          "arr" )[ :, 0, 0, :, 0 ].real
+                                       configList, \
+                                       filename, \
+                                       dsetname=[ dsetname_pre \
+                                       + dsetname_insertion[ 0 ] \
+                                       + dsetname_post ] )[ :, 0, 0, :, 0 ].real
+            threep_gxDx = getDatasets( threepDir, \
+                                       configList, \
+                                       filename, \
+                                       dsetname=[ dsetname_pre \
+                                       + dsetname_insertion[ 1 ] \
+                                       + dsetname_post ] )[ :, 0, 0, :, 0 ].real
+            threep_gyDy= getDatasets( threepDir, \
+                                       configList, \
+                                       filename, \
+                                       dsetname=[ dsetname_pre \
+                                       + dsetname_insertion[ 2 ] \
+                                       + dsetname_post ] )[ :, 0, 0, :, 0 ].real
+            threep_gzDz = getDatasets( threepDir, \
+                                       configList, \
+                                       filename, \
+                                       dsetname=[ dsetname_pre \
+                                       + dsetname_insertion[ 3 ] \
+                                       + dsetname_post ] )[ :, 0, 0, :, 0 ].real
 
             threep_s_gxDx = np.array( [] )
             
@@ -491,34 +508,33 @@ def readAvgXFile( threepDir, configList, threep_template,
             
                 filename_s = threep_template + ".strange.h5"
 
-                threep_s_gxDx = getDatasets( threepDir, \
-                                                configList, \
-                                                filename_s, \
-                                                "=der:gxDx:sym=", \
-                                                "msq0000", \
-                                                "arr" )[ :, 0, 0, :, 0 ].real
+                dsetname_s_pre = "/thrp/ave16/dt{}/strange/".format( ts )
 
-                threep_s_gyDy = getDatasets( threepDir, \
-                                                configList, \
-                                                filename_s, \
-                                                "=der:gyDy:sym=", \
-                                                "msq0000", \
-                                                "arr" )[ :, 0, 0, :, 0 ].real
-
-                threep_s_gzDz = getDatasets( threepDir, \
-                                                configList, \
-                                                filename_s, \
-                                                "=der:gzDz:sym=", \
-                                                "msq0000", \
-                                                "arr" )[ :, 0, 0, :, 0 ].real
-                
                 threep_s_gtDt = getDatasets( threepDir, \
-                                                configList, \
-                                                filename_s, \
-                                                "=der:g0D0:sym=", \
-                                                "msq0000", \
-                                                "arr" )[ :, 0, 0, :, 0 ].real
-            
+                                             configList, \
+                                             filename, \
+                                             dsetname=[ dsetname_s_pre \
+                                                        + dsetname_insertion[ 0 ] \
+                                             + dsetname_post ] )[ :, 0, 0, :, 0 ].real
+                threep_s_gxDx = getDatasets( threepDir, \
+                                             configList, \
+                                             filename, \
+                                             dsetname=[ dsetname_s_pre \
+                                                        + dsetname_insertion[ 1 ] \
+                                                        + dsetname_post ] )[ :, 0, 0, :, 0 ].real
+                threep_s_gyDy= getDatasets( threepDir, \
+                                            configList, \
+                                            filename, \
+                                            dsetname=[ dsetname_s_pre \
+                                                       + dsetname_insertion[ 2 ] \
+                                                       + dsetname_post ] )[ :, 0, 0, :, 0 ].real
+                threep_s_gzDz = getDatasets( threepDir, \
+                                             configList, \
+                                             filename, \
+                                             dsetname=[ dsetname_s_pre \
+                                                        + dsetname_insertion[ 3 ] \
+                                                        + dsetname_post ] )[ :, 0, 0, :, 0 ].real
+
                 return [ threep_gxDx, threep_gyDy, threep_gzDz, threep_gtDt, \
                     threep_s_gxDx, threep_s_gyDy, threep_s_gzDz, threep_s_gtDt ]
 

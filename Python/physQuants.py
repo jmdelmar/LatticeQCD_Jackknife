@@ -16,7 +16,7 @@ def mEffFromSymTwop( twop ):
 
     for t in range( 1, twop.shape[ -1 ] - 1 ):
 
-        mEff[ ..., t ] = 1.0 / 2 \
+        mEff[ ..., t ] = 1.0 / 2.0 \
                          * np.log( ( twop[ ..., t - 1 ] \
                                      + np.sqrt( twop[ ..., t - 1 ] ** 2 \
                                                 - twop[ ..., halfT - 1 ] ** 2 ) ) \
