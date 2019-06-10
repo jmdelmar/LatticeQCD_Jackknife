@@ -465,8 +465,6 @@ for ts, its in zip( tsink, range( tsinkNum ) ) :
 
     threep_mom = np.zeros( ( procSize, T, momBoostNum ) )
     threep_s_mom = np.zeros( ( procSize, T, momBoostNum ) )
-    #threep_mom = fncs.initEmptyList( momBoostNum, 1 )
-    #threep_s_mom = fncs.initEmptyList( momBoostNum, 1 )
 
     for imom in range( momBoostNum ):
 
@@ -755,7 +753,12 @@ if tsf and rank == 0:
                                                        tsink[ ts ] - threep_neglect + 1 ), \
                                                 range( tsink[ ts ] + threep_neglect + 5, \
                                                        T - threep_neglect - 5 + 1 ) ) )
-
+            """
+            ti_to_fit[ ts ] = range( tsink[ ts ] + threep_neglect + 5, \
+                                                       T - threep_neglect - 5 + 1 )
+            ti_to_fit[ ts ] = range( threep_neglect, \
+                                     tsink[ ts ] - threep_neglect + 1 )
+            """
 
         fitParams, chiSq = fit.twoStateFit_threep( threep_jk, \
                                                    ti_to_fit, \
@@ -774,27 +777,27 @@ if tsf and rank == 0:
 
         avgX = np.zeros( binNum_glob )
         
-        t_i= np.zeros( ( tsinkNum, 100 ) )
+        ti_curve = np.zeros( ( tsinkNum, 100 ) )
             
         for b in range( binNum_glob ):
 
             for ts in range( tsinkNum ):
-                                  
-                t_i[ts,:] = np.concatenate( ( np.linspace( threep_neglect, \
-                                                           tsink[ts] \
-                                                           - threep_neglect, \
-                                                           50 ), \
-                                              np.linspace( tsink[ts] \
-                                                           + threep_neglect \
-                                                           + 5, \
-                                                           T \
-                                                           - threep_neglect \
-                                                           - 5 + 1, \
-                                                           50 ) ) )
 
-                for t in range( t_i.shape[ -1 ] ):
+
+                ti_curve[ ts ] = np.concatenate( ( np.linspace( ti_to_fit[ ts ][ 0 ], \
+                                                                ti_to_fit[ ts ][ tsink[ ts ] - 2*threep_neglect ], \
+                                                                num = 50 ), \
+                                                   np.linspace( ti_to_fit[ ts ][ tsink[ts] - 2*threep_neglect+1  ], \
+                                                                ti_to_fit[ ts ][ -1 ], \
+                                                                num = 50 ) ) )
+                """
+                ti_curve[ ts ] = np.linspace( ti_to_fit[ ts ][ 0 ], \
+                                              ti_to_fit[ ts ][ -1 ], \
+                                              num = 100 )
+                """
+                for t in range( len( ti_curve[ ts ] ) ):
                         
-                    threep_curve[b,ts,t] = fit.twoStateThreep( t_i[ ts, t ], \
+                    threep_curve[b,ts,t] = fit.twoStateThreep( ti_curve[ ts, t ], \
                                                                tsink[ ts ], \
                                                                T, \
                                                                a00[ b ], \
@@ -804,7 +807,7 @@ if tsf and rank == 0:
                                                                E1[ b ] )
 
                     curve[ b, ts, t ] = -4.0 / 3.0 / mEff_fit[ b ] * Z \
-                                        * fit.twoStateThreep( t_i[ ts, t ], \
+                                        * fit.twoStateThreep( ti_curve[ ts, t ], \
                                                               tsink[ ts ], \
                                                               T, \
                                                               a00[ b ], \
@@ -898,7 +901,7 @@ if tsf and rank == 0:
                                            + tsf_range_str + "_" \
                                            + ts_range_str )
             rw.writeAvgDataFile_wX( threep_curveOutputFilename, \
-                                    t_i[ ts ], threep_curve_avg[ ts ], \
+                                    ti_curve[ ts ], threep_curve_avg[ ts ], \
                                     threep_curve_err[ ts ] )
 
             curveOutputFilename \
@@ -908,7 +911,7 @@ if tsf and rank == 0:
                                            + tsf_range_str + "_" \
                                            + ts_range_str )
             rw.writeAvgDataFile_wX( curveOutputFilename, \
-                                    t_i[ ts ], curve_avg[ ts ], \
+                                    ti_curve[ ts ], curve_avg[ ts ], \
                                     curve_err[ ts ] )
             
         # End loop over tsink

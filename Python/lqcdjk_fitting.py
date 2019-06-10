@@ -174,8 +174,6 @@ def twoStateFit_threep( threep, ti_to_fit, tsink, E0, E1, T ):
  
         threep_to_fit[ ts ] = threep[ ts ].take( ti_to_fit[ ts ], axis=-1 )
 
-    threep_to_fit = np.array( threep_to_fit )
-
     # fit[b]
 
     binNum = threep.shape[ 1 ]
@@ -186,10 +184,15 @@ def twoStateFit_threep( threep, ti_to_fit, tsink, E0, E1, T ):
 
     # threep_avg[ts, t]
 
-    threep_to_fit_avg = np.average( threep_to_fit, \
-                                    axis=1 )
-    threep_to_fit_err = fncs.calcError( threep_to_fit, \
-                                        binNum, axis=1 )
+    threep_to_fit_avg = fncs.initEmptyList( tsinkNum, 1 )
+    threep_to_fit_err = fncs.initEmptyList( tsinkNum, 1 )
+    
+    for ts in range( tsinkNum ):
+
+        threep_to_fit_avg[ ts ] = np.average( threep_to_fit[ ts ], \
+                                              axis=0 )
+        threep_to_fit_err[ ts ] = fncs.calcError( threep_to_fit[ ts ], \
+                                                  binNum )
 
     E0_avg = np.average( E0 )
     E1_avg = np.average( E1 )
@@ -213,9 +216,15 @@ def twoStateFit_threep( threep, ti_to_fit, tsink, E0, E1, T ):
 
     for b in range( binNum ):
 
+        threep_cp = fncs.initEmptyList( tsinkNum, 1 )
+
+        for ts in range( tsinkNum ):
+
+            threep_cp[ ts ] = threep_to_fit[ ts ][ b, : ]
+
         leastSq = least_squares( twoStateErrorFunction_threep, fitParams, \
                              args = ( ti_to_fit, tsink, T, \
-                                      threep_to_fit[ :, b, : ], \
+                                      threep_cp, \
                                       threep_to_fit_err, \
                                       E0[ b ], E1[ b ] ), \
                              method="lm" )
