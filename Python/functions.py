@@ -186,19 +186,26 @@ def getConfigList( configListFilename, configDir ):
 
 def processMomList( momLists ):
 
-    # Check that momenta lists are the same across configurations
+    if momLists.ndim > 2:
 
-    momList_0 = momLists[ 0 ].flat
+        if len( momLists ) > 1:
 
-    for ml in momLists[ 1: ]:
+            # Check that momenta lists are the same across configurations
 
-        for i in range( ml.size ):
+            momList_0 = momLists[ 0 ].flat
 
-                assert ml.flat[ i ] == momList_0[ i ], \
-                    "Momenta lists in configuration " + configList[ c ] \
-                    + " do not match"
+            for ml in momLists[ 1: ]:
 
-    momList = momLists[ 0 ]
+                for i in range( ml.size ):
+
+                    assert ml.flat[ i ] == momList_0[ i ], \
+                        "Momenta lists do not match."
+
+        momList = momLists[ 0 ]
+
+    else:
+
+        momList = momLists
 
     # Get indexes where each Q^2 begins and ends
 
@@ -206,10 +213,9 @@ def processMomList( momLists ):
 
     Qsq_end = []
 
-    Qsq = np.round( ( np.apply_along_axis( np.linalg.norm, 1, np.array( momList ) ) ) ** 2 )
+    Qsq = np.round( ( np.apply_along_axis( np.linalg.norm, \
+                                           1, np.array( momList ) ) ) ** 2 )
     
-    #Qsq = ( np.apply_along_axis( np.linalg.norm, 1, np.array( momList ) ) ) ** 2
-
     q_last = Qsq[ 0 ]
 
     Qsq_start.append( 0 )
@@ -231,8 +237,6 @@ def processMomList( momLists ):
     # Remove duplicate Q^2's
 
     Qsq = sorted( list( set( Qsq ) ) )
-
-    #return np.array( Qsq ), np.array( Qsq_start ), np.array( Qsq_end )
 
     return np.array( Qsq, dtype=int ), np.array( Qsq_start ), np.array( Qsq_end )
 
@@ -321,9 +325,7 @@ def jackknifeBinSubset( vals, binSize, bin_glob ):
 
     vals_jk = initEmptyList( binNum_loc, 1 )
 
-    for b in range( binNum_loc ):
-
-        
+    for b in range( binNum_loc ):        
 
         vals_jk[ b ] = jackknifeBin( vals, binSize, bin_glob[ b ] )
 

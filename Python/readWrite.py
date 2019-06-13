@@ -24,16 +24,6 @@ def getSourcePositions( srcGroupName ):
     return srcPos
 
 
-def readFormFactorFile( filename, QsqNum, binNum, timestepNum ):
-
-    with open( filename, "r" ) as file:
-
-        data = np.array( file.read().split(), dtype=float )
-
-    data = data.reshape( QsqNum, binNum, timestepNum, 3  )
-
-    return data[ ..., -1 ]
-
 def getFileNames( configDir, configList, fn_template ):
     
     configNum = len( configList )
@@ -152,8 +142,6 @@ def getDatasets( configDir, configList, fn_template, *keyword, **kwargs ):
 
         dsetname = getDatasetNames( filename, *keyword )
 
-    #print( dsetname )
-
     data = fncs.initEmptyList( dsetname, 3 )
 
     # Loop through config indexes
@@ -166,7 +154,6 @@ def getDatasets( configDir, configList, fn_template, *keyword, **kwargs ):
 
                 for ds in range( len( dsetname[c][fn] ) ):
 
-                    #print( dataFile[ dsetname[ c ][ fn ][ ds ] ] )
                     data[ c ][ fn ][ ds ] = np.array( dataFile[ dsetname[ c ][ fn ][ ds ] ] )
 
                 # End loop over datasets
@@ -550,6 +537,21 @@ def readAvgXFile( threepDir, configList, threep_template,
                 exit()                
 
 
+def readTxtFile( filename, columnNum, **kwargs ):
+
+    with open( filename, "r" ) as txtFile:
+
+        lineNum = len( txtFile.readlines() )
+        
+        # Go back to beginning of file
+        
+        txtFile.seek( 0 )
+
+        data = np.array( txtFile.read().split(), **kwargs ).reshape( lineNum, columnNum )
+
+    return data
+
+
 def readDataFile( filename, timestepNum, binNum ):
 
     with open( filename, "r" ) as file:
@@ -560,6 +562,7 @@ def readDataFile( filename, timestepNum, binNum ):
 
     return data[ ..., -1 ]
 
+
 def readNthDataCol( filename, N ):
 
     data = []
@@ -568,11 +571,25 @@ def readNthDataCol( filename, N ):
 
         for line in file:
 
-            data.append( line.split() )
+            if line.split():
+
+                data.append( line.split() )
 
     data = np.array( data, dtype=float )
 
     return data[ ..., N ]
+
+
+def readFormFactorFile( filename, QsqNum, binNum, timestepNum ):
+
+    with open( filename, "r" ) as file:
+
+        data = np.array( file.read().split(), dtype=float )
+
+    data = data.reshape( QsqNum, binNum, timestepNum, 3  )
+
+    return data[ ..., -1 ]
+
 
 def detTimestepAndConfigNum( filename ):
 
@@ -628,60 +645,6 @@ def detTimestepAndConfigNum( filename ):
     return timestepNum, configNum
 
 
-def detConfigAndTimestepNum( filename ):
-
-    t_last = -1
-
-    timestepNum = 0
-
-    timestepNum_last = -1
-
-    configNum = 0
-
-    with open( filename, "r" ) as file:
-
-        for line in file:
-
-            t = int( line.split()[ 0 ] )
-
-            if t == ( t_last + 1 ):
-
-                timestepNum += 1
-
-                t_last = t
-
-            elif t == 0:
-
-                if timestepNum_last >= 0:
-
-                    assert timestepNum == timestepNum_last, \
-                        "Error (detTimestepAndConfigNum): Number of timesteps not" \
-                        + " consistent across configurations"
-                    
-                timestepNum_last = timestepNum
-
-                timestepNum = 1
-
-                configNum += 1
-
-                t_last = t
-
-            else:
-
-                print( "Error (detTimestepAndConfigNum): Timestep in 1st column " \
-                    + "does not behave as expected" )
-
-                return -1
-
-    assert timestepNum == timestepNum_last, \
-        "Error (detTimestepAndConfigNum): Number of timesteps not" \
-        + " consistent across configurations"
-                    
-    configNum += 1
-
-    return configNum, timestepNum
-
-
 def detQsqConfigNumAndTimestepNum( filename ):
 
     t_last = -1
@@ -708,8 +671,6 @@ def detQsqConfigNumAndTimestepNum( filename ):
             t = int( line.split()[ 0 ] )
 
             q = int( line.split()[ 1 ] )
-
-            #print str(t) + " " + str(q)
 
             if t == ( t_last + 1 ) and q == q_last:
 
@@ -845,7 +806,24 @@ def writeFormFactorFile( filename, data, Qsq ):
                 
                 for t in range( data.shape[ 2 ] ):
 
-                    output.write( str( t ).ljust(20) + str( Qsq[ q ] ).ljust(20) + str( data[ q, b, t ] ) + "\n" )
+                    output.write( str( t ).ljust(20) \
+                                  + str( Qsq[ q ] ).ljust(20) \
+                                  + str( data[ q, b, t ] ) + "\n" )
+
+    print( "Wrote " + filename )
+
+
+def writeSVDOutputFile( filename, data, Qsq ):
+
+    with open( filename, "w" ) as output:
+
+        for q in range( len( data ) ):
+
+            for r in range( data[ q ].shape[ 0 ] ):
+                
+                output.write("{:<10}{:<10}{:<20.10}{:<.10}\n".format(r, Qsq[ q ], \
+                                                              data[q][r,0], \
+                                                              data[q][r,1]))
 
     print( "Wrote " + filename )
 
