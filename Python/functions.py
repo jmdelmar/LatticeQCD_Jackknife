@@ -5,7 +5,17 @@ import re
 from os import listdir as ls
 from glob import glob
 
+# Calculates the jackknife error from the standard deviation.
+# Can be given any keyword arguments accepted by numpy.std(),
+# otherwise, calculates the error along the first axis.
+
+# vals: Values for which to calculate jackknife error
+# binNum: Number of bins
+# kwargs (Optional): Keyword arguments to be passed to numpy.std()
+
 def calcError( vals, binNum, **kwargs ):
+
+    # Err = ( N - 1 ) / sqrt( N ) * stdev
 
     if kwargs:
 
@@ -20,6 +30,11 @@ def calcError( vals, binNum, **kwargs ):
             * float( binNum ) ** -0.5
 
 
+# Return either "+" or "-" as a string, depending on the sign
+# of the argument given.
+
+# val: Values whose sign is checked
+
 def signToString( val ):
 
     if val >= 0:
@@ -28,7 +43,16 @@ def signToString( val ):
 
     else:
 
-        return ""
+        return "-"
+
+
+# Combines the different final momentum three-point functions for <x>. 
+# It is obsolete, however, because the combination is just an average.
+# Will keep for now  in case a different combination is needed for a
+# future quantity.
+
+# threep: Three-point functions to be combined 
+# momSq: Value of mometum squared which determines which momenta we have
 
 def combineMomBoosts(threep, momSq):
 
@@ -81,8 +105,14 @@ def combineMomBoosts(threep, momSq):
     else:
 
         print( "Error: momentum boost squared value " \
-            + momSq + " is not supported.\n" )
+               + momSq + " is not supported.\n" )
 
+
+# Initializes a list of empty lists of the given order with the same
+# dimensions as the given list.
+
+# list_in: List which determines dimensions of list_out
+# list_out_order: Order of list_out
 
 def initEmptyList( list_in, list_out_order ):
 
@@ -90,14 +120,20 @@ def initEmptyList( list_in, list_out_order ):
 
     if list_out_order == 1:
 
+        # list_out[ i ]
+
         list_out = [ [] for i in range( list_in ) ]
 
     elif list_out_order == 2:
+
+        # list_out[ i ][ j ]
 
         list_out = [ [ [] for j in range( len( list_in[i] ) ) ] \
                      for i in range( len( list_in ) ) ]
 
     elif list_out_order == 3:
+
+        # list_out[ i ][ j ][ k ]
 
         list_out = [ [ [ [] for k in range( len( list_in[i][j] ) ) ] \
                        for j in range( len( list_in[i] ) ) ] \
@@ -110,30 +146,53 @@ def initEmptyList( list_in, list_out_order ):
     return list_out
 
 
+# Averages data with the points opposite them across the center 
+# of the data array.
+
+# data: Data to be folded
+
 def fold( data ):
 
     timestepNum = data.shape[ -1 ]
 
     out = np.zeros( data.shape[ :-1 ] + ( timestepNum // 2 + 1, ) )
 
+    # First data point is unchanged
+
     out[ ..., 0 ] = data[ ..., 0 ]
 
     for t in range( 1, timestepNum // 2 ):
         
+        # Average opposite points
+
         out[ ..., t ] = ( data[ ..., t ] + data[ ..., -t ] ) / 2
+
+    # Data point at center is unchanged
 
     out[ ..., timestepNum // 2 ] = data[ ..., timestepNum // 2 ]
 
     return out
 
 
+# Reads a configuration list from file if given, else writes a list from
+# directory names in given directory.
+
+# configListFilename: Name of configuration list file, if None, will 
+#                     write list from directory names in directory
+#                     given as 2nd argument
+# configDir: Direcoty containing directories for each configuration
+
 def getConfigList( configListFilename, configDir ):
 
     if configListFilename:
 
+        # Check that configuration list exists
+        
         if glob( configListFilename ):
 
             with open( configListFilename, "r" ) as configFile:
+                
+                # Read configuration list
                 
                 configList = configFile.read().splitlines()
 
@@ -141,7 +200,7 @@ def getConfigList( configListFilename, configDir ):
 
         else:
 
-            print( "WARNING: Given configuration does not exist. " \
+            print( "WARNING: Given configuration list does not exist. " \
                 + "Will use all configurations in configuration directory." )
             
             configList = ls( configDir )
@@ -154,7 +213,7 @@ def getConfigList( configListFilename, configDir ):
 
                     configFile.write( str( config ) + "\n" )
 
-            print( "Configuration list written" )
+            #print( "Configuration list written" )
 
     else:
 
@@ -164,6 +223,8 @@ def getConfigList( configListFilename, configDir ):
 
         configFilename = "./confs.txt"
 
+        # Check that ./confs.txt does not already exist
+
         if glob( configFilename ):
 
             print( "WARNING: Configuration list already exists in this directory. " \
@@ -171,18 +232,25 @@ def getConfigList( configListFilename, configDir ):
 
         else:
 
+            # Write configuration list
+
             with open( configFilename, "w" ) as configFile:
 
                 for config in configList:
 
                     configFile.write( str( config ) + "\n" )
 
-            print( "Configuration list written" )
+            #print( "Configuration list written" )
 
     #print( "Number of configurations: " + str( len( configList ) ) )
 
     return configList
 
+
+# Calculates Q^2 from a given list of Q's and determines the 
+# position of the first and last Q for each Q^2.
+
+# momLists: Momentum lists. Should either identicle.
 
 def processMomList( momLists ):
 
@@ -200,15 +268,14 @@ def processMomList( momLists ):
 
     momList = momLists[ 0 ]
 
-    # Get indexes where each Q^2 begins and ends
+    # Get indices where each Q^2 begins and ends
 
     Qsq_start = []
 
     Qsq_end = []
 
-    Qsq = np.round( ( np.apply_along_axis( np.linalg.norm, 1, np.array( momList ) ) ) ** 2 )
-    
-    #Qsq = ( np.apply_along_axis( np.linalg.norm, 1, np.array( momList ) ) ) ** 2
+    Qsq = np.round( ( np.apply_along_axis( np.linalg.norm, 1, \
+                                           np.array( momList ) ) ) ** 2 )
 
     q_last = Qsq[ 0 ]
 
@@ -232,24 +299,43 @@ def processMomList( momLists ):
 
     Qsq = sorted( list( set( Qsq ) ) )
 
-    #return np.array( Qsq ), np.array( Qsq_start ), np.array( Qsq_end )
-
-    return np.array( Qsq, dtype=int ), np.array( Qsq_start ), np.array( Qsq_end )
+    return np.array( Qsq, dtype=int ), \
+        np.array( Qsq_start ), \
+        np.array( Qsq_end )
 
 
 # Averages over equal Q^2 for numpy array whose last dimension is Q and 
 # returns averaged data as a numpy array whose first dimension is Q^2
 
+# data: Data to be averaged
+# Qsq_start: List of the starting index for each Q^2 to be averaged over
+# Qsq_end: List of the ending index for each Q^2 to be averaged over
+
 def averageOverQsq( data, Qsq_start, Qsq_end ):
 
-    avg = []
+    QsqNum = len( Qsq_start )
 
-    for start, end in zip( Qsq_start, Qsq_end ):
+    assert len( Qsq_end ) == QsqNum, "Error( averageOverQsq ): " \
+        + "Qsq_start and Qsq_end have different lengths " \
+        + QsqNum + " and " + len( Qsq_end ) "."
 
-        avg.append( np.average( data[ ..., start : end + 1 ], axis=-1 ) )
+    avg = initEmptyList( QsqNum, 1 )
+
+    for q in range( QsqNum ):
+
+        avg[ q ] = np.average( data[ ..., start[ q ] : end[ q ] + 1 ], \
+                               axis=-1 )
             
     return np.array( avg )
-    
+
+
+# Checks that there are the correct number of source files, that the 
+# source positions are unique, and that the secondary groups are all
+# source groups. Returns True if all checks pass and False if a 
+# check does not pass.
+
+# filenames: Names of files to be checked
+# sourceNum: Expected number of sources
 
 def check_sources( filenames, sourceNum ):
 
@@ -290,7 +376,7 @@ def check_sources( filenames, sourceNum ):
 
     # source position format for st < 100
     srcPosFormat2 = "\[u'sx[0-9]{2}sy[0-9]{2}sz[0-9]{2}st[0-9]{2}'\]"
-    # source position format for st => 100
+    # source position format for st >= 100
     srcPosFormat3 = "\[u'sx[0-9]{2}sy[0-9]{2}sz[0-9]{2}st[0-9]{3}'\]"
 
     for src in sourcePos:
@@ -302,6 +388,12 @@ def check_sources( filenames, sourceNum ):
     return check
 
 
+# Average over configurations, excluding one bin.
+
+# vals: Values to be averaged
+# binSize: Size of bin to be exclude
+# ibin: index of bin to be exclude
+
 def jackknifeBin( vals, binSize, ibin ):
 
     return np.average( np.vstack( ( vals[ : ibin * binSize, \
@@ -311,11 +403,20 @@ def jackknifeBin( vals, binSize, ibin ):
                        axis=0 )
 
 
+# Perform jackknife averaging over a subset of bins. 
+# Used so that multiple subsets can be averaged in parallel.
+
+# vals: Values to be averaged
+# binSize: Size of bin to be excluded
+# bin_glob: Global indices for subset of bins
+
 def jackknifeBinSubset( vals, binSize, bin_glob ):
 
     assert len( vals ) % binSize == 0, "Number of configurations " \
         + str( len( vals ) ) + " not evenly divided by bin size " \
         + str( binSize ) + " (functions.jackknifeBinSubset).\n"
+
+    # Local number of bins in subset
 
     binNum_loc = len( bin_glob )
 
@@ -323,12 +424,15 @@ def jackknifeBinSubset( vals, binSize, bin_glob ):
 
     for b in range( binNum_loc ):
 
-        
-
         vals_jk[ b ] = jackknifeBin( vals, binSize, bin_glob[ b ] )
 
     return np.array( vals_jk )
-        
+
+
+# Perform jackknife averaging over all bins.        
+
+# vals: Values to be averaged
+# binSize: Size of bin to be excluded
 
 def jackknife( vals, binSize ):
 
