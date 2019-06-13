@@ -2,6 +2,10 @@ from sys import stderr
 from mpi4py import MPI
 import numpy as np
 
+# Prints message run by first process
+
+# message: Message to be printed
+# rank: Rank of process. Prints if rank is 0
 
 def mpiPrint( message, rank ):
 
@@ -10,12 +14,22 @@ def mpiPrint( message, rank ):
         print( message )
 
 
+# Same as mpiPrint() but prints to stderr
+
+# message: Message to be printed
+# rank: Rank of process. Prints if rank is 0
+
 def mpiPrintErr( message, rank ):
 
     if rank == 0:
 
         print( message, file=stderr )
 
+
+# Prints message on every process in order
+
+# message: Message to be printed
+# comm: MPI comm object 
 
 def mpiPrintAllRanks( message, comm ):
 
@@ -28,6 +42,13 @@ def mpiPrintAllRanks( message, comm ):
             print( "rank {}: {}".format( rank, message ) )
 
         comm.Barrier()
+
+
+# Return number of bins to be received and their offsets
+# for each process. Used for sendv/receivev type operations.
+
+# procNum: Number of processes
+# binNum: Number of bins
 
 def recvCountOffset( procNum, binNum ):
 
