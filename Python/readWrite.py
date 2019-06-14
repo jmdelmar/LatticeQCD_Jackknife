@@ -5,34 +5,40 @@ from os import listdir as ls
 from glob import glob
 import functions as fncs
 
+
+#######################
+# HDF5 read functions #
+#######################
+
+
+# Given a source position string, returns the position
+# coordinates as a list of integers
+
+# srcGroupName: source postion string to be processed.
+#               Should be in the form 'sx#sy#sz#st#',
+#               where '#' is an integer.
+
 def getSourcePositions( srcGroupName ):
 
-    #srcPos_tmp = srcGroupName.split( "s" )[ 1: ]
+    # Split string up by 's'
 
     srcPos = srcGroupName.split( "s" )[ 1: ]
 
     dims = [ "x", "y", "z", "t" ]
 
-    #srcPos = [ "", "", "", "" ]
+    # Remove label for each dimension so that only the coordinate is left
 
     srcPos = [ src.replace( d, "" ) for src, d in zip( srcPos, dims ) ]
-
-    #for src, tmp, d in zip( srcPos, srcPos_tmp, dims ):
-
-    #src = tmp.replace( d, "" )
 
     return srcPos
 
 
-def readFormFactorFile( filename, QsqNum, binNum, timestepNum ):
+# Returns an array of filenames which follow given template
+# and are in given directories
 
-    with open( filename, "r" ) as file:
-
-        data = np.array( file.read().split(), dtype=float )
-
-    data = data.reshape( QsqNum, binNum, timestepNum, 3  )
-
-    return data[ ..., -1 ]
+# configDir: Head directory which contains sub-directories
+# configList: List of sub-directory names
+# fn_template: Filename template
 
 def getFileNames( configDir, configList, fn_template ):
     
@@ -44,9 +50,12 @@ def getFileNames( configDir, configList, fn_template ):
 
     for c in range( configNum ):
         
-        # Get filenames in specific configs directory which follow template
+        # Get filenames in sub-directory which follow template
         
-        filename[c] = glob( configDir + "/" + configList[c] + "/" + fn_template )
+        filename[c] = glob( configDir + "/" + configList[c] \
+                            + "/" + fn_template )
+
+        # Check that there are files in sub-directory which follow template
 
         if filename[c]:
 
@@ -58,8 +67,18 @@ def getFileNames( configDir, configList, fn_template ):
                    + fn_template + " were found "\
                    "in " + configDir + "/" + configList[c] )
 
+    # End loop over configs
+
     return filename
 
+
+# Checks that dataset name contains all keywords and appends
+# it to a list if it does
+
+# dsetnameList: List of dataset names to be appended with dataset
+#               names which contain keywords
+# dsetname: dataset name to search for keywords
+# keyword: Keywords to be searched for in dsetname
 
 def filterDsetname( dsetnameList, dsetname, keyword ):
 
@@ -67,6 +86,15 @@ def filterDsetname( dsetnameList, dsetname, keyword ):
         dsetnameList.append( dsetname )
 
     return
+
+
+# Gets the dataset names in a file. If keyword is supplied, will
+# only return datasets names which contain all keywords, else
+# returns all datasets names.
+
+# filename: Name of file
+# keyword (Optional): Lists of keywords which returned dataset
+#                     will contain
 
 def getDatasetNames( filename, *keyword ):
     
@@ -96,10 +124,15 @@ def getDatasetNames( filename, *keyword ):
                                                          name, keyword ) \
                                          if type( obj ) is h5py.Dataset \
                                          else None )
+
+                    # Check that there are any dataset names which contain
+                    # all keywords
+
                     if not dsetname[c][fn]:
                         
-                        print( "WARNING: No datasets containing all keywords " \
-                               + ", ".join( keyword ) + " in file " \
+                        print( "WARNING: No datasets containing " \
+                               "all keywords " + ", ".join( keyword ) \
+                               + " in file " \
                                + filename[c][fn] )
 
                 else:
@@ -134,7 +167,17 @@ def getDatasetNames( filename, *keyword ):
 
 
 # Reads HDF5 datsets containing the given keyword(s) if
-# given and returns them as a numpy array. 
+# given and returns them as a numpy array. If dsetname
+# is given as a keyword argument, only gets datasets
+# in dsetname
+
+# configDir: Head directory which contains sub-directories
+# configList: List of sub-directory names
+# fn_template: Filename template
+# keyword (optional): Lists of keywords which returned dataset
+#                     will contain
+# dsetname (kwarg, optional): List of datasets to read. Overrides
+#                             keyword
 
 def getDatasets( configDir, configList, fn_template, *keyword, **kwargs ):
     
@@ -152,21 +195,19 @@ def getDatasets( configDir, configList, fn_template, *keyword, **kwargs ):
 
         dsetname = getDatasetNames( filename, *keyword )
 
-    #print( dsetname )
-
     data = fncs.initEmptyList( dsetname, 3 )
 
-    # Loop through config indexes
-
+    # Loop over config indices
     for c in range( len( dsetname ) ):
-
+        # Loop over filename indices
         for fn in range( len( dsetname[c] ) ): 
-
+            # Open file
             with h5py.File( filename[c][fn], "r" ) as dataFile:
-
+                # Loop over datasets
                 for ds in range( len( dsetname[c][fn] ) ):
 
-                    #print( dataFile[ dsetname[ c ][ fn ][ ds ] ] )
+                    # Get dataset
+
                     data[ c ][ fn ][ ds ] = np.array( dataFile[ dsetname[ c ][ fn ][ ds ] ] )
 
                 # End loop over datasets
@@ -179,94 +220,154 @@ def getDatasets( configDir, configList, fn_template, *keyword, **kwargs ):
 
 # Reads HDF5 datsets containing the given keyword(s) if
 # given and returns them as a numpy array. Also returns
-# a list of the group/dataset names of each dataset
+# a list of the group/dataset names of each dataset.
 
-def getDatasets_wNames( configDir, configList, fn_template, *keyword ):
+# configDir: Head directory which contains sub-directories
+# configList: List of sub-directory names
+# fn_template: Filename template
+# keyword (optional): Lists of keywords which returned dataset
+#                     will contain
+# dsetname (kwarg, optional): List of datasets to read. Overrides
+#                             keyword
+
+
+def getDatasets_wNames( configDir, configList, fn_template, \
+                        *keyword, **kwargs ):
 
     filename = getFileNames( configDir, configList, fn_template )
 
     configNum = len( filename )
 
-    datasetName = getDatasetNames( filename, *keyword )
+    if "dsetname" in kwargs:
+
+        dsetname = [ [ kwargs[ "dsetname" ] \
+                       for fn in range( len( filename[ c ] ) ) ] \
+                     for c in range( configNum ) ]
+        
+    else:
+
+        datasetName = getDatasetNames( filename, *keyword )
 
     data = fncs.initEmptyList( datasetName, 3 )
 
-    # Loop through config indexes
-
+    # Loop over config indexes
     for c in range( len( configList ) ):
         
         fileNum = len( filename[ c ] )
     
         sources = set()
 
+        # Loop over filenames
         for fn in range( fileNum ): 
-
+            # Open file
             with h5py.File( filename[ c ][ fn ], "r" ) as dataFile:
-
+                # Loop over datasets
                 for ds in range( len( datasetName[c][fn] ) ):
 
+                    # Get dataset
+
                     data[ c ][ fn ][ ds ] = np.array( dataFile[ datasetName[ c ][ fn ][ ds ] ] )
+
+                    # Get source groups to check that they are unique
 
                     groups = datasetName[c][fn][ds].split( "/" )
 
                     sources.add( groups[1] )
 
                 # End loop over datasets
-
             # Close file
-
         # End loop over files in sub-directory
 
-        # Ensure that the source (2nd) group is unique to each file in sub-directory
+        # Ensure that the source (2nd) group is unique to 
+        # each file in sub-directory
 
         assert len( sources ) == fileNum, \
-            "Source groups in configuration %s are not unique to file" % configList[ c ]
+            "Source groups in configuration " \
+            + "{} are not unique to file".format( configList[ c ] )
 
     # End loop over configs
 
     return np.array( data ), datasetName
 
+# Gets full HDF5 file and returns list of arrays where each 
+# array is for a different insertion current. 
+# Only supported for files in the GPU format.
 
-def getHDF5File( configDir, configList, fn_template, *keyword ):
+# configDir: Head directory which contains sub-directories
+# configList: List of sub-directory names
+# fn_template: Filename template
+# keyword (optional): Lists of keywords which returned dataset
+#                     will contain
+# dsetname (kwarg, optional): List of datasets to read. Overrides
+#                             keyword
 
-    dataset = []
+def getHDF5File( configDir, configList, fn_template, *keyword, **kwargs ):
 
-    datasetName = []
+    dataset = fncs.initEmptyList( 3, 1 )
 
     ins_current = [ "noether", "oneD", "ultra_local" ]
 
-    for curr in ins_current:
+    for ic in range( 3 )
 
-        dset, name = getDatasets( configDir, configList, fn_template, curr, *keyword )
+        # Get datasets for this insertion current
 
-        dataset.append( dset )
+        dataset[ ic ] = getDatasets( configDir, configList, \
+                                     fn_template, ins_current[ ic ], \
+                                     *keyword, **kwargs )
 
-        datasetName.append( name )
+    return dataset
+
+
+# Gets full HDF5 file and returns list of arrays of datasets 
+# and dataset names where each array is for a different insertion
+# current. Only supported for files in the GPU format.
+
+# configDir: Head directory which contains sub-directories
+# configList: List of sub-directory names
+# fn_template: Filename template
+# keyword (optional): Lists of keywords which returned dataset
+#                     will contain
+# dsetname (kwarg, optional): List of datasets to read. Overrides
+#                             keyword
+
+def getHDF5File_wNames( configDir, configList, fn_template, \
+                        *keyword, **kwargs ):
+
+    dataset = fncs.initEmptyList( 3, 1 )
+
+    datasetName = fncs.initEmptyList( 3, 1 )
+
+    ins_current = [ "noether", "oneD", "ultra_local" ]
+
+    for ic in range( 3 )
+
+        # Get datasets for this insertion current
+
+        dataset[ ic ], datasetName[ ic ] = getDatasets( configDir, \
+                                                        configList, \
+                                                        fn_template, \
+                                                        ins_current[ ic ], \
+                                                        *keyword, **kwargs )
 
     return dataset, datasetName
 
 
-def getHDF5File_wNames( configDir, configList, fn_template, *keyword ):
-
-    dataset = []
-
-    datasetName = []
-
-    ins_current = [ "noether", "oneD", "ultra_local" ]
-
-    for curr in ins_current:
-
-        dset, name = getDatasets_wNames( configDir, configList, fn_template, curr, *keyword )
-
-        dataset.append( dset )
-
-        datasetName.append( name )
-
-    return dataset, datasetName
+########################
+# ASCII read functions #
+########################
 
 
 # Get the real part of gxDx, gyDy, gzDz, and gtDt
 # three-point functions at zero-momentum
+
+# threepDir: Head directory which contains sub-directories
+# configList: List of sub-directory names
+# threep_template: Filename template
+# ts: Tsink
+# particle: Which particle to do
+# dataFormat: Which format the data files to be read are in
+# dsetname (kwarg, optional): List of datasets to read. Overrides
+#                             keyword
 
 def readAvgXFile( threepDir, configList, threep_template, 
                    ts, particle, dataFormat, **kwargs ):
@@ -394,9 +495,14 @@ def readAvgXFile( threepDir, configList, threep_template,
                                           "up", \
                                           "threep" )[ :, 0, 0, ..., 0, 3, 0 ]
 
-            threep_gtDt = getDatasets( threepDir, configList, threep_template, \
-                                            "tsink_" + str( ts ), "oneD", "dir_03", \
-                                            "up", "threep" )[ :, 0, 0, ..., 0, 4, 0 ]
+            threep_gtDt = getDatasets( threepDir, \
+                                       configList, \
+                                       threep_template, \
+                                       "tsink_" + str( ts ), \
+                                       "oneD", \
+                                       "dir_03", \
+                                       "up", \
+                                       "threep" )[ :, 0, 0, ..., 0, 4, 0 ]
 
             threep_s_gxDx = np.array( [] )
             
@@ -415,7 +521,8 @@ def readAvgXFile( threepDir, configList, threep_template,
                                                 "oneD", \
                                                 "dir_00", \
                                                 "strange", \
-                                                "threep" )[ :, 0, 0, ..., 0, 1, 0 ]
+                                                "threep" )[ :, 0, 0, ..., \
+                                                            0, 1, 0 ]
 
                 threep_s_gyDy = getDatasets( threepDir, \
                                                 configList, \
@@ -424,7 +531,8 @@ def readAvgXFile( threepDir, configList, threep_template,
                                                 "oneD", \
                                                 "dir_01", \
                                                 "strange", \
-                                                "threep" )[ :, 0, 0, ..., 0, 2, 0 ]
+                                                "threep" )[ :, 0, 0, ..., \
+                                                            0, 2, 0 ]
     
                 threep_s_gzDz = getDatasets( threepDir, \
                                                 configList, \
@@ -433,7 +541,8 @@ def readAvgXFile( threepDir, configList, threep_template,
                                                 "oneD", \
                                                 "dir_02", \
                                                 "strange", \
-                                                "threep" )[ :, 0, 0, ..., 0, 3, 0 ]
+                                                "threep" )[ :, 0, 0, ..., \
+                                                            0, 3, 0 ]
 
                 threep_s_gtDt = getDatasets( threepDir, \
                                                 configList, \
@@ -442,14 +551,18 @@ def readAvgXFile( threepDir, configList, threep_template,
                                                 "oneD", \
                                                 "dir_03", \
                                                 "strange", \
-                                                "threep" )[ :, 0, 0, ..., 0, 4, 0 ]
+                                                "threep" )[ :, 0, 0, ..., \
+                                                            0, 4, 0 ]
             
-                return [ threep_gxDx, threep_gyDy, threep_gzDz, threep_gtDt, \
-                         threep_s_gxDx, threep_s_gyDy, threep_s_gzDz, threep_s_gtDt ]
+                return [ threep_gxDx, threep_gyDy, \
+                         threep_gzDz, threep_gtDt, \
+                         threep_s_gxDx, threep_s_gyDy, \
+                         threep_s_gzDz, threep_s_gtDt ]
 
             elif particle == "pion": 
 
-                return [ threep_gxDx, threep_gyDy, threep_gzDz, threep_gtDt ]
+                return [ threep_gxDx, threep_gyDy, \
+                         threep_gzDz, threep_gtDt ]
 
             else: 
 
@@ -476,25 +589,29 @@ def readAvgXFile( threepDir, configList, threep_template,
                                        filename, \
                                        dsetname=[ dsetname_pre \
                                        + dsetname_insertion[ 0 ] \
-                                       + dsetname_post ] )[ :, 0, 0, :, 0 ].real
+                                       + dsetname_post ] )[ :, 0, 0, \
+                                                            :, 0 ].real
             threep_gxDx = getDatasets( threepDir, \
                                        configList, \
                                        filename, \
                                        dsetname=[ dsetname_pre \
                                        + dsetname_insertion[ 1 ] \
-                                       + dsetname_post ] )[ :, 0, 0, :, 0 ].real
+                                       + dsetname_post ] )[ :, 0, 0, \
+                                                            :, 0 ].real
             threep_gyDy= getDatasets( threepDir, \
                                        configList, \
                                        filename, \
                                        dsetname=[ dsetname_pre \
                                        + dsetname_insertion[ 2 ] \
-                                       + dsetname_post ] )[ :, 0, 0, :, 0 ].real
+                                       + dsetname_post ] )[ :, 0, 0, \
+                                                            :, 0 ].real
             threep_gzDz = getDatasets( threepDir, \
                                        configList, \
                                        filename, \
                                        dsetname=[ dsetname_pre \
                                        + dsetname_insertion[ 3 ] \
-                                       + dsetname_post ] )[ :, 0, 0, :, 0 ].real
+                                       + dsetname_post ] )[ :, 0, 0, \
+                                                            :, 0 ].real
 
             threep_s_gxDx = np.array( [] )
             
@@ -515,7 +632,7 @@ def readAvgXFile( threepDir, configList, threep_template,
                                              filename, \
                                              dsetname=[ dsetname_s_pre \
                                                         + dsetname_insertion[ 0 ] \
-                                             + dsetname_post ] )[ :, 0, 0, :, 0 ].real
+                                                        + dsetname_post ] )[ :, 0, 0, :, 0 ].real
                 threep_s_gxDx = getDatasets( threepDir, \
                                              configList, \
                                              filename, \
@@ -535,12 +652,15 @@ def readAvgXFile( threepDir, configList, threep_template,
                                                         + dsetname_insertion[ 3 ] \
                                                         + dsetname_post ] )[ :, 0, 0, :, 0 ].real
 
-                return [ threep_gxDx, threep_gyDy, threep_gzDz, threep_gtDt, \
-                    threep_s_gxDx, threep_s_gyDy, threep_s_gzDz, threep_s_gtDt ]
+                return [ threep_gxDx, threep_gyDy, \
+                         threep_gzDz, threep_gtDt, \
+                         threep_s_gxDx, threep_s_gyDy, \
+                         threep_s_gzDz, threep_s_gtDt ]
 
             elif particle == "pion": 
 
-                return [ threep_gxDx, threep_gyDy, threep_gzDz, threep_gtDt ]
+                return [ threep_gxDx, threep_gyDy, \
+                         threep_gzDz, threep_gtDt ]
 
             else: 
 
@@ -550,15 +670,32 @@ def readAvgXFile( threepDir, configList, threep_template,
                 exit()                
 
 
-def readDataFile( filename, timestepNum, binNum ):
+# Reads an ASCII file with two columns where the data of 
+# interest is in the last column. Lines should repeat 
+# over d1 and then d0. Data is stored in an array with 
+# shape ( d0, d1 ).
+
+# filename: Name of data file to be read
+# d0: Last dimension data is repeated over, 
+#     to be first dimension in output
+# d1: First dimension data is repeated over,
+#     to be last dimension in output
+
+def readDataFile( filename, d0, d1 ):
 
     with open( filename, "r" ) as file:
 
         data = np.array( file.read().split(), dtype=float )
 
-    data = data.reshape( binNum, timestepNum, 2  )
+    data = data.reshape( d0, d1, 2  )
 
     return data[ ..., -1 ]
+
+
+# Reads the Nth column of an ASCII data file.
+
+# filename: Name of data file to be read
+# N: Column number to be read (counting starts at 0)
 
 def readNthDataCol( filename, N ):
 
@@ -574,6 +711,46 @@ def readNthDataCol( filename, N ):
 
     return data[ ..., N ]
 
+
+# Reads and ASCII file of (most often) form factor data 
+# with three columns where the data of interest is in 
+# the last column. Lines should repeat over d2, then d1, 
+# and lastly d0. Data is stored in an array with shape 
+# ( d0, d1, d2 ).
+
+# filename: Name of data file to be read
+# d0: Last dimension data is repeated over, 
+#     to be first dimension in output
+# d1: Second dimension data is repeated over
+#     and in output
+# d2: First dimension data is repeated over,
+#     to be last dimension in output
+
+def readFormFactorFile( filename, d0, d1, d2 ):
+
+    with open( filename, "r" ) as file:
+
+        data = np.array( file.read().split(), dtype=float )
+
+    data = data.reshape( d0, d1, d2, 3  )
+
+    # Return data in the last column
+
+    return data[ ..., -1 ]
+
+
+########################################
+# Determine values from file functions #
+########################################
+
+
+# Determines the number of timesteps and configurations
+# for file whose first column is time and which repeats
+# configurations after timesteps
+
+# filename: Name of file whose timestep and configuration
+#           number will be determined
+
 def detTimestepAndConfigNum( filename ):
 
     t_last = -1
@@ -584,11 +761,16 @@ def detTimestepAndConfigNum( filename ):
 
     configNum = 0
 
+    # Open file
     with open( filename, "r" ) as file:
-
+        # Loop over lines
         for line in file:
 
+            # Get first column
+
             t = int( line.split()[ 0 ] )
+
+            # If next timestep
 
             if t == ( t_last + 1 ):
 
@@ -596,12 +778,17 @@ def detTimestepAndConfigNum( filename ):
 
                 t_last = t
 
+            # Else if timesteps have started over
+
             elif t == 0:
+
+                # If this is not first time counting timestepNum
 
                 if timestepNum_last >= 0:
 
                     assert timestepNum == timestepNum_last, \
-                        "Error (detTimestepAndConfigNum): Number of timesteps not" \
+                        "Error (detTimestepAndConfigNum): " \
+                        + "Number of timesteps not" \
                         + " consistent across configurations"
                     
                 timestepNum_last = timestepNum
@@ -612,15 +799,23 @@ def detTimestepAndConfigNum( filename ):
 
                 t_last = t
 
+            # Else unsupported behaviour
+
             else:
 
-                print( "Error (detTimestepAndConfigNum): Timestep in 1st column " \
+                print( "Error (detTimestepAndConfigNum): " \
+                       + "Timestep in 1st column " \
                     + "does not behave as expected" )
 
                 return -1
 
+            # End if
+        # End loop over lines
+    # Close file
+
     assert timestepNum == timestepNum_last, \
-        "Error (detTimestepAndConfigNum): Number of timesteps not" \
+        "Error (detTimestepAndConfigNum): " \
+        + "Number of timesteps not" \
         + " consistent across configurations"
                     
     configNum += 1
@@ -628,59 +823,13 @@ def detTimestepAndConfigNum( filename ):
     return timestepNum, configNum
 
 
-def detConfigAndTimestepNum( filename ):
+# Determines the number of Q^2's, configurations, and timesteps
+# for file whose first column is time, second column is Q^2,
+# and which repeats Q^2  after timesteps and configurations
+# after Q^2
 
-    t_last = -1
-
-    timestepNum = 0
-
-    timestepNum_last = -1
-
-    configNum = 0
-
-    with open( filename, "r" ) as file:
-
-        for line in file:
-
-            t = int( line.split()[ 0 ] )
-
-            if t == ( t_last + 1 ):
-
-                timestepNum += 1
-
-                t_last = t
-
-            elif t == 0:
-
-                if timestepNum_last >= 0:
-
-                    assert timestepNum == timestepNum_last, \
-                        "Error (detTimestepAndConfigNum): Number of timesteps not" \
-                        + " consistent across configurations"
-                    
-                timestepNum_last = timestepNum
-
-                timestepNum = 1
-
-                configNum += 1
-
-                t_last = t
-
-            else:
-
-                print( "Error (detTimestepAndConfigNum): Timestep in 1st column " \
-                    + "does not behave as expected" )
-
-                return -1
-
-    assert timestepNum == timestepNum_last, \
-        "Error (detTimestepAndConfigNum): Number of timesteps not" \
-        + " consistent across configurations"
-                    
-    configNum += 1
-
-    return configNum, timestepNum
-
+# filename: Name of file whose Q^2, timestep, and configuration
+#           number will be determined
 
 def detQsqConfigNumAndTimestepNum( filename ):
 
@@ -709,19 +858,24 @@ def detQsqConfigNumAndTimestepNum( filename ):
 
             q = int( line.split()[ 1 ] )
 
-            #print str(t) + " " + str(q)
+            # If next timestep and Q^2 is the same as last
 
             if t == ( t_last + 1 ) and q == q_last:
 
                 timestepNum += 1
 
+            # Else if timesteps have started over
+
             elif t == 0:
+
+                # If this is not the first time counting timestep number
 
                 if timestepNum_last >= 0:
 
                     assert timestepNum == timestepNum_last, \
-                        "Error (detQsqConfigNumAndTimestepNum): Number of " \
-                        + "timesteps is not consistent across configurations"
+                        "Error (detQsqConfigNumAndTimestepNum): " \
+                        + "Number of timesteps is not " \
+                        + "consistent across configurations"
                     
                 timestepNum_last = timestepNum
 
@@ -729,13 +883,18 @@ def detQsqConfigNumAndTimestepNum( filename ):
 
                 configNum += 1
 
+                # If next Q^2
+
                 if q > q_last:
+
+                    # If this in not the first time counting Q^2 number
 
                     if configNum_last >= 0:
 
                         assert configNum == configNum_last, \
-                            "Error (detQsqConfigNumAndTimestepNum): Number of " \
-                            + "configurations is not consistent across Qsq's"
+                            "Error (detQsqConfigNumAndTimestepNum): "\
+                            + "Number of configurations is not " \
+                            + "consistent across Qsq's"
 
                     configNum_last = configNum
 
@@ -743,10 +902,13 @@ def detQsqConfigNumAndTimestepNum( filename ):
 
                     Qsq.append( q )
 
+            # Else unsupported behaviour
+
             else:
 
-                print( "Error (detTimestepAndConfigNum): Timestep in 1st column " \
-                    + "does not behave as expected" )
+                print( "Error (detTimestepAndConfigNum): " \
+                       + "Timestep in 1st column " \
+                       + "does not behave as expected" )
 
                 return -1
 
@@ -761,17 +923,30 @@ def detQsqConfigNumAndTimestepNum( filename ):
     configNum += 1
 
     assert configNum == configNum_last, \
-        "Error (detQsqConfigNumAndTimestepNum): Number of \
-        configurations is not consistent across Qsq's"
+        "Error (detQsqConfigNumAndTimestepNum): Number of " \
+        + "configurations is not consistent across Qsq's"
 
     return np.array( Qsq ), configNum, timestepNum
 
+
+###################
+# Write functions #
+###################
+
+
+# Writes an ASCII file with two columns and two repeating dimensions.
+# The first column is the first repeating dimension and the second is
+# the data.
+
+# filename: Name of file to be written
+# data: 2-D array of data to be written in the second column
 
 def writeDataFile( filename, data ):
 
     if data.ndim != 2:
 
-        print( "Error (writeDataFile): Data array does not have two dimensions" )
+        print( "Error (writeDataFile): Data array does not " \
+               + "have two dimensions" )
 
         return -1
 
@@ -781,22 +956,33 @@ def writeDataFile( filename, data ):
 
             for d1 in range( len( data[ d0 ] ) ):
                 
-                output.write( "{:<5d}{:<20.15}\n".format( d1, data[ d0, d1 ] ) )
+                output.write( "{:<5d}{:<20.15}\n".format( d1, \
+                                                          data[ d0, d1 ] ) )
 
     print( "Wrote " + filename )
 
+
+# Write an ASCII file with three columns. The first column is row number,
+# the second column is a set of data, and the third column is another 
+# set of data, often the error associated with the first set of data.
+
+# filename: Name of file to be written
+# data: 1-D array of data to be written in the second column
+# error: 1-D array of data to be written in the third column
 
 def writeAvgDataFile( filename, data, error ):
 
     if data.ndim != 1:
 
-        print( "Error (writeAvgDataFile): Data array has more than one dimension" )
+        print( "Error (writeAvgDataFile): Data array has more " \
+               + "than one dimension" )
 
         return -1
 
     if data.shape != error.shape or len( data ) != len( error ):
 
-        print( "Error (writeAvgDataFile): Error array's length and shape does not match data array's" )
+        print( "Error (writeAvgDataFile): Error array's length and " \
+               + "shape does not match data array's" )
         
         return -1
 
@@ -804,35 +990,55 @@ def writeAvgDataFile( filename, data, error ):
 
         for d0 in range( len( data ) ):
 
-            output.write( "{:<5d}{:<25.15}{:<25.15}\n".format( d0, data[ d0 ], error[ d0 ] ) )
+            output.write( "{:<5d}{:<25.15}{:<25.15}\n".format(d0, \
+                                                              data[ d0 ], \
+                                                              error[ d0 ]) )
 
     print( "Wrote " + filename )
 
 
+# Same as writeAvgDataFile except the first column is a set of given numbers
+# instead of simply the row number.
+
+# filename: Name of file to be written
+# x: 1-D array of data to be written in the first column
+# y: 1-D array of data to be written in the second column
+# error: 1-D array of data to be written in the third column
+
 def writeAvgDataFile_wX( filename, x, y, error ):
 
-    if y.ndim != 1:
+    assert y.ndim == 1, "Error (writeAvgDataFile_wX): Data array has more " \
+        + "than one dimension"
 
-        print( "Error (writeAvgDataFile_wX): Data array has more than one dimension" )
+    assert y.shape == error. shape and len( y ) == len( error ), \
+        "Error (writeAvgDataFile_wX): Error array's length and " \
+        + "shape does not match data array's" 
 
-        return -1
-
-    if y.shape != error.shape or len( y ) != len( error ):
-
-        print( "Error (writeAvgDataFile_wX): Error array's length and shape does not match data array's" )
-        
-        return -1
+    assert y.shape == x.shape and len( y ) == len( x ), \
+        "Error (writeAvgDataFile_wX): x array's length and " \
+        + "shape does not match data array's" 
 
     with open( filename, "w" ) as output:
 
         for ix, iy, ierr in zip( x, y, error ):
 
-            output.write( "{:<20.15f}{:<20.15f}{:.15f}\n".format( ix, iy, ierr) )
+            output.write( "{:<20.15f}{:<20.15f}{:.15f}\n".format( ix, \
+                                                                  iy, \
+                                                                  ierr) )
 
     print( "Wrote " + filename )
 
 
-def writeFormFactorFile( filename, data, Qsq ):
+# Write an ASCII file with three columns and three repeating dimensions. 
+# The first column is the first repeating dimension which increases by one,
+# the second column is the second repeating dimension which is given,
+# and the third column is a set of data.
+
+# filename: Name of file to be written
+# Qsq: 1-D array of data to be written repeatedly in the second column
+# data: 3-D array of data to be written in the third column
+
+def writeFormFactorFile( filename, Qsq, data ):
 
     assert data.ndim == 3, "Error (writeFormFactorFile): " \
         + "Data array does not have three dimensions"
@@ -845,12 +1051,25 @@ def writeFormFactorFile( filename, data, Qsq ):
                 
                 for t in range( data.shape[ 2 ] ):
 
-                    output.write( str( t ).ljust(20) + str( Qsq[ q ] ).ljust(20) + str( data[ q, b, t ] ) + "\n" )
+                    output.write( str( t ).ljust(20) \
+                                  + str( Qsq[ q ] ).ljust(20) \
+                                  + str( data[ q, b, t ] ) + "\n" )
 
     print( "Wrote " + filename )
 
 
-def writeAvgFormFactorFile( filename, data, error, Qsq ):
+# Write an ASCII file with four columns and 2 repeating dimensions. 
+# The first column is the first repeating dimension which increases by one,
+# the second column is the second repeating dimension which is given,
+# and the third column is a set of data, and the fourth column is another
+# set of data, often the error associated with the other set.
+
+# filename: Name of file to be written
+# Qsq: 1-D array of data to be written repeatedly in the second column
+# data: 2-D array of data to be written in the third column
+# error: 2-D array of data to be written in the fourth column
+
+def writeAvgFormFactorFile( filename, Qsq, data, error ):
 
     assert data.ndim == 2, "Error (writeAvgFormFactorFile): " \
         + "Data array does not have two dimensions"
@@ -872,6 +1091,16 @@ def writeAvgFormFactorFile( filename, data, error, Qsq ):
     print( "Wrote " + filename )
 
 
+# Write one line of data with four values. Most often used for constant fit 
+# values, their associated error, and the start and ending values of the fit 
+# range.
+
+# filename: Name of file to be written
+# fit: First number to be written
+# err: Second number to be written
+# fitStart: number to be written
+# fitEnd: number to be written
+
 def writeFitDataFile( filename, fit, err, fitStart, fitEnd ):
 
     with open( filename, "w" ) as output:
@@ -883,6 +1112,13 @@ def writeFitDataFile( filename, fit, err, fitStart, fitEnd ):
 
     print( "Wrote " + filename )
 
+
+# Write the fit parameters for a two-state fit of two- and three-point 
+# functions
+
+# filename: Name of file to be written
+# params: List of seven fit parameters
+# params_err: Error associated with each fit parameter
 
 def writeTSFParamsFile( filename, params, params_err ):
 
@@ -931,6 +1167,13 @@ def writeTSFParamsFile( filename, params, params_err ):
                       + str( params_err[ 6 ] ) + "\n" )
 
     print( "Wrote " + filename )
+
+
+# Write the fit parameters for a two-state fit of two-point functions
+
+# filename: Name of file to be written
+# params: List of four fit parameters
+# params_err: Error associated with each fit parameter
 
 def writeTSFParamsFile_twop( filename, params, params_err ):
 

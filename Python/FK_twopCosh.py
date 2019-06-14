@@ -85,7 +85,7 @@ binSize = configNum / binNum
 # Read input files
 # mEff[ b, t ]
 
-mEff = rw.readDataFile( mEff_filename, timestepNum, binNum )
+mEff = rw.readDataFile( mEff_filename, binNum, timestepNum )
 
 # mEff_err[ t ]
 
@@ -187,13 +187,13 @@ for ts in tsink:
 
     FK_outFilename = output_template.replace( "*", "Fpi_tsink" + str( ts ) )
 
-    rw.writeFormFactorFile( FK_outFilename, FK, Qsq )
+    rw.writeFormFactorFile( FK_outFilename, Qsq, FK )
 
     # Form factors for each Q^2 averaged over bins
     
     FK_avg_outFilename = output_template.replace( "*", "avgFpi_tsink" + str( ts ) )
 
-    rw.writeAvgFormFactorFile( FK_avg_outFilename, FK_avg, FK_err, Qsq )
+    rw.writeAvgFormFactorFile( FK_avg_outFilename, Qsq, FK_avg, FK_err )
 
     # Fitted effective mass
 

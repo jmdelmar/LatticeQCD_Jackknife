@@ -317,7 +317,7 @@ def averageOverQsq( data, Qsq_start, Qsq_end ):
 
     assert len( Qsq_end ) == QsqNum, "Error( averageOverQsq ): " \
         + "Qsq_start and Qsq_end have different lengths " \
-        + QsqNum + " and " + len( Qsq_end ) "."
+        + QsqNum + " and " + len( Qsq_end ) + "."
 
     avg = initEmptyList( QsqNum, 1 )
 

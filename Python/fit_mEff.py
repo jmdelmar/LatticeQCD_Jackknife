@@ -39,7 +39,7 @@ timestepNum, binNum = rw.detTimestepAndConfigNum( mEff_filename )
 
 # mEff[ b, t ]
 
-mEff = rw.readDataFile( mEff_filename, timestepNum, binNum )
+mEff = rw.readDataFile( mEff_filename, binNum, timestepNum )
 
 print "Read effective masses from data file"
 
