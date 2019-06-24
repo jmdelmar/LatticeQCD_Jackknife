@@ -307,7 +307,7 @@ def getHDF5File( configDir, configList, fn_template, *keyword, **kwargs ):
 
     ins_current = [ "noether", "oneD", "ultra_local" ]
 
-    for ic in range( 3 )
+    for ic in range( 3 ):
 
         # Get datasets for this insertion current
 
@@ -339,7 +339,7 @@ def getHDF5File_wNames( configDir, configList, fn_template, \
 
     ins_current = [ "noether", "oneD", "ultra_local" ]
 
-    for ic in range( 3 )
+    for ic in range( 3 ):
 
         # Get datasets for this insertion current
 
