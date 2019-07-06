@@ -162,6 +162,19 @@ assert particle in particle_list, \
     "Error: Particle not supported. " \
     + "Supported particles: " + str( particle_list )
 
+if particle == "pion":
+
+    flavNum = 1
+
+else:
+
+    flavNum = 2
+
+# Set string for up and strange quark.
+# If pion, will not access strange.
+
+flav_str = [ "u", "s" ]
+
 assert dataFormat in format_list, \
     "Error: Data format not supported. " \
     + "Supported particles: " + str( format_list )
@@ -450,49 +463,28 @@ t0 = time.time()
 
 if rank == 0:
         
-    threep_jk = np.zeros( ( tsinkNum, binNum_glob, T ) )
+    threep_jk = np.zeros( ( flavNum, tsinkNum, binNum_glob, T ) )
 
 else:
 
-    threep_jk = [ None for ts in tsink ]
+    threep_jk = np.array( [ [ None for ts in tsink ] \
+                            for iflav in range( flavNum ) ] )
 
 for ts, its in zip( tsink, range( tsinkNum ) ) :
     
     t0_ts =time.time()
 
-    threep_mom = np.zeros( ( procSize, T, momBoostNum ) )
-    threep_s_mom = np.zeros( ( procSize, T, momBoostNum ) )
+    threep_mom = np.zeros( ( flavNum, procSize, T, momBoostNum ) )
 
     for imom in range( momBoostNum ):
-
-        if dataFormat == "cpu":
-        
-            threep_template = threep_tokens[0] + str(ts) \
-                              + threep_tokens[1] \
-                              + fncs.signToString( momList[imom][0] ) \
-                              + str(momList[imom][0]) + "_" \
-                              + fncs.signToString( momList[imom][1] ) \
-                              + str(momList[imom][1]) + "_" \
-                              + fncs.signToString( momList[imom][2] ) \
-                              + str(momList[imom][2])
-
-        else:
-
-            threep_template = threep_tokens[0] + \
-                              fncs.signToString( momList[imom][0] ) \
-                              + str(momList[imom][0]) + "_" \
-                              + fncs.signToString( momList[imom][1] ) \
-                              + str(momList[imom][1]) + "_" \
-                              + fncs.signToString( momList[imom][2] ) \
-                              + str(momList[imom][2]) \
-                              + threep_tokens[1]
 
         # Get the real part of gxDx, gyDy, gzDz, and gtDt
         # three-point functions at zero-momentum
         # threep[ c, t ]
 
         threeps = rw.readAvgXFile( threepDir, configList_loc, \
-                                   threep_template, ts, particle, dataFormat)
+                                   threep_tokens, ts, momList[ imom ], \
+                                   particle, dataFormat )
 
         threep_gxDx = threeps[0]
         threep_gyDy = threeps[1]
@@ -519,214 +511,160 @@ for ts, its in zip( tsink, range( tsinkNum ) ) :
             
         # Subtract average over directions from gtDt
 
-        threep_mom[ ..., imom ] = threep_gtDt - \
-                                  0.25 * ( threep_gtDt \
-                                           + threep_gxDx \
-                                           + threep_gyDy \
-                                           + threep_gzDz )
+        threep_mom[ 0, ..., imom ] = threep_gtDt - \
+                                     0.25 * ( threep_gtDt \
+                                              + threep_gxDx \
+                                              + threep_gyDy \
+                                              + threep_gzDz )
 
-        """
+
         if particle == "kaon":
 
-            threep_s_mom[ imom ] = threep_s_gtDt - \
-                                   0.25 * ( threep_s_gtDt \
-                                            + threep_s_gxDx \
-                                            + threep_s_gyDy \
-                                            + threep_s_gzDz )
-        """
+            threep_mom[ 1, ..., imom ] = threep_s_gtDt - \
+                                         0.25 * ( threep_s_gtDt \
+                                                  + threep_s_gxDx \
+                                                  + threep_s_gyDy \
+                                                  + threep_s_gzDz )
+
     # End loop over momenta
 
-    threep_loc = np.average( threep_mom, axis=-1 )
+    # Loop over flavors
+    for iflav in range( flavNum ):
 
-    threep_loc = np.asarray( threep_loc, order='c' )
+        threep_loc = np.average( threep_mom[ iflav ], axis=-1 )
 
-    threep = np.zeros( ( configNum, T ) )
+        threep_loc = np.asarray( threep_loc, order='c' )
 
-    comm.Allgather( threep_loc, threep )
+        threep = np.zeros( ( configNum, T ) )
 
-    # Jackknife
-    # threep_jk[ ts, b, t ]
+        comm.Allgather( threep_loc, threep )
+
+        # Jackknife
+        # threep_jk[ iflav, ts, b, t ]
     
-    threep_jk_loc = fncs.jackknifeBinSubset( threep, \
-                                             binSize, bin_glob[ rank ] )
+        threep_jk_loc = fncs.jackknifeBinSubset( threep, \
+                                                 binSize, bin_glob[ rank ] )
 
-    comm.Gatherv( threep_jk_loc, [ threep_jk[ its ], recvCount * T, \
-                                   recvOffset * T, MPI.DOUBLE ], root=0 )
+        comm.Gatherv( threep_jk_loc, [ threep_jk[ iflav, its ], \
+                                       recvCount * T, recvOffset * T, \
+                                       MPI.DOUBLE ], root=0 )
 
-    if rank == 0:
+        if rank == 0:
 
-        threep_avg = np.average( threep_jk[ its ], axis = 0 )
-        threep_err = fncs.calcError( threep_jk[ its ], binNum_glob )
+            threep_avg = np.average( threep_jk[ iflav, its ], axis = 0 )
+            threep_err = fncs.calcError( threep_jk[ iflav, its ], \
+                                         binNum_glob )
         
-        avgOutputFilename = output_template.replace( "*", "threep_u_tsink" + str( ts ) )
-        rw.writeAvgDataFile( avgOutputFilename, threep_avg, threep_err )
+            avgOutputFilename = output_template.replace( "*", \
+                                                         "threep_" \
+                                                         + flav_str[ iflav ] \
+                                                         + "_tsink" \
+                                                         + str( ts ) )
 
-        #################
-        # Calculate <x> #
-        #################
-
-        # avgX[ b, t ]
-
-        preFactor = np.repeat( -4.0 / 3.0 / mEff_fit * Z, \
-                               T ).reshape( binNum_glob, T )
-
-        if tsf:
-
-            c0_cp = np.repeat( c0, T ).reshape( binNum_glob, T )
-            c1_cp = np.repeat( c1, T ).reshape( binNum_glob, T )
-            E0_cp = np.repeat( E0, T ).reshape( binNum_glob, T )
-            E1_cp = np.repeat( E1, T ).reshape( binNum_glob, T )
-
-            avgX = preFactor * threep_jk[ its ] \
-                   / fit.twoStateTwop( ts, T, c0_cp, c1_cp, E0_cp, E1_cp )
-        
-        else:
-
-            if its == 0:
-
-                G = np.repeat( G, T ).reshape( binNum_glob, T )
-                E = np.repeat( E, T ).reshape( binNum_glob, T )
-
-            avgX = preFactor * threep_jk[ its ] \
-                   / fit.oneStateTwop( ts, T, G, E )
-
-            #avgX = Z * pq.calcAvgX( threep_jk[ -1 ], twop_jk[ :, ts ], mEff_fit )
-
-        # Average over bins
-
-        avgX_avg = np.average( avgX, axis=0 )
-
-        avgX_err = fncs.calcError( avgX, binNum_glob )
-
-        ######################
-        # Write output files #
-        ######################
-
-        # <x>
-    
-        avgX_outFilename = output_template.replace( "*", "avgX_u_tsink" + str( ts ) )
-
-        rw.writeAvgDataFile( avgX_outFilename, avgX_avg, avgX_err )
-
-        ###############
-        # Fit plateau #
-        ###############
-
-        fitStart = [ ts // 2 - 1, ts // 2 - 2, ts // 2 - 3 ]
-    
-        fitEnd = [ ts // 2 + 1, ts // 2 + 2, ts // 2 + 3 ]
-
-        # Loop over fit ranges
-
-        for irange in range( len( fitStart ) ):
-
-            avgX_fit = []
-        
-            # Fit each bin
-            
-            for x in avgX:
-
-                avgX_fit.append( float( np.polyfit( range( fitStart[ irange ], fitEnd[ irange ] + 1 ), \
-                                                    x[ fitStart[ irange ] : fitEnd[ irange ] + 1 ], \
-                                                    0, w=avgX_err[ fitStart[ irange ] : fitEnd[ irange ] + 1 ] ) ) )
-
-            avgX_fit = np.array( avgX_fit )
-
-            # Average over bins
-
-            avgX_fit_avg = np.average( avgX_fit )
-
-            avgX_fit_err = fncs.calcError( avgX_fit, binNum_glob )
-                
-            # Write output files
-
-            avgX_fit_outFilename = ""
-
-            avgX_fit_outFilename = output_template.replace( "*", \
-                                                            "avgX_u_fit_" \
-                                                            "tsink" + str( ts ) \
-                                                            + "_" + str( fitStart[ irange ] ) \
-                                                            + "_" + str( fitEnd[ irange ] ) )
-
-            rw.writeFitDataFile( avgX_fit_outFilename, avgX_fit_avg, avgX_fit_err, fitStart[ irange ], fitEnd[ irange ] )
-            
-        # End loop over fit ranges
-
-        if particle == "kaon":
-
-            ###########################
-            # Repeat for strange part #
-            ###########################
-
-            # Subtract average over directions from gtDt
-
-            threep_s = threep_s_gtDt - 0.25 * ( threep_s_gtDt + threep_s_gxDx + threep_s_gyDy + threep_s_gzDz )
-
-            # Jackknife
-            # threep_s_jk[ b, t ]
-    
-            threep_s_jk = fncs.jackknife( threep_s, binSize )
+            rw.writeAvgDataFile( avgOutputFilename, threep_avg, threep_err )
 
             #################
             # Calculate <x> #
             #################
+
+            # avgX[ b, t ]
+
+            preFactor = np.repeat( -4.0 / 3.0 / mEff_fit * Z, \
+                                   T ).reshape( binNum_glob, T )
+
+            if tsf:
+
+                c0_cp = np.repeat( c0, T ).reshape( binNum_glob, T )
+                c1_cp = np.repeat( c1, T ).reshape( binNum_glob, T )
+                E0_cp = np.repeat( E0, T ).reshape( binNum_glob, T )
+                E1_cp = np.repeat( E1, T ).reshape( binNum_glob, T )
+
+                avgX = preFactor * threep_jk[ iflav, its ] \
+                       / fit.twoStateTwop( ts, T, c0_cp, c1_cp, E0_cp, E1_cp )
         
-            avgX_s = Z * pq.calcAvgX( threep_s_jk, twop_jk[ :, ts ], mEff_fit_avg )
+            else:
+
+                if its == 0:
+
+                    G = np.repeat( G, T ).reshape( binNum_glob, T )
+                    E = np.repeat( E, T ).reshape( binNum_glob, T )
+
+                    avgX = preFactor * threep_jk[ iflav, its ] \
+                           / fit.oneStateTwop( ts, T, G, E )
+                    
+                    #avgX = Z * pq.calcAvgX( threep_jk[ -1 ], \
+                    #                        twop_jk[ :, ts ], mEff_fit )
 
             # Average over bins
 
-            avgX_s_avg = np.average( avgX_s, axis=0 )
+            avgX_avg = np.average( avgX, axis=0 )
 
-            avgX_s_err = fncs.calcError( avgX_s, binNum_glob )
-                
+            avgX_err = fncs.calcError( avgX, binNum_glob )
+
             ######################
             # Write output files #
             ######################
 
             # <x>
     
-            avgX_s_outFilename = output_template.replace( "*", "avgX_s_tsink" + str( ts ) )
+            avgX_outFilename = output_template.replace( "*", "avgX_" \
+                                                        + flav_str[ iflav ] \
+                                                        + "_tsink" \
+                                                        + str( ts ) )
 
-            rw.writeAvgDataFile( avgX_s_outFilename, avgX_s_avg, avgX_s_err )
+            rw.writeAvgDataFile( avgX_outFilename, avgX_avg, avgX_err )
 
             ###############
             # Fit plateau #
             ###############
 
+            fitStart = [ ts // 2 - 1, ts // 2 - 2, ts // 2 - 3 ]
+    
+            fitEnd = [ ts // 2 + 1, ts // 2 + 2, ts // 2 + 3 ]
+
             # Loop over fit ranges
 
             for irange in range( len( fitStart ) ):
 
-                avgX_s_fit = []
-
+                avgX_fit = []
+        
                 # Fit each bin
             
-                for x in avgX_s:
+                for x in avgX:
 
-                    avgX_s_fit.append( float( np.polyfit( range( fitStart[ irange ], fitEnd[ irange ] + 1 ), \
-                                                          x[ fitStart[ irange ] : fitEnd[ irange ] + 1 ], \
-                                                          0, w=avgX_s_err[ fitStart[ irange ] : fitEnd[ irange ] + 1 ] ) ) )
-            
-                avgX_s_fit = np.array( avgX_s_fit )
-            
+                    avgX_fit.append( float( np.polyfit( range( fitStart[ irange ], \
+                                                               fitEnd[ irange ] + 1 ), \
+                                                        x[ fitStart[ irange ] : fitEnd[ irange ] + 1 ], \
+                                                        0, w=avgX_err[ fitStart[ irange ] \
+                                                                       : fitEnd[ irange ] + 1 ] ) ) )
+
+                avgX_fit = np.array( avgX_fit )
+
                 # Average over bins
 
-                avgX_s_fit_avg = np.average( avgX_s_fit )
+                avgX_fit_avg = np.average( avgX_fit )
 
-                avgX_s_fit_err = fncs.calcError( avgX_s_fit, binNum_glob )
+                avgX_fit_err = fncs.calcError( avgX_fit, binNum_glob )
                 
                 # Write output files
-                
-                avgX_s_fit_outFilename = output_template.replace( "*", \
-                                                                  "avgX_s_fit_" \
-                                                                  "tsink" + str( ts ) \
-                                                                  + "_" + str( fitStart[ irange ] ) \
-                                                                  + "_" + str( fitEnd[ irange ] ) )
 
-                rw.writeFitDataFile( avgX_s_fit_outFilename, avgX_s_fit_avg, avgX_s_fit_err, fitStart[ irange ], fitEnd[ irange ] )
+                avgX_fit_outFilename = ""
 
+                avgX_fit_outFilename = output_template.replace( "*", \
+                                                                "avgX_" \
+                                                                + flav_str[iflav] \
+                                                                + "_fit_" \
+                                                                "tsink" \
+                                                                + str( ts ) \
+                                                                + "_" \
+                                                                + str(fitStart[irange]) \
+                                                                + "_" \
+                                                                + str(fitEnd[irange]))
+
+                rw.writeFitDataFile( avgX_fit_outFilename, avgX_fit_avg, avgX_fit_err, fitStart[ irange ], fitEnd[ irange ] )
+            
             # End loop over fit ranges
-        # End if kaon
+        # End loop over flavor
     # End if first rank
 # End loop over tsink
     
@@ -740,180 +678,198 @@ if tsf and rank == 0:
 
     #twop_rangeEnd = 20
 
-    for threep_neglect in 2,3:
+    for iflav in range( flavNum ):
 
-        ti_to_fit = fncs.initEmptyList( tsinkNum, 1 )
+        for threep_neglect in 2,3:
 
-        for ts in range( tsinkNum ):
-
-            ti_to_fit[ ts ] = np.concatenate( ( range( threep_neglect, \
-                                                       tsink[ ts ] - threep_neglect + 1 ), \
-                                                range( tsink[ ts ] + threep_neglect + 5, \
-                                                       T - threep_neglect - 5 + 1 ) ) )
-            """
-            ti_to_fit[ ts ] = range( tsink[ ts ] + threep_neglect + 5, \
-                                                       T - threep_neglect - 5 + 1 )
-            ti_to_fit[ ts ] = range( threep_neglect, \
-                                     tsink[ ts ] - threep_neglect + 1 )
-            """
-
-        fitParams, chiSq = fit.twoStateFit_threep( threep_jk, \
-                                                   ti_to_fit, \
-                                                   tsink, E0, E1, T )
-
-        a00 = fitParams[ :, 0 ]
-        a01 = fitParams[ :, 1 ]
-        a11 = fitParams[ :, 2 ]
-          
-        fitParams = np.stack( ( a00, a01, a11, c0, c1, E0, E1 ), axis=1 )
-
-        # Calculate curve with constant tsink
-
-        threep_curve = np.zeros( ( binNum_glob, tsinkNum, 100 ) )
-        curve = np.zeros( ( binNum_glob, tsinkNum, 100 ) )
-
-        avgX = np.zeros( binNum_glob )
-        
-        ti_curve = np.zeros( ( tsinkNum, 100 ) )
-            
-        for b in range( binNum_glob ):
+            ti_to_fit = fncs.initEmptyList( tsinkNum, 1 )
 
             for ts in range( tsinkNum ):
 
+                ti_to_fit[ ts ] = np.concatenate( ( range( threep_neglect, \
+                                                           tsink[ ts ] \
+                                                           - threep_neglect \
+                                                           + 1 ), \
+                                                    range( tsink[ ts ] \
+                                                           + threep_neglect \
+                                                           + 5, \
+                                                           T - \
+                                                           threep_neglect \
+                                                           - 5 + 1 ) ) )
+                """
+                ti_to_fit[ ts ] = range( tsink[ ts ] + threep_neglect + 5, \
+                T - threep_neglect - 5 + 1 )
+                ti_to_fit[ ts ] = range( threep_neglect, \
+                tsink[ ts ] - threep_neglect + 1 )
+                """
 
-                ti_curve[ ts ] = np.concatenate( ( np.linspace( ti_to_fit[ ts ][ 0 ], \
-                                                                ti_to_fit[ ts ][ tsink[ ts ] - 2*threep_neglect ], \
-                                                                num = 50 ), \
-                                                   np.linspace( ti_to_fit[ ts ][ tsink[ts] - 2*threep_neglect+1  ], \
-                                                                ti_to_fit[ ts ][ -1 ], \
-                                                                num = 50 ) ) )
-                """
-                ti_curve[ ts ] = np.linspace( ti_to_fit[ ts ][ 0 ], \
-                                              ti_to_fit[ ts ][ -1 ], \
-                                              num = 100 )
-                """
-                for t in range( len( ti_curve[ ts ] ) ):
+            fitParams, chiSq = fit.twoStateFit_threep( threep_jk[iflav], \
+                                                       ti_to_fit, \
+                                                       tsink, E0, E1, T )
+
+            a00 = fitParams[ :, 0 ]
+            a01 = fitParams[ :, 1 ]
+            a11 = fitParams[ :, 2 ]
+          
+            fitParams = np.stack( ( a00, a01, a11, c0, c1, E0, E1 ), axis=1 )
+
+            # Calculate curve with constant tsink
+
+            threep_curve = np.zeros( ( binNum_glob, tsinkNum, 100 ) )
+            curve = np.zeros( ( binNum_glob, tsinkNum, 100 ) )
+
+            avgX = np.zeros( binNum_glob )
+        
+            ti_curve = np.zeros( ( tsinkNum, 100 ) )
+            
+            for b in range( binNum_glob ):
+
+                for ts in range( tsinkNum ):
+
+                    ti_curve[ts]=np.concatenate((np.linspace(ti_to_fit[ts][0],\
+                                                             ti_to_fit[ts][tsink[ts] - 2*threep_neglect], \
+                                                             num = 50 ), \
+                                                 np.linspace( ti_to_fit[ ts ][ tsink[ts] - 2*threep_neglect+1  ], \
+                                                              ti_to_fit[ ts ][ -1 ], \
+                                                              num = 50 ) ) )
+                    """
+                    ti_curve[ ts ] = np.linspace( ti_to_fit[ ts ][ 0 ], \
+                    ti_to_fit[ ts ][ -1 ], \
+                    num = 100 )
+                    """
+                    for t in range( len( ti_curve[ ts ] ) ):
                         
-                    threep_curve[b,ts,t] = fit.twoStateThreep( ti_curve[ ts, t ], \
-                                                               tsink[ ts ], \
-                                                               T, \
-                                                               a00[ b ], \
-                                                               a01[ b ], \
-                                                               a11[ b ], \
-                                                               E0[ b ], \
-                                                               E1[ b ] )
+                        threep_curve[b,ts,t] = fit.twoStateThreep( ti_curve[ ts, t ], \
+                                                                   tsink[ ts ], \
+                                                                   T, \
+                                                                   a00[ b ], \
+                                                                   a01[ b ], \
+                                                                   a11[ b ], \
+                                                                   E0[ b ], \
+                                                                   E1[ b ] )
 
-                    curve[ b, ts, t ] = -4.0 / 3.0 / mEff_fit[ b ] * Z \
-                                        * fit.twoStateThreep( ti_curve[ ts, t ], \
-                                                              tsink[ ts ], \
-                                                              T, \
-                                                              a00[ b ], \
-                                                              a01[ b ], \
-                                                              a11[ b ], \
-                                                              E0[ b ], \
-                                                              E1[ b ] ) \
-                                        / fit.twoStateTwop( tsink[ ts ], \
-                                                            T, \
-                                                            c0[ b ], \
-                                                            c1[ b ], \
-                                                            E0[ b ], \
-                                                            E1[ b ] )
+                        curve[ b, ts, t ] = -4.0 / 3.0 / mEff_fit[ b ] * Z \
+                                            * fit.twoStateThreep( ti_curve[ ts, t ], \
+                                                                  tsink[ ts ], \
+                                                                  T, \
+                                                                  a00[ b ], \
+                                                                  a01[ b ], \
+                                                                  a11[ b ], \
+                                                                  E0[ b ], \
+                                                                  E1[ b ] ) \
+                                            / fit.twoStateTwop( tsink[ ts ], \
+                                                                T, \
+                                                                c0[ b ], \
+                                                                c1[ b ], \
+                                                                E0[ b ], \
+                                                                E1[ b ] )
 
-                # End loop over insertion time
-            # End loop over tsink
+                    # End loop over insertion time
+                # End loop over tsink
             
-            avgX[ b ] = -4.0 / 3.0 / mEff_fit[ b ] * Z * a00[ b ] / c0[ b ]
+                avgX[ b ] = -4.0 / 3.0 / mEff_fit[ b ] * Z \
+                            * a00[ b ] / c0[ b ]
 
-            # Write curve with constant insertion time = tsink / 2
+                # Write curve with constant insertion time = tsink / 2
         
-            #for b in range( binNum_glob ):
+                #for b in range( binNum_glob ):
                     
-            #t_s = np.linspace( tsink[ 0 ] - 2, tsink[ -1 ] + 2, 50 )
+                #t_s = np.linspace( tsink[ 0 ] - 2, tsink[ -1 ] + 2, 50 )
                 
-            #for t in range( t_s.shape[ 0 ] ):
+                #for t in range( t_s.shape[ 0 ] ):
                     
-            #curve[ b, t ] = -4.0 / 3.0 / E0[ b ] * Z * \
-                #fit.twoStateThreep( t_s[ t ] / 2, t_s[ t ], \
-                #a00[ b ], a01[ b ], a11[ b ], \
-                #E0[ b ], E1[ b ] ) \
-                #/ fit.twoStateTwop( t_s[ t ], c0[ b ], c1[ b ], \
-                #E0[ b ], E1[ b] )
+                #curve[ b, t ] = -4.0 / 3.0 / E0[ b ] * Z * \
+                    #fit.twoStateThreep( t_s[ t ] / 2, t_s[ t ], \
+                    #a00[ b ], a01[ b ], a11[ b ], \
+                    #E0[ b ], E1[ b ] ) \
+                    #/ fit.twoStateTwop( t_s[ t ], c0[ b ], c1[ b ], \
+                    #E0[ b ], E1[ b] )
 
-        # End loop over bins
+            # End loop over bins
         
-        # Average over bins
+            # Average over bins
                     
-        threep_curve_avg = np.average( threep_curve, axis=0 )
-        threep_curve_err = fncs.calcError( threep_curve, binNum_glob )
+            threep_curve_avg = np.average( threep_curve, axis=0 )
+            threep_curve_err = fncs.calcError( threep_curve, binNum_glob )
             
-        curve_avg = np.average( curve, axis=0 )
-        curve_err = fncs.calcError( curve, binNum_glob )
+            curve_avg = np.average( curve, axis=0 )
+            curve_err = fncs.calcError( curve, binNum_glob )
                 
-        fitParams_avg = np.average( fitParams, axis=0 )
-        fitParams_err = fncs.calcError( fitParams, binNum_glob )
+            fitParams_avg = np.average( fitParams, axis=0 )
+            fitParams_err = fncs.calcError( fitParams, binNum_glob )
 
-        chiSq_avg = np.average( chiSq, axis=0 )
-        chiSq_err = fncs.calcError( chiSq, binNum_glob )
+            chiSq_avg = np.average( chiSq, axis=0 )
+            chiSq_err = fncs.calcError( chiSq, binNum_glob )
                 
-        avgX_avg = np.average( avgX )
-        avgX_err = fncs.calcError( avgX, binNum_glob )
+            avgX_avg = np.average( avgX )
+            avgX_err = fncs.calcError( avgX, binNum_glob )
     
-        # Write output file
+            # Write output file
 
-        tsf_range_str += ".3n" + str( threep_neglect )
+            tsf_threep_range_str = tsf_range_str + ".3n" + str( threep_neglect )
 
-        avgXOutputFilename \
-            = output_template.replace( "*", \
-                                       "avgX_twoStateFit_" \
-                                       + tsf_range_str + "_" \
-                                       + ts_range_str )
+            avgXOutputFilename \
+                = output_template.replace( "*", \
+                                           "avgX_" \
+                                           + flav_str[ iflav ] \
+                                           + "_twoStateFit_" \
+                                           + tsf_threep_range_str + "_" \
+                                           + ts_range_str )
                 
-        rw.writeFitDataFile( avgXOutputFilename, \
-                             avgX_avg, avgX_err, 0, 0 )
+            rw.writeFitDataFile( avgXOutputFilename, \
+                                 avgX_avg, avgX_err, 0, 0 )
             
-        chiSqOutputFilename \
-            = output_template.replace( "*", \
-                                       "avgX_twoStateFit_threep_chiSq_" \
-                                       + tsf_range_str + "_" \
-                                       + ts_range_str )
+            chiSqOutputFilename \
+                = output_template.replace( "*", \
+                                           "avgX_" \
+                                           + flav_str[ iflav ] \
+                                           + "_twoStateFit_threep_chiSq_" \
+                                           + tsf_threep_range_str + "_" \
+                                           + ts_range_str )
         
-        rw.writeFitDataFile( chiSqOutputFilename, \
-                             chiSq_avg, chiSq_err, 0, 0 )
+            rw.writeFitDataFile( chiSqOutputFilename, \
+                                 chiSq_avg, chiSq_err, 0, 0 )
             
-        avgXParamsOutputFilename \
-            = output_template.replace( "*", \
-                                       "avgX_twoStateFitParams_" \
-                                       + tsf_range_str + "_" \
-                                       + ts_range_str )
-
-        rw.writeTSFParamsFile( avgXParamsOutputFilename, \
-                               fitParams_avg, fitParams_err )
-            
-        for ts in range( tsinkNum ):
-            
-            threep_curveOutputFilename \
+            avgXParamsOutputFilename \
                 = output_template.replace( "*", \
-                                           "threep_twoStateFit_curve_tsink" \
-                                           + str( tsink[ ts ] ) + "_" \
-                                           + tsf_range_str + "_" \
+                                           "avgX_" \
+                                           + flav_str[ iflav ] \
+                                           + "_twoStateFitParams_" \
+                                           + tsf_threep_range_str + "_" \
                                            + ts_range_str )
-            rw.writeAvgDataFile_wX( threep_curveOutputFilename, \
-                                    ti_curve[ ts ], threep_curve_avg[ ts ], \
-                                    threep_curve_err[ ts ] )
 
-            curveOutputFilename \
-                = output_template.replace( "*", \
-                                           "avgX_twoStateFit_curve_tsink" \
-                                           + str( tsink[ ts ] ) + "_" \
-                                           + tsf_range_str + "_" \
-                                           + ts_range_str )
-            rw.writeAvgDataFile_wX( curveOutputFilename, \
-                                    ti_curve[ ts ], curve_avg[ ts ], \
-                                    curve_err[ ts ] )
+            rw.writeTSFParamsFile( avgXParamsOutputFilename, \
+                                   fitParams_avg, fitParams_err )
             
-        # End loop over tsink
-    # End loop over number of neglected three-point functions
+            for ts in range( tsinkNum ):
+            
+                threep_curveOutputFilename \
+                    = output_template.replace( "*", \
+                                               "threep_" \
+                                               + flav_str[ iflav ] \
+                                               + "_twoStateFit_curve_tsink" \
+                                               + str( tsink[ ts ] ) + "_" \
+                                               + tsf_threep_range_str + "_" \
+                                               + ts_range_str )
+                rw.writeAvgDataFile_wX( threep_curveOutputFilename, \
+                                        ti_curve[ ts ], \
+                                        threep_curve_avg[ ts ], \
+                                        threep_curve_err[ ts ] )
+
+                curveOutputFilename \
+                    = output_template.replace( "*", \
+                                               "avgX_" \
+                                               + flav_str[ iflav ] \
+                                               + "_twoStateFit_curve_tsink" \
+                                               + str( tsink[ ts ] ) + "_" \
+                                               + tsf_threep_range_str + "_" \
+                                               + ts_range_str )
+                rw.writeAvgDataFile_wX( curveOutputFilename, \
+                                        ti_curve[ ts ], curve_avg[ ts ], \
+                                        curve_err[ ts ] )
+            
+            # End loop over tsink
+        # End loop over number of neglected three-point functions
+    # End loop over flavors
 # End if two-state fit
-
-# CJL To Do: Add kaon two-state fit
 

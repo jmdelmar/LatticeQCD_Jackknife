@@ -369,8 +369,32 @@ def getHDF5File_wNames( configDir, configList, fn_template, \
 # dsetname (kwarg, optional): List of datasets to read. Overrides
 #                             keyword
 
-def readAvgXFile( threepDir, configList, threep_template, 
-                   ts, particle, dataFormat, **kwargs ):
+def readAvgXFile( threepDir, configList, threep_tokens,
+                   ts, momList, particle, dataFormat, **kwargs ):
+
+    # Set filename template
+
+    if dataFormat == "cpu":
+        
+        threep_template = threep_tokens[0] + str(ts) \
+                          + threep_tokens[1] \
+                          + fncs.signToString( momList[0] ) \
+                          + str(momList[0]) + "_" \
+                          + fncs.signToString( momList[1] ) \
+                          + str(momList[1]) + "_" \
+                          + fncs.signToString( momList[2] ) \
+                          + str(momList[2])
+
+    else:
+
+        threep_template = threep_tokens[0] + \
+                          fncs.signToString( momList[0] ) \
+                          + str(momList[0]) + "_" \
+                          + fncs.signToString( momList[1] ) \
+                          + str(momList[1]) + "_" \
+                          + fncs.signToString( momList[2] ) \
+                          + str(momList[2]) \
+                          + threep_tokens[1]
 
     if particle == "nucleon":
 
@@ -629,25 +653,25 @@ def readAvgXFile( threepDir, configList, threep_template,
 
                 threep_s_gtDt = getDatasets( threepDir, \
                                              configList, \
-                                             filename, \
+                                             filename_s, \
                                              dsetname=[ dsetname_s_pre \
                                                         + dsetname_insertion[ 0 ] \
                                                         + dsetname_post ] )[ :, 0, 0, :, 0 ].real
                 threep_s_gxDx = getDatasets( threepDir, \
                                              configList, \
-                                             filename, \
+                                             filename_s, \
                                              dsetname=[ dsetname_s_pre \
                                                         + dsetname_insertion[ 1 ] \
                                                         + dsetname_post ] )[ :, 0, 0, :, 0 ].real
                 threep_s_gyDy= getDatasets( threepDir, \
                                             configList, \
-                                            filename, \
+                                            filename_s, \
                                             dsetname=[ dsetname_s_pre \
                                                        + dsetname_insertion[ 2 ] \
                                                        + dsetname_post ] )[ :, 0, 0, :, 0 ].real
                 threep_s_gzDz = getDatasets( threepDir, \
                                              configList, \
-                                             filename, \
+                                             filename_s, \
                                              dsetname=[ dsetname_s_pre \
                                                         + dsetname_insertion[ 3 ] \
                                                         + dsetname_post ] )[ :, 0, 0, :, 0 ].real

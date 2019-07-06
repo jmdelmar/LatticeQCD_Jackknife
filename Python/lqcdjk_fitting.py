@@ -29,7 +29,7 @@ def mEffTwopFit( mEff, twop, rangeEnd, tsf ):
     mEff_err = fncs.calcError( mEff, binNum )
 
     # Loop over plateau fit range starts
-    for mEff_rangeStart in range( 1, rangeEnd - 2 ):
+    for mEff_rangeStart in range( 10, rangeEnd - 2 ):
 
         mEff_fit = np.zeros( binNum )
 
