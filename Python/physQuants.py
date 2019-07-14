@@ -7,11 +7,15 @@ import numpy as np
 # a: Lattice spacing of ensemble
 # L: Spacial dimension length of ensemble
 
+def energy( mEff, Qsq, L ):
+
+    return np.sqrt( mEff ** 2 + ( 2.0 * np.pi / L ) ** 2 * Qsq )
+
+
 def convertQsqToGeV( Qsq, mEff, a, L ):
 
-    energy = np.sqrt( mEff ** 2 + ( 2.0 * np.pi / L ) ** 2 * Qsq )
-
-    Qsq_GeV = 2.0 * ( 0.197 / a ) ** 2 * mEff * ( energy - mEff )
+    Qsq_GeV = 2.0 * ( 0.197 / a ) ** 2 * mEff * ( energy( mEff, Qsq, L ) \
+                                                  - mEff )
 
     return Qsq_GeV
 
@@ -105,15 +109,12 @@ def calcAvgX_momBoost( threep, twop_tsink, mEff, momSq, L ):
     # momSq
     # L
 
-    pSq = (2*np.pi/L)**2 * momSq
+    # prefactor = 8/3 * E / ( E^2 + p^2 )
 
-    energy = np.sqrt( mEff**2 + pSq )
-    """
-    preFactor = -2.0 / mEff**2 * \
-                energy * ( energy + mEff ) \
-                / ( 3 * energy**2 + pSq )
-    """
-    preFactor = 1.0
+    preFactor = -8.0 / 3.0 * energy( mEff, momSq, L ) \
+                / ( energy( mEff, momSq, L ) ** 2 \
+                    + ( 2 * np.pi / L ) ** 2 * momSq )
+
     avgX = np.zeros( threep.shape )
 
     for t in range( threep.shape[ 1 ] ):

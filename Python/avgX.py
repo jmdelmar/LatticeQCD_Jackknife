@@ -11,6 +11,8 @@ from mpi4py import MPI
 
 Z = 1.0
 
+L = 32
+
 particle_list = [ "pion", "kaon", "nucleon" ]
 
 format_list = [ "gpu", "cpu" ]
@@ -96,50 +98,6 @@ tsink = args.t_sink
 tsinkNum = len( tsink )
 ts_range_str = "tsink" + str(tsink[0]) + "_" + str(tsink[-1])
 
-# Momenta list
-
-momSq = args.mom_squared
-
-momList = []
-
-if momSq == 0:
-
-    momList = [ [ 0, 0, 0 ] ]
-
-elif momSq == 2:
-
-    momList = [ [ +1, +1,  0], \
-              [ +1,  0, +1], \
-              [  0, +1, +1], \
-              [ +1, -1,  0], \
-              [ +1,  0, -1], \
-              [  0, +1, -1], \
-              [ -1, +1,  0], \
-              [ -1,  0, +1], \
-              [  0, -1, +1], \
-              [ -1, -1,  0], \
-              [ -1,  0, -1], \
-              [  0, -1, -1] ]
-
-elif momSq == 3:
-
-    momList = [ [ +1, +1, +1], \
-              [ -1, +1, +1], \
-              [ +1, -1, +1], \
-              [ +1, +1, -1], \
-              [ +1, -1, -1], \
-              [ -1, +1, -1], \
-              [ -1, -1, +1], \
-              [ -1, -1, -1] ]
-
-else:
-
-    mpi_fncs.mpiPrint( "Error: momentum squared " + str(momSq) + " not supported.", rank )
-
-    exit()
-
-momBoostNum = len( momList )
-                                                         
 # Other info
 
 binSize = args.binSize
@@ -149,6 +107,8 @@ output_template = args.output_template
 tsf = args.two_state_fit
 
 dataFormat = args.data_format
+
+momSq = args.mom_squared
 
 # Get configurations from given list or from given 
 # threep directory if list not given
@@ -223,37 +183,113 @@ binNum = [ len( binStart[ r ] ) for r in range( procNum ) ]
 
 binNum_loc = binNum[ rank ]
 
-#######################
-# Two-point functions #
-#######################
+recvCount, recvOffset = mpi_fncs.recvCountOffset( procNum, binNum )
 
-# Get the real part of two-point functions
+# Read momentum list
+
+momList = []
+
+if dataFormat == "cpu":
+
+    momList = np.array ( rw.getDatasets( twopDir, [ configList_loc[0] ], \
+                                         twop_template, \
+                                         "twop_".format( particle ), \
+                                         "ave16", \
+                                         "msq{:0>4}".format( momSq ), \
+                                         "mvec" )[ 0, 0, 0, ... ].real, \
+                         dtype = int )
+
+else:
+
+    if momSq == 0:
+
+        momList = np.array( [ [ 0, 0, 0 ] ] )
+
+    else:
+
+        mpi_fncs.mpiPrintErr( "ERROR: nonzero momenta boost not yet " \
+               + "supported for gpu format" )
+        
+        exit()
+
+# Multiply momList by -1 because three-point functions are named
+# opposite their sign (sign of phase negative because adjoint taken of
+# sequential propagator)
+
+momList = -1 * momList
+
+momBoostNum = len( momList )
+
+############################
+# Read Two-point Functions #
+############################
+
+# Zero momentum two-point functions
 # twop[ c, t ]
-
-twop_loc = []
 
 t0 = time.time()
 
 if dataFormat == "cpu":
 
     twop_loc = rw.getDatasets( twopDir, configList_loc, twop_template, \
-                                            "msq0000", "arr" )[ :, 0, 0, :, 0 ].real
+                               "msq0000", "arr" )[ :, 0, 0, :, 0 ].real
 
 else:
         
     twop_loc = rw.getDatasets( twopDir, configList_loc, \
-                               twop_template, "twop" )[ :, 0, 0, ..., 0, 0 ]
+                               twop_template, \
+                               "twop" )[ :, 0, 0, ..., 0, 0 ]
 
 twop_loc = np.asarray( twop_loc, order='c' )
 
+mpi_fncs.mpiPrint( "Read two-point functions from HDF5 files " \
+                   + "in {:.3} seconds".format( time.time() - t0 ), rank )
+
+# Boosted two-point functions
+# twop_boost[ mom, c, t ]
+
+if momSq > 0:
+
+    t0 = time.time()
+
+    if dataFormat == "cpu":
+
+        twop_boost_loc = rw.getDatasets( twopDir, configList_loc, \
+                                         twop_template, \
+                                         "msq{:0>4}".format( momSq ), \
+                                         "arr" )[ :, 0, 0, ... ].real
+
+    else:
+        
+        twop_boost_loc = rw.getDatasets( twopDir, configList_loc, \
+                                         twop_template, \
+                                         "twop" )[ :, 0, 0, ..., 0, 0 ]
+
+    # twop_boost_loc[ c, t, mom ] -> twop_boost_loc [mom, c, t ]
+    
+    twop_boost_loc = np.moveaxis( twop_boost_loc, -1, 0 )
+
+    twop_boost_loc = np.asarray( twop_boost_loc, order='c' )
+
+    mpi_fncs.mpiPrint( "Read boosted two-point functions from HDF5 files " \
+                       + "in {:.3} seconds".format( time.time() - t0 ), \
+                       rank )
+
+else:
+
+    twop_boost_loc = np.array( [] )
+
 T = twop_loc.shape[ -1 ]
+
+# Time dimension length after fold
+
+T_fold = T // 2 + 1
+
+# Gather two-point functions
 
 twop = np.zeros( ( configNum, T ) )
 
 comm.Allgather( twop_loc, twop )
-
-mpi_fncs.mpiPrint( "Read two-point functions from HDF5 files " \
-                   + "in {:.3} seconds".format( time.time() - t0 ), rank )
 
 ##########################################
 # Jackknife and fold two-point functions #
@@ -455,28 +491,71 @@ if rank == 0:
 
 # End if first process
 
-#########################
-# Three-point functions #
-#########################
+if momSq > 0:
 
-t0 = time.time()
+    twop_boost = np.zeros( ( momBoostNum, configNum, T ) )
+
+    comm.Allgather( twop_boost_loc, twop_boost )
+
+else:
+    
+    twop_boost = np.array( [] )
 
 if rank == 0:
         
-    threep_jk = np.zeros( ( flavNum, tsinkNum, binNum_glob, T ) )
+    twop_boost_jk = np.zeros( ( momBoostNum, binNum_glob, T ) )
+    threep_jk = np.zeros( ( momBoostNum, flavNum, \
+                            tsinkNum, binNum_glob, T ) )
+    avgX = np.zeros( ( momBoostNum, flavNum, \
+                       tsinkNum, binNum_glob, T ) )
 
 else:
 
-    threep_jk = np.array( [ [ None for ts in tsink ] \
-                            for iflav in range( flavNum ) ] )
+    twop_boost_jk = np.array( [ None for imom in range( momBoostNum ) ] )
+    threep_jk = np.array( [ [ [ None for ts in tsink ] \
+                              for f in flav_str ] \
+                            for imom in range( momBoostNum ) ] )
+    avgX = np.array( [ [ [ None for ts in tsink ] \
+                         for f in flav_str ] \
+                       for imom in range( momBoostNum ) ] )
 
-for ts, its in zip( tsink, range( tsinkNum ) ) :
+# Loop over momenta
+for imom in range( momBoostNum ):
+
+    if momSq > 0:
+
+        #########################################
+        # Jackknife boosted two-point functions #
+        #########################################
+
+        if binNum_loc:
+
+            twop_boost_jk_loc = fncs.jackknifeBinSubset( twop_boost[ imom ], \
+                                                         binSize, \
+                                                         bin_glob[ rank ] )
+
+        else:
+
+            twop_boost_jk_loc = np.array( [] )
+
+        comm.Gatherv( twop_boost_jk_loc, [ twop_boost_jk[ imom ], \
+                                           recvCount * T, recvOffset * T, \
+                                           MPI.DOUBLE ], root=0 )
+
+    else:
+
+        twop_boost_jk = np.array( [ twop_jk ] )
+
+    ##############################
+    # Read three-point functions #
+    ##############################
+
+    t0 = time.time()
+
+    # Loop over tsink
+    for ts, its in zip( tsink, range( tsinkNum ) ) :
     
-    t0_ts =time.time()
-
-    threep_mom = np.zeros( ( flavNum, procSize, T, momBoostNum ) )
-
-    for imom in range( momBoostNum ):
+        t0_ts = time.time()
 
         # Get the real part of gxDx, gyDy, gzDz, and gtDt
         # three-point functions at zero-momentum
@@ -508,166 +587,194 @@ for ts, its in zip( tsink, range( tsinkNum ) ) :
                                                              time.time() \
                                                              - t0_ts ) \
                            + " seconds.", rank )
+
+        threep_loc = np.zeros( ( flavNum, binNum_loc, T ) )
             
         # Subtract average over directions from gtDt
 
-        threep_mom[ 0, ..., imom ] = threep_gtDt - \
-                                     0.25 * ( threep_gtDt \
-                                              + threep_gxDx \
-                                              + threep_gyDy \
-                                              + threep_gzDz )
+        threep_loc = threep_gtDt - \
+                     0.25 * ( threep_gtDt \
+                              + threep_gxDx \
+                              + threep_gyDy \
+                              + threep_gzDz )
 
+        threep_loc = np.asarray( threep_loc, order='c' )
+    
+        threep = np.zeros( ( flavNum, configNum, T ) )
+
+        comm.Allgather( threep_loc, threep[ 0 ] )
 
         if particle == "kaon":
 
-            threep_mom[ 1, ..., imom ] = threep_s_gtDt - \
-                                         0.25 * ( threep_s_gtDt \
-                                                  + threep_s_gxDx \
-                                                  + threep_s_gyDy \
-                                                  + threep_s_gzDz )
+            threep_loc = threep_s_gtDt - \
+                              0.25 * ( threep_s_gtDt \
+                                       + threep_s_gxDx \
+                                       + threep_s_gyDy \
+                                       + threep_s_gzDz )
 
-    # End loop over momenta
-
-    # Loop over flavors
-    for iflav in range( flavNum ):
-
-        threep_loc = np.average( threep_mom[ iflav ], axis=-1 )
-
-        threep_loc = np.asarray( threep_loc, order='c' )
-
-        threep = np.zeros( ( configNum, T ) )
-
-        comm.Allgather( threep_loc, threep )
-
-        # Jackknife
-        # threep_jk[ iflav, ts, b, t ]
+            threep_loc = np.asarray( threep_loc, order='c' )
     
-        threep_jk_loc = fncs.jackknifeBinSubset( threep, \
-                                                 binSize, bin_glob[ rank ] )
+            comm.Allgather( threep_loc, threep[ 1 ] )
 
-        comm.Gatherv( threep_jk_loc, [ threep_jk[ iflav, its ], \
-                                       recvCount * T, recvOffset * T, \
-                                       MPI.DOUBLE ], root=0 )
+        # Loop over flavor
+        for iflav in range( flavNum ):
 
-        if rank == 0:
+            # Jackknife
+            # threep_jk[ iflav, ts, b, t ]
 
-            threep_avg = np.average( threep_jk[ iflav, its ], axis = 0 )
-            threep_err = fncs.calcError( threep_jk[ iflav, its ], \
-                                         binNum_glob )
+            threep_jk_loc = fncs.jackknifeBinSubset( threep[ iflav ], \
+                                                     binSize, \
+                                                     bin_glob[ rank ] )
+
+            comm.Gatherv( threep_jk_loc, [ threep_jk[ imom, iflav, its ], \
+                                           recvCount * T, recvOffset * T, \
+                                           MPI.DOUBLE ], root=0 )
+            
+            if rank == 0:
+
+                """
+                threep_avg = np.average( threep_jk[ iflav, its ], axis = 0 )
+                threep_err = fncs.calcError( threep_jk[ iflav, its ], \
+                                             binNum_glob )
         
-            avgOutputFilename = output_template.replace( "*", \
-                                                         "threep_" \
-                                                         + flav_str[ iflav ] \
-                                                         + "_tsink" \
-                                                         + str( ts ) )
+                avgOutputFilename = output_template.replace( "*", \
+                                                             "threep_" \
+                                                             + flav_str[ iflav ] \
+                                                             + "_tsink" \
+                                                             + str( ts ) )
 
-            rw.writeAvgDataFile( avgOutputFilename, threep_avg, threep_err )
+                rw.writeAvgDataFile( avgOutputFilename, threep_avg, threep_err )
+                """
+                #################
+                # Calculate <x> #
+                #################
 
-            #################
-            # Calculate <x> #
-            #################
+                # avgX[ b, t ]
 
-            # avgX[ b, t ]
+                avgX[imom,iflav,its]=pq.calcAvgX_momBoost(threep_jk[imom, \
+                                                                    iflav, \
+                                                                    its], \
+                                                          twop_boost_jk[imom,\
+                                                                        :, \
+                                                                        ts], \
+                                                          mEff_fit_avg, \
+                                                          momSq, L )
+                """
+                if tsf:
 
-            preFactor = np.repeat( -4.0 / 3.0 / mEff_fit * Z, \
-                                   T ).reshape( binNum_glob, T )
+                    c0_cp = np.repeat( c0, T ).reshape( binNum_glob, T )
+                    c1_cp = np.repeat( c1, T ).reshape( binNum_glob, T )
+                    E0_cp = np.repeat( E0, T ).reshape( binNum_glob, T )
+                    E1_cp = np.repeat( E1, T ).reshape( binNum_glob, T )
 
-            if tsf:
-
-                c0_cp = np.repeat( c0, T ).reshape( binNum_glob, T )
-                c1_cp = np.repeat( c1, T ).reshape( binNum_glob, T )
-                E0_cp = np.repeat( E0, T ).reshape( binNum_glob, T )
-                E1_cp = np.repeat( E1, T ).reshape( binNum_glob, T )
-
-                avgX = preFactor * threep_jk[ iflav, its ] \
-                       / fit.twoStateTwop( ts, T, c0_cp, c1_cp, E0_cp, E1_cp )
+                    avgX = preFactor * threep_jk[ iflav, its ] \
+                           / fit.twoStateTwop( ts, T, c0_cp, c1_cp, E0_cp, E1_cp )
         
-            else:
+                else:
 
-                if its == 0:
+                    if its == 0:
 
-                    G = np.repeat( G, T ).reshape( binNum_glob, T )
-                    E = np.repeat( E, T ).reshape( binNum_glob, T )
+                        G = np.repeat( G, T ).reshape( binNum_glob, T )
+                        E = np.repeat( E, T ).reshape( binNum_glob, T )
 
                     avgX = preFactor * threep_jk[ iflav, its ] \
                            / fit.oneStateTwop( ts, T, G, E )
                     
                     #avgX = Z * pq.calcAvgX( threep_jk[ -1 ], \
                     #                        twop_jk[ :, ts ], mEff_fit )
+                """
+            # End loop over flavor
+        # End if first process
+    # End loop over tsink
+# End loop over momenta
 
-            # Average over bins
+if rank == 0:
 
-            avgX_avg = np.average( avgX, axis=0 )
+    # Average over momenta
 
-            avgX_err = fncs.calcError( avgX, binNum_glob )
+    avgX = np.average( avgX, axis=0 )
 
-            ######################
-            # Write output files #
-            ######################
+    # Average over bins
 
-            # <x>
+    # avgX_avg[ flav, ts, t ]
+
+    avgX_avg = np.average( avgX, axis=-2 )
+    avgX_err = fncs.calcError( avgX, binNum_glob, axis=-2 )
+
+    # Loop over tsink
+    for ts, its in zip( tsink, range( tsinkNum ) ) :
+        # Loop over flavor
+        for iflav in range( flavNum ):
+
+            # Write <x> output files
     
             avgX_outFilename = output_template.replace( "*", "avgX_" \
                                                         + flav_str[ iflav ] \
                                                         + "_tsink" \
                                                         + str( ts ) )
 
-            rw.writeAvgDataFile( avgX_outFilename, avgX_avg, avgX_err )
+            rw.writeAvgDataFile( avgX_outFilename, avgX_avg[ iflav, its ], \
+                                 avgX_err[ iflav, its ] )
 
             ###############
             # Fit plateau #
             ###############
 
             fitStart = [ ts // 2 - 1, ts // 2 - 2, ts // 2 - 3 ]
-    
+            
             fitEnd = [ ts // 2 + 1, ts // 2 + 2, ts // 2 + 3 ]
 
             # Loop over fit ranges
-
             for irange in range( len( fitStart ) ):
 
                 avgX_fit = []
         
                 # Fit each bin
-            
-                for x in avgX:
 
-                    avgX_fit.append( float( np.polyfit( range( fitStart[ irange ], \
-                                                               fitEnd[ irange ] + 1 ), \
-                                                        x[ fitStart[ irange ] : fitEnd[ irange ] + 1 ], \
-                                                        0, w=avgX_err[ fitStart[ irange ] \
-                                                                       : fitEnd[ irange ] + 1 ] ) ) )
+                for x in avgX[ iflav, its ]:
+
+                    avgX_fit.append(float(np.polyfit(range(fitStart[irange], \
+                                                           fitEnd[ irange ] \
+                                                           + 1 ), \
+                                                     x[ fitStart[ irange ] \
+                                                        : fitEnd[ irange ] \
+                                                        + 1 ], \
+                                                     0, \
+                                                     w=avgX_err[iflav, its, \
+                                                                fitStart[irange] \
+                                                                :fitEnd[irange] \
+                                                                + 1 ] ) ) )
 
                 avgX_fit = np.array( avgX_fit )
 
                 # Average over bins
 
                 avgX_fit_avg = np.average( avgX_fit )
-
+                
                 avgX_fit_err = fncs.calcError( avgX_fit, binNum_glob )
                 
                 # Write output files
 
                 avgX_fit_outFilename = ""
 
-                avgX_fit_outFilename = output_template.replace( "*", \
-                                                                "avgX_" \
-                                                                + flav_str[iflav] \
-                                                                + "_fit_" \
-                                                                "tsink" \
-                                                                + str( ts ) \
-                                                                + "_" \
-                                                                + str(fitStart[irange]) \
-                                                                + "_" \
-                                                                + str(fitEnd[irange]))
+                avgX_fit_outFilename=output_template.replace("*", \
+                                                             "avgX_" \
+                                                             + flav_str[iflav]\
+                                                             + "_fit_" \
+                                                             "tsink" \
+                                                             + str( ts ) \
+                                                             + "_" \
+                                                             + str(fitStart[irange]) \
+                                                             + "_" \
+                                                             + str(fitEnd[irange]))
 
                 rw.writeFitDataFile( avgX_fit_outFilename, avgX_fit_avg, avgX_fit_err, fitStart[ irange ], fitEnd[ irange ] )
             
             # End loop over fit ranges
         # End loop over flavor
-    # End if first rank
-# End loop over tsink
-    
+    # End loop over tsink
+# End if first process
+
 ##################
 # Two-state Fit  #
 ##################

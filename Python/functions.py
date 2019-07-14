@@ -43,7 +43,7 @@ def signToString( val ):
 
     else:
 
-        return "-"
+        return ""
 
 
 # Combines the different final momentum three-point functions for <x>. 
