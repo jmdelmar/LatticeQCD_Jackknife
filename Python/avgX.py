@@ -9,7 +9,7 @@ import physQuants as pq
 import lqcdjk_fitting as fit
 from mpi4py import MPI
 
-Z = 1.0
+ZvD1 = 1.123
 
 L = 32
 
@@ -515,9 +515,9 @@ else:
     threep_jk = np.array( [ [ [ None for ts in tsink ] \
                               for f in flav_str ] \
                             for imom in range( momBoostNum ) ] )
-    avgX = np.array( [ [ [ None for ts in tsink ] \
-                         for f in flav_str ] \
-                       for imom in range( momBoostNum ) ] )
+    #avgX = np.array( [ [ [ None for ts in tsink ] \
+    #                     for f in flav_str ] \
+    #                   for imom in range( momBoostNum ) ] )
 
 # Loop over momenta
 for imom in range( momBoostNum ):
@@ -630,70 +630,69 @@ for imom in range( momBoostNum ):
                                            recvCount * T, recvOffset * T, \
                                            MPI.DOUBLE ], root=0 )
             
-            if rank == 0:
-
-                """
-                threep_avg = np.average( threep_jk[ iflav, its ], axis = 0 )
-                threep_err = fncs.calcError( threep_jk[ iflav, its ], \
-                                             binNum_glob )
-        
-                avgOutputFilename = output_template.replace( "*", \
-                                                             "threep_" \
-                                                             + flav_str[ iflav ] \
-                                                             + "_tsink" \
-                                                             + str( ts ) )
-
-                rw.writeAvgDataFile( avgOutputFilename, threep_avg, threep_err )
-                """
-                #################
-                # Calculate <x> #
-                #################
-
-                # avgX[ b, t ]
-
-                avgX[imom,iflav,its]=pq.calcAvgX_momBoost(threep_jk[imom, \
-                                                                    iflav, \
-                                                                    its], \
-                                                          twop_boost_jk[imom,\
-                                                                        :, \
-                                                                        ts], \
-                                                          mEff_fit_avg, \
-                                                          momSq, L )
-                """
-                if tsf:
-
-                    c0_cp = np.repeat( c0, T ).reshape( binNum_glob, T )
-                    c1_cp = np.repeat( c1, T ).reshape( binNum_glob, T )
-                    E0_cp = np.repeat( E0, T ).reshape( binNum_glob, T )
-                    E1_cp = np.repeat( E1, T ).reshape( binNum_glob, T )
-
-                    avgX = preFactor * threep_jk[ iflav, its ] \
-                           / fit.twoStateTwop( ts, T, c0_cp, c1_cp, E0_cp, E1_cp )
-        
-                else:
-
-                    if its == 0:
-
-                        G = np.repeat( G, T ).reshape( binNum_glob, T )
-                        E = np.repeat( E, T ).reshape( binNum_glob, T )
-
-                    avgX = preFactor * threep_jk[ iflav, its ] \
-                           / fit.oneStateTwop( ts, T, G, E )
-                    
-                    #avgX = Z * pq.calcAvgX( threep_jk[ -1 ], \
-                    #                        twop_jk[ :, ts ], mEff_fit )
-                """
             # End loop over flavor
         # End if first process
     # End loop over tsink
 # End loop over momenta
 
 if rank == 0:
+        
+    avgX = np.zeros( ( flavNum, \
+                       tsinkNum, binNum_glob, T ) )
+
+else:
+
+    avgX = np.array( [ [ None for ts in tsink ] \
+                         for f in flav_str ] )
+
+#################
+# Calculate <x> #
+#################
+    
+if rank == 0:
 
     # Average over momenta
 
-    avgX = np.average( avgX, axis=0 )
+    threep_jk = np.average( threep_jk, axis=0 )
+    twop_boost_jk = np.average( twop_boost_jk, axis=0 )
+    
+    # avgX[ flav, ts, b, t ]
 
+    # Loop over tsink
+    for ts, its in zip( tsink, range( tsinkNum ) ) :
+        # Loop over flavor
+        for iflav in range( flavNum ):
+
+            avgX[iflav,its]=pq.calcAvgX_momBoost(threep_jk[iflav, \
+                                                           its], \
+                                                 twop_boost_jk[:, \
+                                                               ts], \
+                                                 mEff_fit_avg, \
+                                                 momSq, L )
+            """
+            if tsf:
+
+            c0_cp = np.repeat( c0, T ).reshape( binNum_glob, T )
+            c1_cp = np.repeat( c1, T ).reshape( binNum_glob, T )
+            E0_cp = np.repeat( E0, T ).reshape( binNum_glob, T )
+            E1_cp = np.repeat( E1, T ).reshape( binNum_glob, T )
+
+            avgX = preFactor * threep_jk[ iflav, its ] \
+            / fit.twoStateTwop( ts, T, c0_cp, c1_cp, E0_cp, E1_cp )
+        
+            else:
+
+            if its == 0:
+
+            G = np.repeat( G, T ).reshape( binNum_glob, T )
+            E = np.repeat( E, T ).reshape( binNum_glob, T )
+
+            avgX = preFactor * threep_jk[ iflav, its ] \
+            / fit.oneStateTwop( ts, T, G, E )
+                    
+            #avgX = Z * pq.calcAvgX( threep_jk[ -1 ], \
+            #                        twop_jk[ :, ts ], mEff_fit )
+            """
     # Average over bins
 
     # avgX_avg[ flav, ts, t ]
