@@ -19,11 +19,15 @@ def mpiPrint( message, rank ):
 # message: Message to be printed
 # rank: Rank of process. Prints if rank is 0
 
-def mpiPrintErr( message, rank ):
+def mpiPrintErr( message, comm ):
 
-    if rank == 0:
+    if comm.Get_rank() == 0:
 
         print( message, file=stderr )
+        
+        stderr.flush()
+
+    comm.Abort()
 
 
 # Prints message on every process in order

@@ -208,10 +208,8 @@ else:
     else:
 
         mpi_fncs.mpiPrintErr( "ERROR: nonzero momenta boost not yet " \
-               + "supported for gpu format" )
+               + "supported for gpu format", comm )
         
-        exit()
-
 # Multiply momList by -1 because three-point functions are named
 # opposite their sign (sign of phase negative because adjoint taken of
 # sequential propagator)
@@ -353,19 +351,28 @@ if rank == 0:
     try:
     
         fitResults = fit.mEffTwopFit( mEff, twop_jk, \
-                                      rangeEnd, tsf )
+                                      rangeEnd, 0, L, tsf )
     
-    except fit.lqcdjk_BadFitError as error:
-
-        mpi_fncs.mpiPrintErr( error, rank )
-
-        exit()
+    except Exception as error:
+        
+        mpi_fncs.mpiPrintErr( "ERROR (lqcdjk_fitting.mEffTwopFit):" \
+                              + str( error ), comm )
 
     fitParams = fitResults[ 0 ]
     chiSq = fitResults[ 1 ]
     mEff_fit = fitResults[ 2 ]
     rangeStart = fitResults[ 3 ]
     mEff_rangeStart = fitResults[ 4 ]
+
+    curve = np.zeros( ( binNum_glob, 50 ) )
+
+    t_s = np.concatenate( ( np.linspace( rangeStart, \
+                                         rangeEnd, 25 ), \
+                            np.linspace( T - rangeEnd, \
+                                         T- rangeStart, 25 ) ) )
+                    
+    twopFit_str = "2s" + str( rangeStart ) \
+                  + ".2e" + str( rangeEnd )
 
     if tsf:
 
@@ -376,56 +383,25 @@ if rank == 0:
 
         # Calculate fitted curve
 
-        curve = np.zeros( ( binNum_glob, 50 ) )
-
-        t_s = np.concatenate( ( np.linspace( rangeStart, \
-                                             rangeEnd, 25 ), \
-                                np.linspace( T - rangeEnd, \
-                                             T- rangeStart, 25 ) ) )
-                    
         for b in range( binNum_glob ):
 
             for t in range( t_s.shape[ -1 ] ):
                 
-                curve[ b, t ] = fit.twoStateTwop( t_s[ t ], T, c0[ b ], c1[ b ], \
+                curve[ b, t ] = fit.twoStateTwop( t_s[ t ], T, \
+                                                  c0[ b ], c1[ b ], \
                                                   E0[ b ], E1[ b ] )
                         
             # End loop over tsink
         # End loop over bins
 
-        curve_avg = np.average( curve, axis=0 )
-        curve_err = fncs.calcError( curve, binNum_glob )
-                
-        chiSq_avg = np.average( chiSq, axis=0 )
-        chiSq_err = fncs.calcError( chiSq, binNum_glob )
-    
-        c0_avg = np.average( c0 )
-        c0_err = fncs.calcError( c0, binNum_glob )
-                
-        c1_avg = np.average( c1 )
-        c1_err = fncs.calcError( c1, binNum_glob )
-            
-        E1_avg = np.average( E1 )
-        E1_err = fncs.calcError( E1, binNum_glob )
-        
-        # Write output files
-
-        tsf_range_str = "2s" + str( rangeStart ) \
-                        + ".2e" + str( rangeEnd )
-
         curveOutputFilename \
             = output_template.replace( "*", \
                                        "twop_twoStateFit_curve_" \
                                        + tsf_range_str )
-        rw.writeAvgDataFile_wX( curveOutputFilename, \
-                                t_s, curve_avg, curve_err )
-
         chiSqOutputFilename \
             = output_template.replace( "*", \
                                        "twop_twoStateFit_chiSq_" \
                                        + tsf_range_str )
-        rw.writeFitDataFile( chiSqOutputFilename, \
-                             chiSq_avg, chiSq_err, rangeStart, rangeEnd )
 
     else: # One-state fit
 
@@ -433,13 +409,6 @@ if rank == 0:
         E = fitParams[ :, 1 ]
 
         # Calculate fitted curve
-
-        curve = np.zeros( ( binNum_glob, 50 ) )
-
-        t_s = np.concatenate( ( np.linspace( rangeStart, \
-                                             rangeEnd, 25 ), \
-                                np.linspace( T - rangeEnd, \
-                                             T- rangeStart, 25 ) ) )
 
         for b in range( binNum_glob ):
 
@@ -451,33 +420,29 @@ if rank == 0:
             # End loop over tsink
         # End loop over bins
 
-        curve_avg = np.average( curve, axis=0 )
-        curve_err = fncs.calcError( curve, binNum_glob )
-            
-        chiSq_avg = np.average( chiSq, axis=0 )
-        chiSq_err = fncs.calcError( chiSq, binNum_glob )
-            
-        G_avg = np.average( G )
-        G_err = fncs.calcError( G, binNum_glob )
-                
-        # Write output files
-
-        twopFit_str = "2s" + str( rangeStart ) \
-                      + ".2e" + str( rangeEnd )
-
         curveOutputFilename \
             = output_template.replace( "*", \
-                                       "twop_fit_curve_" \
+                                       "twop_oneStateFit_curve_" \
                                        + twopFit_str )
-        rw.writeAvgDataFile_wX( curveOutputFilename, t_s, curve_avg, curve_err )
-        
         chiSqOutputFilename \
             = output_template.replace( "*", \
-                                       "twop_fit_chiSq_" \
+                                       "twop_oneStateFit_chiSq_" \
                                        + twopFit_str )
-        rw.writeFitDataFile( chiSqOutputFilename, chiSq_avg, chiSq_err, rangeStart, rangeEnd )
 
     # End if not two-state fit
+
+    curve_avg = np.average( curve, axis=0 )
+    curve_err = fncs.calcError( curve, binNum_glob )
+            
+    chiSq_avg = np.average( chiSq, axis=0 )
+    chiSq_err = fncs.calcError( chiSq, binNum_glob )
+            
+    # Write output files
+
+    rw.writeAvgDataFile_wX( curveOutputFilename, t_s, curve_avg, curve_err )
+        
+    rw.writeFitDataFile( chiSqOutputFilename, chiSq_avg, \
+                         chiSq_err, rangeStart, rangeEnd )
 
     mEff_fit_avg = np.average( mEff_fit, axis=0 )
     mEff_fit_err = fncs.calcError( mEff_fit, binNum_glob )
@@ -490,6 +455,8 @@ if rank == 0:
                          mEff_fit_err, mEff_rangeStart, rangeEnd )
 
 # End if first process
+
+comm.Barrier()
 
 if momSq > 0:
 
@@ -629,9 +596,8 @@ for imom in range( momBoostNum ):
             comm.Gatherv( threep_jk_loc, [ threep_jk[ imom, iflav, its ], \
                                            recvCount * T, recvOffset * T, \
                                            MPI.DOUBLE ], root=0 )
-            
-            # End loop over flavor
-        # End if first process
+
+        # End loop over flavor
     # End loop over tsink
 # End loop over momenta
 
@@ -773,6 +739,7 @@ if rank == 0:
         # End loop over flavor
     # End loop over tsink
 # End if first process
+comm.Barrier()
 
 ##################
 # Two-state Fit  #
@@ -978,4 +945,4 @@ if tsf and rank == 0:
         # End loop over number of neglected three-point functions
     # End loop over flavors
 # End if two-state fit
-
+comm.Barrier()

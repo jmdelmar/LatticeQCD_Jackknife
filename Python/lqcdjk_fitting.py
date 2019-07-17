@@ -5,9 +5,9 @@ from scipy.optimize import least_squares, minimize
 # Exception thrown if good fit cannot be found.
 # The definition of a good fit can vary on fitting routine.
 
-class lqcdjk_BadFitError(Exception):
-    def __init__(self, mismatch):
-        Exception.__init__(self, mismatch)
+#class lqcdjk_BadFitError(Exception):
+#    def __init__(self, mismatch):
+#        Exception.__init__(self, mismatch)
 
 
 # Fit the effective mass using two different methods and vary the fit range
@@ -21,7 +21,7 @@ class lqcdjk_BadFitError(Exception):
 # rangeEnd: The last t value to be include in the fit range
 # tsf: Perform two-state fit if True, else perform one-state fit
 
-def mEffTwopFit( mEff, twop, rangeEnd, tsf ):
+def mEffTwopFit( mEff, twop, rangeEnd, pSq, L, tsf ):
 
     binNum = mEff.shape[ 0 ]
     T = twop.shape[ -1 ]
@@ -83,10 +83,13 @@ def mEffTwopFit( mEff, twop, rangeEnd, tsf ):
 
             # End if no two-state fit
 
+            mass = np.sqrt( E_avg ** 2 \
+                            - ( 2.0 * np.pi / L ) ** 2 * pSq )
+
             # Check if the fits are good
 
-            relDiff = np.abs( mEff_fit_avg - E_avg ) \
-                      / ( 0.5 * ( mEff_fit_avg + E_avg ) )
+            relDiff = np.abs( mEff_fit_avg - mass ) \
+                      / ( 0.5 * ( mEff_fit_avg + mass ) )
         
             if 0.5 * E_err > relDiff \
                and 0.5 * mEff_fit_err > relDiff:
@@ -100,10 +103,10 @@ def mEffTwopFit( mEff, twop, rangeEnd, tsf ):
         # End loop over twop fit start
     # End loop over effective mass fit start
 
-    raise lqcdjk_BadFitError( "fitTwop() could not find a good fit with " \
-                              + "given effective masses, " \
-                              + "two-point functions, " \
-                              + "and range end." )
+    raise Exception( "fitTwop() could not find a good fit with " \
+                     + "given effective masses, " \
+                     + "two-point functions, " \
+                     + "and range end." )
 
     return -1
 
