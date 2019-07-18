@@ -11,7 +11,7 @@ from mpi4py import MPI
 
 ZvD1 = 1.123
 
-L = 32
+L = 32.0
 
 particle_list = [ "pion", "kaon", "nucleon" ]
 
@@ -629,32 +629,41 @@ if rank == 0:
         # Loop over flavor
         for iflav in range( flavNum ):
 
-            avgX[iflav,its]=pq.calcAvgX_momBoost(threep_jk[iflav, \
-                                                           its], \
-                                                 twop_boost_jk[:, \
-                                                               ts], \
-                                                 mEff_fit_avg, \
-                                                 momSq, L )
-            """
-            if tsf:
+            if momSq > 0:
 
-            c0_cp = np.repeat( c0, T ).reshape( binNum_glob, T )
-            c1_cp = np.repeat( c1, T ).reshape( binNum_glob, T )
-            E0_cp = np.repeat( E0, T ).reshape( binNum_glob, T )
-            E1_cp = np.repeat( E1, T ).reshape( binNum_glob, T )
-
-            avgX = preFactor * threep_jk[ iflav, its ] \
-            / fit.twoStateTwop( ts, T, c0_cp, c1_cp, E0_cp, E1_cp )
-        
+                avgX[iflav,its]=ZvD1*pq.calcAvgX_momBoost(threep_jk[iflav, \
+                                                                    its], \
+                                                          twop_boost_jk[:, \
+                                                                        ts], \
+                                                          mEff_fit, \
+                                                          momSq, L )
             else:
 
-            if its == 0:
+                preFactor = np.repeat( -ZvD1 * 8.0 / 3.0 \
+                                       * pq.energy( mEff_fit, momSq, L ) \
+                                       / ( pq.energy( mEff_fit, \
+                                                      momSq, L ) ** 2 \
+                                           + ( 2.0 * np.pi / L ) ** 2 \
+                                           * momSq ), \
+                                       T ).reshape( binNum_glob, T )
 
-            G = np.repeat( G, T ).reshape( binNum_glob, T )
-            E = np.repeat( E, T ).reshape( binNum_glob, T )
+                if tsf:
 
-            avgX = preFactor * threep_jk[ iflav, its ] \
-            / fit.oneStateTwop( ts, T, G, E )
+                    c0_cp = np.repeat( c0, T ).reshape( binNum_glob, T )
+                    c1_cp = np.repeat( c1, T ).reshape( binNum_glob, T )
+                    E0_cp = np.repeat( E0, T ).reshape( binNum_glob, T )
+                    E1_cp = np.repeat( E1, T ).reshape( binNum_glob, T )
+
+                    avgX = preFactor * threep_jk[ iflav, its ] \
+                           / fit.twoStateTwop( ts, T, c0_cp, c1_cp, E0_cp, E1_cp )
+        
+                else:
+
+                    G_cp = np.repeat( G, T ).reshape( binNum_glob, T )
+                    E_cp = np.repeat( E, T ).reshape( binNum_glob, T )
+
+                    avgX = preFactor * threep_jk[ iflav, its ] \
+                           / fit.oneStateTwop( ts, T, G, E )
                     
             #avgX = Z * pq.calcAvgX( threep_jk[ -1 ], \
             #                        twop_jk[ :, ts ], mEff_fit )

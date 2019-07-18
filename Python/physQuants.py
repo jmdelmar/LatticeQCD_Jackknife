@@ -113,7 +113,7 @@ def calcAvgX_momBoost( threep, twop_tsink, mEff, momSq, L ):
 
     preFactor = -8.0 / 3.0 * energy( mEff, momSq, L ) \
                 / ( energy( mEff, momSq, L ) ** 2 \
-                    + ( 2 * np.pi / L ) ** 2 * momSq )
+                    + ( 2.0 * np.pi / L ) ** 2 * momSq )
 
     #preFactor = 1.0
 
