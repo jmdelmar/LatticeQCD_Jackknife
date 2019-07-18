@@ -113,13 +113,13 @@ def calcAvgX_momBoost( threep, twop_tsink, mEff, momSq, L ):
 
     preFactor = -8.0 / 3.0 * energy( mEff, momSq, L ) \
                 / ( energy( mEff, momSq, L ) ** 2 \
-                    + ( 2 * np.pi / L ) ** 2 * momSq )
+                    + ( 2.0 * np.pi / L ) ** 2 * momSq )
 
     #preFactor = 1.0
 
     avgX = np.zeros( threep.shape )
 
-    for t in range( threep.shape[ 1 ] ):
+    for t in range( threep.shape[ -1 ] ):
 
         avgX[ :, t ] = preFactor * threep[ :, t ] / twop_tsink
 

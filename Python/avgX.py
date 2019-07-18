@@ -11,7 +11,7 @@ from mpi4py import MPI
 
 ZvD1 = 1.123
 
-L = 32
+L = 32.0
 
 particle_list = [ "pion", "kaon", "nucleon" ]
 
@@ -272,7 +272,30 @@ if momSq > 0:
     mpi_fncs.mpiPrint( "Read boosted two-point functions from HDF5 files " \
                        + "in {:.3} seconds".format( time.time() - t0 ), \
                        rank )
+    """
+    # Remove (+1,-1,+1) from momList and twop_boost_loc
 
+    if momSq == 3:
+
+        momList_cp = []
+        twop_boost_cp = []
+
+        for imom in range( momBoostNum ):
+
+            if momList[imom][0]==1 and momList[imom][1]==-1 and momList[imom][2]==1 :
+
+                momList_cp = np.delete( momList, imom, axis=0 )
+                twop_boost_cp = np.delete( twop_boost_loc, imom, axis=0 )
+
+                break
+            
+        momList = momList_cp
+        twop_boost_loc = twop_boost_cp
+
+        momBoostNum = len( momList )
+
+    # End if p^2=3
+    """
 else:
 
     twop_boost_loc = np.array( [] )
@@ -480,11 +503,11 @@ else:
 
     twop_boost_jk = np.array( [ None for imom in range( momBoostNum ) ] )
     threep_jk = np.array( [ [ [ None for ts in tsink ] \
-                              for f in flav_str ] \
+                              for f in range( flavNum ) ] \
                             for imom in range( momBoostNum ) ] )
-    #avgX = np.array( [ [ [ None for ts in tsink ] \
-    #                     for f in flav_str ] \
-    #                   for imom in range( momBoostNum ) ] )
+    avgX = np.array( [ [ [ None for ts in tsink ] \
+                         for f in flav_str ] \
+                       for imom in range( momBoostNum ) ] )
 
 # Loop over momenta
 for imom in range( momBoostNum ):
@@ -597,20 +620,34 @@ for imom in range( momBoostNum ):
                                            recvCount * T, recvOffset * T, \
                                            MPI.DOUBLE ], root=0 )
 
+            if rank == 0:
+
+                avgX[imom,iflav,its]=ZvD1*pq.calcAvgX_momBoost(threep_jk[imom, \
+                                                                         iflav, \
+                                                                         its], \
+                                                               twop_boost_jk[imom, \
+                                                                             :, \
+                                                                             ts], \
+                                                               mEff_fit, \
+                                                               momSq, L )
+
         # End loop over flavor
     # End loop over tsink
 # End loop over momenta
-
+"""
 if rank == 0:
         
-    avgX = np.zeros( ( flavNum, \
-                       tsinkNum, binNum_glob, T ) )
+    avgX = np.zeros( ( flavNum, tsinkNum, \
+                       binNum_glob, T ) )
 
 else:
 
+    #avgX = np.array( [ [ [ None for ts in tsink ] \
+    #                     for f in flav_str ] \
+    #                   for m in momList ] )
     avgX = np.array( [ [ None for ts in tsink ] \
                          for f in flav_str ] )
-
+"""
 #################
 # Calculate <x> #
 #################
@@ -619,23 +656,37 @@ if rank == 0:
 
     # Average over momenta
 
-    threep_jk = np.average( threep_jk, axis=0 )
-    twop_boost_jk = np.average( twop_boost_jk, axis=0 )
+    #avgX = np.average( avgX, axis=0 )
+    #threep_jk = np.average( threep_jk, axis=0 )
+    #twop_boost_jk = np.average( twop_boost_jk, axis=0 )
+    #avgX = np.average( avgX, axis=0 )
+    threep_avg = np.average( threep_jk, axis=-2 )
+    threep_err = fncs.calcError( threep_jk, binNum_glob, axis=-2 )
+    twop_boost_avg = np.average( twop_boost_jk, axis=-2 )
+    twop_boost_err = fncs.calcError( twop_boost_jk, binNum_glob, axis=-2 )
     
     # avgX[ flav, ts, b, t ]
 
+    # Loop over momenta
+    #for imom in range( momBoostNum ):
     # Loop over tsink
     for ts, its in zip( tsink, range( tsinkNum ) ) :
         # Loop over flavor
         for iflav in range( flavNum ):
-
-            avgX[iflav,its]=pq.calcAvgX_momBoost(threep_jk[iflav, \
-                                                           its], \
-                                                 twop_boost_jk[:, \
-                                                               ts], \
-                                                 mEff_fit_avg, \
-                                                 momSq, L )
-            """
+                     
+            avgX[imom,iflav,its]=ZvD1*pq.calcAvgX_momBoost(threep_jk[imom,iflav, \
+                                                                     its], \
+                                                           twop_boost_jk[imom,:, \
+                                                                         ts], \
+                                                           mEff_fit, \
+                                                           momSq, L )
+            #avgX[iflav,its]=ZvD1*pq.calcAvgX_momBoost(threep_jk[iflav, \
+                #                                               its], \
+                #                                 twop_boost_jk[:, \
+                #                                               ts], \
+                #                                 mEff_fit, \
+                #                                 momSq, L )
+    """
             if tsf:
 
             c0_cp = np.repeat( c0, T ).reshape( binNum_glob, T )
@@ -658,7 +709,7 @@ if rank == 0:
                     
             #avgX = Z * pq.calcAvgX( threep_jk[ -1 ], \
             #                        twop_jk[ :, ts ], mEff_fit )
-            """
+    """
     # Average over bins
 
     # avgX_avg[ flav, ts, t ]
@@ -666,6 +717,125 @@ if rank == 0:
     avgX_avg = np.average( avgX, axis=-2 )
     avgX_err = fncs.calcError( avgX, binNum_glob, axis=-2 )
 
+    # Loop over momenta
+    for imom in range( momBoostNum ):
+        # Loop over tsink
+        for ts, its in zip( tsink, range( tsinkNum ) ) :
+            # Loop over flavor
+            for iflav in range( flavNum ):
+
+                # Write <x> output files
+
+                threep_outFilename = output_template.replace( "*", "threep_" \
+                                                            + flav_str[ iflav ] \
+                                                            + "_tsink" \
+                                                            + str( ts ) + "_" \
+                                                            + fncs.signToString( momList[ imom ][0] ) \
+                                                            + str(momList[ imom ][0]) + "_" \
+                                                            + fncs.signToString( momList[ imom ][1] ) \
+                                                            + str(momList[ imom ][1]) + "_" \
+                                                            + fncs.signToString( momList[ imom ][2] ) \
+                                                            + str(momList[ imom ][2]) )
+
+                rw.writeAvgDataFile( threep_outFilename, threep_avg[ imom, iflav, its ], \
+                                     threep_err[ imom,iflav, its ] )
+
+
+                avgX_outFilename = output_template.replace( "*", "avgX_" \
+                                                            + flav_str[ iflav ] \
+                                                            + "_tsink" \
+                                                            + str( ts ) + "_" \
+                                                            + fncs.signToString( momList[ imom ][0] ) \
+                                                            + str(momList[ imom ][0]) + "_" \
+                                                            + fncs.signToString( momList[ imom ][1] ) \
+                                                            + str(momList[ imom ][1]) + "_" \
+                                                            + fncs.signToString( momList[ imom ][2] ) \
+                                                            + str(momList[ imom ][2]) )
+
+                rw.writeAvgDataFile( avgX_outFilename, avgX_avg[ imom, iflav, its ], \
+                                     avgX_err[ imom,iflav, its ] )
+
+                ###############
+                # Fit plateau #
+                ###############
+
+                fitStart = [ ts // 2 - 1, ts // 2 - 2, ts // 2 - 3 ]
+            
+                fitEnd = [ ts // 2 + 1, ts // 2 + 2, ts // 2 + 3 ]
+
+                # Loop over fit ranges
+                for irange in range( len( fitStart ) ):
+
+                    avgX_fit = []
+        
+                    # Fit each bin
+
+                    for x in avgX[ imom, iflav, its ]:
+
+                        avgX_fit.append(float(np.polyfit(range(fitStart[irange], \
+                                                               fitEnd[ irange ] \
+                                                               + 1 ), \
+                                                         x[ fitStart[ irange ] \
+                                                            : fitEnd[ irange ] \
+                                                            + 1 ], \
+                                                         0, \
+                                                         w=avgX_err[imom,iflav, its, \
+                                                                    fitStart[irange] \
+                                                                    :fitEnd[irange] \
+                                                                    + 1 ] ) ) )
+
+                    avgX_fit = np.array( avgX_fit )
+
+                    # Average over bins
+
+                    avgX_fit_avg = np.average( avgX_fit )
+                
+                    avgX_fit_err = fncs.calcError( avgX_fit, binNum_glob )
+                
+                    # Write output files
+
+                    avgX_fit_outFilename = ""
+
+                    avgX_fit_outFilename=output_template.replace("*", \
+                                                                 "avgX_" \
+                                                                 + flav_str[iflav]\
+                                                                 + "_fit_" \
+                                                                 "tsink" \
+                                                                 + str( ts ) \
+                                                                 + "_" \
+                                                                 + str(fitStart[irange]) \
+                                                                 + "_" \
+                                                                 + str(fitEnd[irange]) + "_" \
+                                                                 + fncs.signToString( momList[ imom ][0] ) \
+                                                                 + str(momList[ imom ][0]) + "_" \
+                                                                 + fncs.signToString( momList[ imom ][1] ) \
+                                                                 + str(momList[ imom ][1]) + "_" \
+                                                                 + fncs.signToString( momList[ imom ][2] ) \
+                                                                 + str(momList[ imom ][2]) )
+
+                    rw.writeFitDataFile( avgX_fit_outFilename, avgX_fit_avg, avgX_fit_err, fitStart[ irange ], fitEnd[ irange ] )
+
+                # End loop over fit ranges
+            # End loop over flavor
+        # End loop over tsink
+
+        twop_outFilename = output_template.replace( "*", "twop_" \
+                                                    + flav_str[ iflav ] \
+                                                    + "_tsink" \
+                                                    + str( ts ) + "_" \
+                                                    + fncs.signToString( momList[ imom ][0] ) \
+                                                    + str(momList[ imom ][0]) + "_" \
+                                                    + fncs.signToString( momList[ imom ][1] ) \
+                                                    + str(momList[ imom ][1]) + "_" \
+                                                    + fncs.signToString( momList[ imom ][2] ) \
+                                                    + str(momList[ imom ][2]) )
+
+        rw.writeAvgDataFile( twop_outFilename, twop_boost_avg[ imom ], \
+                             twop_boost_err[ imom ] )
+       
+    # End loop over momenta
+
+    """
     # Loop over tsink
     for ts, its in zip( tsink, range( tsinkNum ) ) :
         # Loop over flavor
@@ -738,6 +908,7 @@ if rank == 0:
             # End loop over fit ranges
         # End loop over flavor
     # End loop over tsink
+    """
 # End if first process
 comm.Barrier()
 
