@@ -1,24 +1,42 @@
 import numpy as np
 import functions as fncs
-from scipy.optimize import least_squares, fmin, minimize, differential_evolution
+from scipy.optimize import least_squares, minimize
 
-class lqcdjk_BadFitError(Exception):
-    def __init__(self, mismatch):
-        Exception.__init__(self, mismatch)
+# Exception thrown if good fit cannot be found.
+# The definition of a good fit can vary on fitting routine.
+
+#class lqcdjk_BadFitError(Exception):
+#    def __init__(self, mismatch):
+#        Exception.__init__(self, mismatch)
 
 
-def mEffTwopFit( mEff, twop, rangeEnd, tsf ):
+# Fit the effective mass using two different methods and vary the fit range
+# starting point until the relative difference between the masses calculated
+# by both methods is less than half of both their jackkinfe errors. 
+# The different methods are fitting the effective mass plateau to a constant
+# value and either a one- or two-state fit on the two-point functions.
+
+# mEff: effective masses to be fit to a constant value
+# twop: two-point functions to be fit using a one- or two-state fit
+# rangeEnd: The last t value to be include in the fit range
+# tsf: Perform two-state fit if True, else perform one-state fit
+
+def mEffTwopFit( mEff, twop, rangeEnd, pSq, L, tsf ):
 
     binNum = mEff.shape[ 0 ]
     T = twop.shape[ -1 ]
 
     mEff_err = fncs.calcError( mEff, binNum )
 
-    for mEff_rangeStart in range( 1, rangeEnd - 2 ):
+    # Loop over plateau fit range starts
+    for mEff_rangeStart in range( 10, rangeEnd - 2 ):
 
         mEff_fit = np.zeros( binNum )
 
+        # Loop over bins
         for b in range( binNum ):
+
+            # Perform the plateau fit
 
             mEff_fit[ b ] = np.polyfit( range( mEff_rangeStart, \
                                                rangeEnd + 1 ), \
@@ -28,45 +46,34 @@ def mEffTwopFit( mEff, twop, rangeEnd, tsf ):
                                         w=mEff_err[ mEff_rangeStart \
                                                     : rangeEnd + 1 ] )
 
+        # End loop over bins
+
         # Average over bins
 
         mEff_fit_avg = np.average( mEff_fit )
         mEff_fit_err = fncs.calcError( mEff_fit, binNum )
 
-        if tsf:
+        for twop_rangeStart in range( 1, rangeEnd - 2 ):
 
-            for tsf_rangeStart in range( 1, rangeEnd - 2 ):
+            # Two-state fit
+
+            if tsf:
 
                 # fitParams[ b, param ]
 
                 fitParams, chiSq = twoStateFit_twop( twop, \
-                                                     tsf_rangeStart, \
+                                                     twop_rangeStart, \
                                                      rangeEnd, T )
 
-                E0_avg = np.average( fitParams[ :, 2 ] )
-                E0_err = fncs.calcError( fitParams[ :, 2 ], binNum )
+                E_avg = np.average( fitParams[ :, 2 ] )
+                E_err = fncs.calcError( fitParams[ :, 2 ], binNum )
 
-                # Check if the fit is good by comparing mass values
-                # obtained from two-state and mEff fits
+            # One-state fit
 
-                relDiff = np.abs( mEff_fit_avg - E0_avg ) \
-                          / ( 0.5 * ( mEff_fit_avg + E0_avg ) )
+            else:
 
-                if 0.5 * E0_err > relDiff \
-                   and 0.5 * mEff_fit_err > relDiff:
-
-                    results = ( fitParams, chiSq, mEff_fit, \
-                                tsf_rangeStart, mEff_rangeStart )
-
-                    return results
-
-                # End if relDiff < dm/2
-            # End loop over two-state fit start
-
-        else: # One-state fit
-
-            for twop_rangeStart in range( 1, rangeEnd - 2 ):
-
+                # Perform one-state fit
+                
                 fitParams, chiSq = oneStateFit_twop( twop, \
                                                      twop_rangeStart, \
                                                      rangeEnd, T )
@@ -74,33 +81,49 @@ def mEffTwopFit( mEff, twop, rangeEnd, tsf ):
                 E_avg = np.average( fitParams[ :, 1 ], axis=0 )
                 E_err = fncs.calcError( fitParams[ :, 1 ], binNum )
 
-                relDiff = np.abs( mEff_fit_avg - E_avg ) \
-                          / ( 0.5 * ( mEff_fit_avg + E_avg ) )
+            # End if no two-state fit
+
+            mass = np.sqrt( E_avg ** 2 \
+                            - ( 2.0 * np.pi / L ) ** 2 * pSq )
+
+            # Check if the fits are good
+
+            relDiff = np.abs( mEff_fit_avg - mass ) \
+                      / ( 0.5 * ( mEff_fit_avg + mass ) )
         
-                if 0.5 * E_err > relDiff \
-                   and 0.5 * mEff_fit_err > relDiff:
+            if 0.5 * E_err > relDiff \
+               and 0.5 * mEff_fit_err > relDiff:
+                
+                results = ( fitParams, chiSq, mEff_fit, \
+                            twop_rangeStart, mEff_rangeStart )
 
-                    results = ( fitParams, chiSq, mEff_fit, \
-                                twop_rangeStart, mEff_rangeStart )
+                return results
 
-                    return results
-
-                # End if relDiff < dm/2
-            # End loop over twop fit start
-        # End if no two-state fit
+            # End if relDiff < dm/2
+        # End loop over twop fit start
     # End loop over effective mass fit start
 
-    raise lqcdjk_BadFitError( "fitTwop() could not find a good fit with " \
-                              + "given effective masses, two-point functions, " \
-                              + "and range end." )
+    raise Exception( "fitTwop() could not find a good fit with " \
+                     + "given effective masses, " \
+                     + "two-point functions, " \
+                     + "and range end." )
 
     return -1
 
+
+# Fit two-point functions to a two-state fit.
+
+# twop: Two-point functions to be fit
+# twop_rangeStart: Starting t value to include in fit range
+# twop_rangeEnd: Ending t value to include in fit range
+# T: Time dimension length for ensemble
 
 def twoStateFit_twop( twop, twop_rangeStart, twop_rangeEnd, T ):
 
     # twop[ b, t ]
     # twop_err[ t ]
+
+    # Set two-point functions to fit based on fit range start and end
 
     twop_to_fit = np.concatenate( ( twop[ :, twop_rangeStart : \
                                           twop_rangeEnd + 1 ], \
@@ -113,13 +136,11 @@ def twoStateFit_twop( twop, twop_rangeStart, twop_rangeEnd, T ):
     binNum = twop.shape[ 0 ]
 
     fit = fncs.initEmptyList( binNum, 1 )
-
     chi_sq = fncs.initEmptyList( binNum, 1 )
 
     # twop_avg[ts]
 
     twop_avg = np.average( twop_to_fit, axis=0 )
-
     twop_err = fncs.calcError( twop_to_fit, binNum )
     
     tsink = np.concatenate( ( range( twop_rangeStart, \
@@ -142,6 +163,9 @@ def twoStateFit_twop( twop, twop_rangeStart, twop_rangeEnd, T ):
 
     fitParams = leastSq_avg.x
 
+    # Find fit parameters for each bins
+
+    # Loop over bins
     for b in range( binNum ):
 
         leastSq = least_squares( twoStateErrorFunction_twop, fitParams, \
@@ -158,6 +182,15 @@ def twoStateFit_twop( twop, twop_rangeStart, twop_rangeEnd, T ):
     return np.array( fit ), np.array( chi_sq )
 
 
+# Fit three-point functions to a two-state fit.
+
+# threep: three-point functions to be fit
+# ti_to_fit: Values of insertion time to be fit over
+# tsink: list of tsink values to fit over
+# E0: ground state energy value calculated from two-state function fit
+# E1: first excited state energy value calculated from two-state function fit
+# T: Time dimension length for ensemble
+
 def twoStateFit_threep( threep, ti_to_fit, tsink, E0, E1, T ):
 
     # threep[ ts, b, t ]
@@ -169,6 +202,8 @@ def twoStateFit_threep( threep, ti_to_fit, tsink, E0, E1, T ):
         + "number of three-point function datasets."
 
     threep_to_fit = fncs.initEmptyList( tsinkNum, 1 )
+
+    # Set three-point functions to fit based on ti_to_fit
 
     for ts in range( tsinkNum ):
  
@@ -214,13 +249,20 @@ def twoStateFit_threep( threep, ti_to_fit, tsink, E0, E1, T ):
 
     fitParams = leastSq_avg.x
 
+    # Find fit parameters for each bin
+
+    # Loop over bins
     for b in range( binNum ):
 
         threep_cp = fncs.initEmptyList( tsinkNum, 1 )
 
+
+        # Loop over tsink
         for ts in range( tsinkNum ):
 
             threep_cp[ ts ] = threep_to_fit[ ts ][ b, : ]
+
+        # End loop over tsink
 
         leastSq = least_squares( twoStateErrorFunction_threep, fitParams, \
                              args = ( ti_to_fit, tsink, T, \
@@ -237,6 +279,17 @@ def twoStateFit_threep( threep, ti_to_fit, tsink, E0, E1, T ):
 
     return np.array( fit ), np.array( chi_sq )
 
+
+# Calculate the difference between two-point function values of the data 
+# and calculated from the two-state fit divided by the jackknife errors
+# of the data
+
+# fitParams: Parameters of fit (c0, c1, E0, E1)
+# tsink: tsink values to fit over
+# T: time dimension length of ensemble
+# twop: two-point functions to fit
+# twop_err: jacckife errors associated with two-point functions
+
 def twoStateErrorFunction_twop( fitParams, tsink, T, twop, twop_err ):
 
     c0 = fitParams[ 0 ]
@@ -249,6 +302,19 @@ def twoStateErrorFunction_twop( fitParams, tsink, T, twop, twop_err ):
     
     return twopErr
     
+
+# Calculate the difference between three-point function values of the data 
+# and calculated from the two-state fit divided by the jackknife errors
+# of the data
+
+# fitParams: Parameters of fit (a00, a01, a11 )
+# ti: insertion time values to fit over
+# tsink: tsink values to fit over
+# T: time dimension length of ensemble
+# threep: three-point functions to fit
+# threep_err: jacckife errors associated with three-point functions
+# E0: ground state energy value calculated from two-state function fit
+# E1: first excited state energy value calculated from two-state function fit
 
 def twoStateErrorFunction_threep( fitParams, ti, tsink, T, \
                                   threep, threep_err, E0, E1):
@@ -275,6 +341,17 @@ def twoStateErrorFunction_threep( fitParams, ti, tsink, T, \
     return np.array( threepErr )
     
 
+# Calculate three-point function from given two-state fit parameters and time values
+
+# ti: insertion time value
+# tsink: tsink value
+# T: time dimension length of ensemble
+# a00: amplitude of ground state term (fit parameter)
+# a01: amplitude of mixed state terms (fit parameter)
+# a11: amplitude of first excited state term (fit parameter)
+# E0: ground state energy value calculated from two-state function fit
+# E1: first excited state energy value calculated from two-state function fit
+
 def twoStateThreep( ti, tsink, T, a00, a01, a11, E0, E1 ):
 
     if ti < tsink:
@@ -287,12 +364,22 @@ def twoStateThreep( ti, tsink, T, a00, a01, a11, E0, E1 ):
     else:
         
         return a00 * np.exp( -E0 * ( T - tsink ) ) \
-            + a01 * np.exp( -E0 * ( ti - tsink ) \
-                            - E1 * ( T - ti ) ) \
-            + a01 * np.exp( -E1 * ( ti - tsink ) \
-                            - E0 * ( T - ti ) ) \
+            + a01 * np.exp( -E0 * ( T - ti ) \
+                            - E1 * ( ti - tsink ) ) \
+            + a01 * np.exp( -E1 * ( T - ti ) \
+                            - E0 * ( ti - tsink ) ) \
             + a11 * np.exp( -E1 * ( T - tsink ) )
         
+
+# Calculate two-point functions from given two-state fit parameters and 
+# time values
+
+# tsink: tsink value
+# T: time dimension length of ensemble
+# c0: amplitude of ground state term (fit parameter)
+# c1: amplitude of first excited state term (fit parameter)
+# E0: ground state energy (fit parameter)
+# E1: first excited state energy (fit parameter)
 
 def twoStateTwop( tsink, T, c0, c1, E0, E1 ):
 
@@ -300,6 +387,103 @@ def twoStateTwop( tsink, T, c0, c1, E0, E1 ):
                   + np.exp( -E0 * ( T - tsink ) ) ) \
         + c1 * ( np.exp( -E1 * tsink ) \
                  + np.exp( -E1 * ( T - tsink ) ) )
+
+
+# Fit two-point functions to a one-state fit.
+
+# twop: Two-point functions to be fit
+# twop_rangeStart: Starting t value to include in fit range
+# twop_rangeEnd: Ending t value to include in fit range
+# T: Time dimension length for ensemble
+
+def oneStateFit_twop( twop, twop_rangeStart, twop_rangeEnd, T ):
+
+    # twop[ b, t ]
+
+    twop_to_fit = np.concatenate( ( twop[ :, twop_rangeStart : \
+                                          twop_rangeEnd + 1 ], \
+                                    twop[ :, T - twop_rangeEnd : \
+                                          T - twop_rangeStart + 1 ] ), \
+                                  axis=1 )
+
+    binNum = twop.shape[ 0 ]
+
+    fit = fncs.initEmptyList( binNum, 1 )
+
+    chi_sq = fncs.initEmptyList( binNum, 1 )
+
+    twop_avg = np.average( twop_to_fit, axis=0 )
+
+    twop_err = fncs.calcError( twop_to_fit, binNum )
+    
+    t = np.concatenate((range( twop_rangeStart, twop_rangeEnd + 1 ), \
+                        range( T - twop_rangeEnd, T-twop_rangeStart + 1 ) ))
+
+    # Find fit parameters of mean values to use as initial guess
+
+    G = 0.1 
+    E = 0.1 
+        
+    fitParams = np.array( [ G, E ] )
+
+    leastSq_avg = least_squares( oneStateErrorFunction_twop, fitParams, \
+                             args = ( t, T, twop_avg, twop_err ), \
+                             method="lm" )
+    
+
+    fitParams = leastSq_avg.x
+
+    for b in range( binNum ):
+
+        leastSq = least_squares( oneStateErrorFunction_twop, fitParams, \
+                                 args = ( t, T, twop_to_fit[ b, : ], \
+                                          twop_err ), \
+                                 method="lm" )
+    
+        fit[ b ] = leastSq.x
+
+        chi_sq[ b ] = leastSq.cost
+
+    # End loop over bins
+
+    return np.array( fit ), np.array( chi_sq )
+
+
+# Calculate the difference between two-point function values of the data 
+# and calculated from the one-state fit divided by the jackknife errors
+# of the data
+
+# fitParams: Parameters of fit (G, E)
+# tsink: tsink values to fit over
+# T: time dimension length of ensemble
+# twop: two-point functions to fit
+# twop_err: jacckife errors associated with two-point functions
+
+def oneStateErrorFunction_twop( fitParams, tsink, T, twop, twop_err ):
+
+    G = fitParams[ 0 ]
+    E = fitParams[ 1 ]
+        
+    # twopErr[ tsink ]
+
+    twopErr = np.array( ( oneStateTwop( tsink, T, G, E, ) \
+                          - twop ) / twop_err )
+
+    return twopErr
+
+
+# Calculate two-point functions from given one-state fit parameters and 
+# time values
+
+# tsink: tsink value
+# T: time dimension length of ensemble
+# G: amplitude (fit parameter)
+# E: ground state energy (fit parameter)
+
+def oneStateTwop( tsink, T, G, E ):
+    
+    return G**2 / 2 / E * ( np.exp( -E * tsink ) \
+                            + np.exp( -E * ( T - tsink ) ) )
 
 
 """
@@ -536,75 +720,4 @@ def twoStateErrorFunction( fitParams, tsink_twop, ti, tsink, twop, twop_err, thr
     
     #return np.concatenate( ( twopErr, threepErr ) )
 """
-
-def oneStateFit_twop( twop, fitStart, fitEnd, T ):
-
-    # twop[ b, t ]
-
-    twop_to_fit = np.concatenate( ( twop[ :, fitStart : \
-                                          fitEnd + 1 ], \
-                                    twop[ :, T - fitEnd : \
-                                          T - fitStart + 1 ] ), \
-                                  axis=1 )
-
-    binNum = twop.shape[ 0 ]
-
-    fit = fncs.initEmptyList( binNum, 1 )
-
-    chi_sq = fncs.initEmptyList( binNum, 1 )
-
-    twop_avg = np.average( twop_to_fit, axis=0 )
-
-    twop_err = fncs.calcError( twop_to_fit, binNum )
-    
-    t = np.concatenate( ( range( fitStart, fitEnd + 1 ), \
-                          range( T - fitEnd, T-fitStart + 1 ) ) )
-
-    # Find fit parameters of mean values to use as initial guess
-
-    G = 0.1 
-    E = 0.1 
-        
-    fitParams = np.array( [ G, E ] )
-
-    leastSq_avg = least_squares( oneStateErrorFunction_twop, fitParams, \
-                             args = ( t, T, twop_avg, twop_err ), \
-                             method="lm" )
-    
-
-    fitParams = leastSq_avg.x
-
-    for b in range( binNum ):
-
-        leastSq = least_squares( oneStateErrorFunction_twop, fitParams, \
-                                 args = ( t, T, twop_to_fit[ b, : ], \
-                                          twop_err ), \
-                                 method="lm" )
-    
-        fit[ b ] = leastSq.x
-
-        chi_sq[ b ] = leastSq.cost
-
-    # End loop over bins
-
-    return np.array( fit ), np.array( chi_sq )
-
-
-def oneStateErrorFunction_twop( fitParams, t, T, twop, twop_err ):
-
-    G = fitParams[ 0 ]
-          
-    E = fitParams[ 1 ]
-        
-    # twopErr[ t ]
-
-    twopErr = np.array( ( oneStateTwop( t, T, G, E, ) \
-                          - twop ) / twop_err )
-
-    return twopErr
-
-
-def oneStateTwop( t, T, G, E ):
-    
-    return G**2 / 2 / E * ( np.exp( -E * t ) + np.exp( -E * ( T - t ) ) )
 

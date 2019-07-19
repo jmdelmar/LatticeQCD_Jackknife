@@ -7,7 +7,7 @@ def energy( mEff, Qsq, L ):
 
 def KK( mEff, Qsq, L ):
 
-    return np.sqrt( 2 * energy( mEff, Qsq, L ) \
+    return np.sqrt( 2.0 * energy( mEff, Qsq, L ) \
                     * ( energy( mEff, Qsq, L ) \
                         + mEff ) )
 
@@ -54,13 +54,26 @@ def kineFactor_GE_GM( ratio_err, mEff, Q, L ):
 
     return kineFactor
 
+
+# Convert Q^2 from units of (2pi/L)^2 to GeV^2
+
+# Qsq: Q^2 values to be converted
+# mEff: Effective mass of particle
+# a: Lattice spacing of ensemble
+# L: Spacial dimension length of ensemble
+
 def convertQsqToGeV( Qsq, mEff, a, L ):
 
-    energy = np.sqrt( mEff ** 2 + ( 2.0 * np.pi / L ) ** 2 * Qsq )
-
-    Qsq_GeV = 2.0 * ( 0.197 / a ) ** 2 * mEff * ( energy - mEff )
+    Qsq_GeV = 2.0 * ( 0.197 / a ) ** 2 * mEff * ( energy( mEff, Qsq, L ) \
+                                                  - mEff )
 
     return Qsq_GeV
+
+
+# Calcuate the effective mass from two-point functions which have been
+# symmetrized
+
+# twop: Symmetrized two-point functions with last dimension as time
 
 def mEffFromSymTwop( twop ):
 
@@ -68,49 +81,51 @@ def mEffFromSymTwop( twop ):
 
     mEff = np.zeros( twop.shape )
 
-    for t in range( 1, twop.shape[ -1 ] - 1 ):
+    for t in range( 1, halfT - 1 ):
 
         mEff[ ..., t ] = 1.0 / 2.0 \
                          * np.log( ( twop[ ..., t - 1 ] \
-                                     + np.sqrt( twop[ ..., t - 1 ] ** 2 \
-                                                - twop[ ..., halfT - 1 ] ** 2 ) ) \
+                                     + np.sqrt(twop[ ..., \
+                                                     t - 1 ] ** 2 \
+                                               - twop[ ..., \
+                                                       halfT - 1 ] ** 2) ) \
                                    / ( twop[ ..., t + 1 ] \
-                                       + np.sqrt( twop[ ..., t + 1 ] ** 2 \
-                                                  - twop[ ..., halfT - 1 ] ** 2 ) ) )
+                                       + np.sqrt(twop[ ..., \
+                                                       t + 1 ] ** 2 \
+                                                 - twop[ ..., \
+                                                         halfT - 1 ] ** 2) ))
 
     return mEff
 
+
+# Calculate the effective mass from two-point functions
+
+# twop: Two-point functions with last dimension as time
 
 def mEff( twop ):
 
     mEff = np.zeros( twop.shape )
 
-    # Recursively loop though each axis of twop, until the
-    # last dimension, which should be time, is reached
+    # Loop through timestep, excluding the last timestep
 
-    if( twop.ndim > 1 ):
+    for t in range( len( twop ) - 1 ):
 
-        for dim in range( len( twop ) ):
+        mEff[ ..., t ] = np.log( twop[ ..., t ] / twop[ ..., t + 1 ] )
 
-            mEff[dim] = mEff( twop[dim] )
+    # Calculate effective mass at last timestep, 
+    # applying boundary conditions
 
-    else:
+    mEff[ ..., -1 ] = np.log( twop[ ..., -1 ] / twop[ ..., 0 ] )
 
-        timeLength = len( twop )
+    return mEff
 
-        # Loop through timestep, excluding the last timestep
 
-        for t in range( timeLength - 1 ):
+# Calculate the quark momentum fraction <x> for three-point functions with
+# zero final momentum.
 
-            mEff[ t ] = np.log( twop[ t ] / twop[ t + 1 ] )
-
-            # Calculate effective mass at last timestep, 
-            # applying boundary conditions
-
-        mEff[ timeLength - 1 ] = np.log( twop[ timeLength - 1 ] / twop[ 0 ] )
-
-    return np.array( mEff )
-
+# threep: Three-point functions with last dimension as time
+# twop_tsink: Two-point funtion at Tsink
+# mEff: Effective mass of particle
 
 def calcAvgX( threep, twop_tsink, mEff ):
 
@@ -127,6 +142,15 @@ def calcAvgX( threep, twop_tsink, mEff ):
     return avgX
 
 
+# Calculate the quark momentum fraction <x> for three-point functions with
+# finite final momentum.
+
+# threep: Three-point functions with last dimension as time
+# twop_tsink: Two-point funtion at Tsink
+# mEff: Effective mass of particle
+# momSq: Final momentum squared
+# L: Spacial dimension length of ensemble
+
 def calcAvgX_momBoost( threep, twop_tsink, mEff, momSq, L ):
 
     # threep[ b, t ]
@@ -135,15 +159,14 @@ def calcAvgX_momBoost( threep, twop_tsink, mEff, momSq, L ):
     # momSq
     # L
 
-    pSq = (2*np.pi/L)**2 * momSq
+    # prefactor = 8/3 * E / ( E^2 + p^2 )
 
-    energy = np.sqrt( mEff**2 + pSq )
-    """
-    preFactor = -2.0 / mEff**2 * \
-                energy * ( energy + mEff ) \
-                / ( 3 * energy**2 + pSq )
-    """
-    preFactor = 1.0
+    preFactor = -8.0 / 3.0 * energy( mEff, momSq, L ) \
+                / ( energy( mEff, momSq, L ) ** 2 \
+                    + ( 2.0 * np.pi / L ) ** 2 * momSq )
+
+    #preFactor = 1.0
+
     avgX = np.zeros( threep.shape )
 
     for t in range( threep.shape[ 1 ] ):
@@ -152,6 +175,11 @@ def calcAvgX_momBoost( threep, twop_tsink, mEff, momSq, L ):
 
     return avgX
 
+
+# Calculate the axial charge gA.
+
+# threep: Three-point functions with last dimension as time
+# twop_tsink: Two-point funtion at Tsink
 
 def calcgA( threep, twop_tsink ):
 
@@ -167,10 +195,20 @@ def calcgA( threep, twop_tsink ):
     return gA
 
 
+# Calculate the cosh form of the two-point functions
+
+# t: 
+# energy:
+# tsink:
+
 def twopCosh( t, energy, tsink ):
 
     return np.exp( - energy * t ) + np.exp( - energy * ( tsink - t ) )
 
+
+# Calcualte the electromagnetic form factor.
+
+# threep:
 
 def calcEMFF( threep, twop, Qsq, mEff, tsink, latticeDim ):
 
