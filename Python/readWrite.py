@@ -694,6 +694,21 @@ def readAvgXFile( threepDir, configList, threep_tokens,
                 exit()                
 
 
+def readTxtFile( filename, columnNum, **kwargs ):
+
+    with open( filename, "r" ) as txtFile:
+
+        lineNum = len( txtFile.readlines() )
+        
+        # Go back to beginning of file
+        
+        txtFile.seek( 0 )
+
+        data = np.array( txtFile.read().split(), **kwargs ).reshape( lineNum, columnNum )
+
+    return data
+
+
 # Reads an ASCII file with two columns where the data of 
 # interest is in the last column. Lines should repeat 
 # over d1 and then d0. Data is stored in an array with 
@@ -729,7 +744,9 @@ def readNthDataCol( filename, N ):
 
         for line in file:
 
-            data.append( line.split() )
+            if line.split():
+
+                data.append( line.split() )
 
     data = np.array( data, dtype=float )
 
@@ -1078,6 +1095,30 @@ def writeFormFactorFile( filename, Qsq, data ):
                     output.write( str( t ).ljust(20) \
                                   + str( Qsq[ q ] ).ljust(20) \
                                   + str( data[ q, b, t ] ) + "\n" )
+
+    print( "Wrote " + filename )
+
+
+# Write an ASCII file with four columns and three repeating dimensions. 
+# The first column is the first repeating dimension which increases by one,
+# the second column is the second repeating dimension which is given,
+# and the third and fourth columns are a set of data pairs.
+
+# filename: Name of file to be written
+# data: 3-D array of data pairs to be written in the third and fourth columns
+# Qsq: 1-D array of data to be written repeatedly in the second column
+
+def writeSVDOutputFile( filename, data, Qsq ):
+
+    with open( filename, "w" ) as output:
+
+        for q in range( len( data ) ):
+
+            for r in range( data[ q ].shape[ 0 ] ):
+                
+                output.write("{:<10}{:<10}{:<20.10}{:<.10}\n".format(r, Qsq[ q ], \
+                                                              data[q][r,0], \
+                                                              data[q][r,1]))
 
     print( "Wrote " + filename )
 

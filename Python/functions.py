@@ -254,19 +254,26 @@ def getConfigList( configListFilename, configDir ):
 
 def processMomList( momLists ):
 
-    # Check that momenta lists are the same across configurations
+    if momLists.ndim > 2:
 
-    momList_0 = momLists[ 0 ].flat
+        if len( momLists ) > 1:
 
-    for ml in momLists[ 1: ]:
+            # Check that momenta lists are the same across configurations
 
-        for i in range( ml.size ):
+            momList_0 = momLists[ 0 ].flat
 
-                assert ml.flat[ i ] == momList_0[ i ], \
-                    "Momenta lists in configuration " + configList[ c ] \
-                    + " do not match"
+            for ml in momLists[ 1: ]:
 
-    momList = momLists[ 0 ]
+                for i in range( ml.size ):
+
+                    assert ml.flat[ i ] == momList_0[ i ], \
+                        "Momenta lists do not match."
+
+        momList = momLists[ 0 ]
+
+    else:
+
+        momList = momLists
 
     # Get indices where each Q^2 begins and ends
 
