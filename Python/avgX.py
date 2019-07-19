@@ -397,11 +397,11 @@ if rank == 0:
         curveOutputFilename \
             = output_template.replace( "*", \
                                        "twop_twoStateFit_curve_" \
-                                       + tsf_range_str )
+                                       + twopFit_str )
         chiSqOutputFilename \
             = output_template.replace( "*", \
                                        "twop_twoStateFit_chiSq_" \
-                                       + tsf_range_str )
+                                       + twopFit_str )
 
     else: # One-state fit
 
@@ -614,7 +614,7 @@ else:
 #################
 # Calculate <x> #
 #################
-    
+
 if rank == 0:
 
     # Average over momenta
@@ -639,12 +639,7 @@ if rank == 0:
                                                           momSq, L )
             else:
 
-                preFactor = np.repeat( -ZvD1 * 8.0 / 3.0 \
-                                       * pq.energy( mEff_fit, momSq, L ) \
-                                       / ( pq.energy( mEff_fit, \
-                                                      momSq, L ) ** 2 \
-                                           + ( 2.0 * np.pi / L ) ** 2 \
-                                           * momSq ), \
+                preFactor = np.repeat( -ZvD1 * 8.0 / 3.0 / mEff_fit, \
                                        T ).reshape( binNum_glob, T )
 
                 if tsf:
@@ -654,20 +649,22 @@ if rank == 0:
                     E0_cp = np.repeat( E0, T ).reshape( binNum_glob, T )
                     E1_cp = np.repeat( E1, T ).reshape( binNum_glob, T )
 
-                    avgX = preFactor * threep_jk[ iflav, its ] \
-                           / fit.twoStateTwop( ts, T, c0_cp, c1_cp, E0_cp, E1_cp )
+                    avgX[ iflav, its ] = preFactor * threep_jk[ iflav, its ] \
+                                         / fit.twoStateTwop( ts, T, \
+                                                             c0_cp, c1_cp, \
+                                                             E0_cp, E1_cp )
         
                 else:
 
                     G_cp = np.repeat( G, T ).reshape( binNum_glob, T )
                     E_cp = np.repeat( E, T ).reshape( binNum_glob, T )
 
-                    avgX = preFactor * threep_jk[ iflav, its ] \
-                           / fit.oneStateTwop( ts, T, G, E )
+                    avgX[ iflav, its ] = preFactor * threep_jk[ iflav, its ] \
+                                         / fit.oneStateTwop( ts, T, G_cp, E_cp )
                     
             #avgX = Z * pq.calcAvgX( threep_jk[ -1 ], \
             #                        twop_jk[ :, ts ], mEff_fit )
-            """
+
     # Average over bins
 
     # avgX_avg[ flav, ts, t ]
@@ -830,7 +827,7 @@ if tsf and rank == 0:
                                                                    E0[ b ], \
                                                                    E1[ b ] )
 
-                        curve[ b, ts, t ] = -4.0 / 3.0 / mEff_fit[ b ] * Z \
+                        curve[ b, ts, t ] = -8.0 / 3.0 / mEff_fit[ b ] * ZvD1 \
                                             * fit.twoStateThreep( ti_curve[ ts, t ], \
                                                                   tsink[ ts ], \
                                                                   T, \
@@ -849,7 +846,7 @@ if tsf and rank == 0:
                     # End loop over insertion time
                 # End loop over tsink
             
-                avgX[ b ] = -4.0 / 3.0 / mEff_fit[ b ] * Z \
+                avgX[ b ] = -8.0 / 3.0 / mEff_fit[ b ] * ZvD1 \
                             * a00[ b ] / c0[ b ]
 
                 # Write curve with constant insertion time = tsink / 2
@@ -888,7 +885,7 @@ if tsf and rank == 0:
     
             # Write output file
 
-            tsf_threep_range_str = tsf_range_str + ".3n" + str( threep_neglect )
+            tsf_threep_range_str = twopFit_str + ".3n" + str( threep_neglect )
 
             avgXOutputFilename \
                 = output_template.replace( "*", \
