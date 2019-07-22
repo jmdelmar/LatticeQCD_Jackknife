@@ -272,7 +272,7 @@ if momSq > 0:
     mpi_fncs.mpiPrint( "Read boosted two-point functions from HDF5 files " \
                        + "in {:.3} seconds".format( time.time() - t0 ), \
                        rank )
-    """
+
     # Remove (+1,-1,+1) from momList and twop_boost_loc
 
     if momSq == 3:
@@ -295,7 +295,7 @@ if momSq > 0:
         momBoostNum = len( momList )
 
     # End if p^2=3
-    """
+
 else:
 
     twop_boost_loc = np.array( [] )
@@ -479,8 +479,6 @@ if rank == 0:
 
 # End if first process
 
-comm.Barrier()
-
 if momSq > 0:
 
     twop_boost = np.zeros( ( momBoostNum, configNum, T ) )
@@ -496,7 +494,7 @@ if rank == 0:
     twop_boost_jk = np.zeros( ( momBoostNum, binNum_glob, T ) )
     threep_jk = np.zeros( ( momBoostNum, flavNum, \
                             tsinkNum, binNum_glob, T ) )
-    avgX = np.zeros( ( momBoostNum, flavNum, \
+    avgX_avgRatio = np.zeros( ( momBoostNum, flavNum, \
                        tsinkNum, binNum_glob, T ) )
 
 else:
@@ -505,7 +503,7 @@ else:
     threep_jk = np.array( [ [ [ None for ts in tsink ] \
                               for f in range( flavNum ) ] \
                             for imom in range( momBoostNum ) ] )
-    avgX = np.array( [ [ [ None for ts in tsink ] \
+    avgX_avgRatio = np.array( [ [ [ None for ts in tsink ] \
                          for f in flav_str ] \
                        for imom in range( momBoostNum ) ] )
 
@@ -622,70 +620,58 @@ for imom in range( momBoostNum ):
 
             if rank == 0:
 
-                avgX[imom,iflav,its]=ZvD1*pq.calcAvgX_momBoost(threep_jk[imom, \
-                                                                         iflav, \
-                                                                         its], \
-                                                               twop_boost_jk[imom, \
-                                                                             :, \
-                                                                             ts], \
-                                                               mEff_fit, \
-                                                               momSq, L )
+                avgX_avgRatio[imom,iflav,its]=ZvD1*pq.calcAvgX_momBoost(threep_jk[imom, \
+                                                                                  iflav, \
+                                                                                  its], \
+                                                                        twop_boost_jk[imom, \
+                                                                                      :, \
+                                                                                      ts], \
+                                                                        mEff_fit, \
+                                                                        momSq, L )
 
         # End loop over flavor
     # End loop over tsink
 # End loop over momenta
-"""
+
 if rank == 0:
         
-    avgX = np.zeros( ( flavNum, tsinkNum, \
-                       binNum_glob, T ) )
+    avgX_avgTwopThreep = np.zeros( ( momBoostNum, flavNum, \
+                                     tsinkNum, \
+                                     binNum_glob, T ) )
 
 else:
 
-    #avgX = np.array( [ [ [ None for ts in tsink ] \
-    #                     for f in flav_str ] \
-    #                   for m in momList ] )
-    avgX = np.array( [ [ None for ts in tsink ] \
-                         for f in flav_str ] )
-"""
+    avgX_avgTwopThreep = np.array( [ [ [ None for ts in tsink ] \
+                                       for f in flav_str ] \
+                                     for m in momList ] )
+
 #################
 # Calculate <x> #
 #################
     
 if rank == 0:
 
-    # Average over momenta
-
-    #avgX = np.average( avgX, axis=0 )
-    #threep_jk = np.average( threep_jk, axis=0 )
-    #twop_boost_jk = np.average( twop_boost_jk, axis=0 )
-    #avgX = np.average( avgX, axis=0 )
     threep_avg = np.average( threep_jk, axis=-2 )
     threep_err = fncs.calcError( threep_jk, binNum_glob, axis=-2 )
+
     twop_boost_avg = np.average( twop_boost_jk, axis=-2 )
     twop_boost_err = fncs.calcError( twop_boost_jk, binNum_glob, axis=-2 )
     
-    # avgX[ flav, ts, b, t ]
+    # avgX[ mom, flav, ts, b, t ]
 
     # Loop over momenta
-    #for imom in range( momBoostNum ):
-    # Loop over tsink
-    for ts, its in zip( tsink, range( tsinkNum ) ) :
-        # Loop over flavor
-        for iflav in range( flavNum ):
+    for imom in range( momBoostNum ):
+        # Loop over tsink
+        for ts, its in zip( tsink, range( tsinkNum ) ) :
+            # Loop over flavor
+            for iflav in range( flavNum ):
                      
-            avgX[imom,iflav,its]=ZvD1*pq.calcAvgX_momBoost(threep_jk[imom,iflav, \
-                                                                     its], \
-                                                           twop_boost_jk[imom,:, \
-                                                                         ts], \
-                                                           mEff_fit, \
-                                                           momSq, L )
-            #avgX[iflav,its]=ZvD1*pq.calcAvgX_momBoost(threep_jk[iflav, \
-                #                                               its], \
-                #                                 twop_boost_jk[:, \
-                #                                               ts], \
-                #                                 mEff_fit, \
-                #                                 momSq, L )
+                avgX_avgTwopThreep[imom,iflav,its]=ZvD1*pq.calcAvgX_momBoost(threep_jk[imom,iflav, \
+                                                                                       its], \
+                                                                             twop_boost_jk[imom,:, \
+                                                                                           ts], \
+                                                                             mEff_fit, \
+                                                                             momSq, L )
     """
             if tsf:
 
@@ -712,10 +698,13 @@ if rank == 0:
     """
     # Average over bins
 
-    # avgX_avg[ flav, ts, t ]
+    # avgX_avg[ mom, flav, ts, t ]
 
-    avgX_avg = np.average( avgX, axis=-2 )
-    avgX_err = fncs.calcError( avgX, binNum_glob, axis=-2 )
+    avgX_avgRatio_avg = np.average( avgX_avgRatio, axis=-2 )
+    avgX_avgRatio_err = fncs.calcError( avgX_avgRatio, binNum_glob, axis=-2 )
+
+    avgX_avgTwopThreep_avg = np.average( avgX_avgTwopThreep, axis=-2 )
+    avgX_avgTwopThreep_err = fncs.calcError( avgX_avgTwopThreep, binNum_glob, axis=-2 )
 
     # Loop over momenta
     for imom in range( momBoostNum ):
@@ -741,19 +730,33 @@ if rank == 0:
                                      threep_err[ imom,iflav, its ] )
 
 
-                avgX_outFilename = output_template.replace( "*", "avgX_" \
-                                                            + flav_str[ iflav ] \
-                                                            + "_tsink" \
-                                                            + str( ts ) + "_" \
-                                                            + fncs.signToString( momList[ imom ][0] ) \
-                                                            + str(momList[ imom ][0]) + "_" \
-                                                            + fncs.signToString( momList[ imom ][1] ) \
-                                                            + str(momList[ imom ][1]) + "_" \
-                                                            + fncs.signToString( momList[ imom ][2] ) \
-                                                            + str(momList[ imom ][2]) )
+                avgX_avgRatio_outFilename = output_template.replace( "*", "avgX_avgRatio_" \
+                                                                     + flav_str[ iflav ] \
+                                                                     + "_tsink" \
+                                                                     + str( ts ) + "_" \
+                                                                     + fncs.signToString( momList[ imom ][0] ) \
+                                                                     + str(momList[ imom ][0]) + "_" \
+                                                                     + fncs.signToString( momList[ imom ][1] ) \
+                                                                     + str(momList[ imom ][1]) + "_" \
+                                                                     + fncs.signToString( momList[ imom ][2] ) \
+                                                                     + str(momList[ imom ][2]) )
+                
+                rw.writeAvgDataFile( avgX_avgRatio_outFilename, avgX_avgRatio_avg[ imom, iflav, its ], \
+                                     avgX_avgRatio_err[ imom,iflav, its ] )
 
-                rw.writeAvgDataFile( avgX_outFilename, avgX_avg[ imom, iflav, its ], \
-                                     avgX_err[ imom,iflav, its ] )
+                avgX_avgTwopThreep_outFilename = output_template.replace( "*", "avgX_avgTwopThreep_" \
+                                                                          + flav_str[ iflav ] \
+                                                                          + "_tsink" \
+                                                                          + str( ts ) + "_" \
+                                                                          + fncs.signToString( momList[ imom ][0] ) \
+                                                                          + str(momList[ imom ][0]) + "_" \
+                                                                          + fncs.signToString( momList[ imom ][1] ) \
+                                                                          + str(momList[ imom ][1]) + "_" \
+                                                                          + fncs.signToString( momList[ imom ][2] ) \
+                                                                          + str(momList[ imom ][2]) )
+
+                rw.writeAvgDataFile( avgX_avgTwopThreep_outFilename, avgX_avgTwopThreep_avg[ imom, iflav, its ], \
+                                     avgX_avgTwopThreep_err[ imom,iflav, its ] )
 
                 ###############
                 # Fit plateau #
@@ -766,38 +769,56 @@ if rank == 0:
                 # Loop over fit ranges
                 for irange in range( len( fitStart ) ):
 
-                    avgX_fit = []
+                    avgX_avgRatio_fit = []
+                    avgX_avgTwopThreep_fit = []
         
                     # Fit each bin
 
-                    for x in avgX[ imom, iflav, its ]:
+                    for x in avgX_avgRatio[ imom, iflav, its ]:
 
-                        avgX_fit.append(float(np.polyfit(range(fitStart[irange], \
+                        avgX_avgRatio_fit.append(float(np.polyfit(range(fitStart[irange], \
+                                                               fitEnd[ irange ] \
+                                                               + 1 ), \
+                                                                  x[ fitStart[ irange ] \
+                                                                     : fitEnd[ irange ] \
+                                                                     + 1 ], \
+                                                                  0, \
+                                                                  w=avgX_avgRatio_err[imom,iflav, its, \
+                                                                                      fitStart[irange] \
+                                                                                      :fitEnd[irange] \
+                                                                                      + 1 ] ) ) )
+
+                    for x in avgX_avgTwopThreep[ imom, iflav, its ]:
+
+                        avgX_avgTwopThreep_fit.append(float(np.polyfit(range(fitStart[irange], \
                                                                fitEnd[ irange ] \
                                                                + 1 ), \
                                                          x[ fitStart[ irange ] \
                                                             : fitEnd[ irange ] \
                                                             + 1 ], \
                                                          0, \
-                                                         w=avgX_err[imom,iflav, its, \
+                                                         w=avgX_avgTwopThreep_err[imom,iflav, its, \
                                                                     fitStart[irange] \
                                                                     :fitEnd[irange] \
                                                                     + 1 ] ) ) )
 
-                    avgX_fit = np.array( avgX_fit )
+                    avgX_avgRatio_fit = np.array( avgX_avgRatio_fit )
+                    avgX_avgTwopThreep_fit = np.array( avgX_avgTwopThreep_fit )
 
                     # Average over bins
 
-                    avgX_fit_avg = np.average( avgX_fit )
+                    avgX_avgRatio_fit_avg = np.average( avgX_avgRatio_fit )
+                    avgX_avgRatio_fit_err = fncs.calcError( avgX_avgRatio_fit, binNum_glob )
                 
-                    avgX_fit_err = fncs.calcError( avgX_fit, binNum_glob )
+                    avgX_avgTwopThreep_fit_avg = np.average( avgX_avgTwopThreep_fit )
+                    avgX_avgTwopThreep_fit_err = fncs.calcError( avgX_avgTwopThreep_fit, binNum_glob )
                 
                     # Write output files
 
-                    avgX_fit_outFilename = ""
+                    avgX_avgRatio_fit_outFilename = ""
 
-                    avgX_fit_outFilename=output_template.replace("*", \
-                                                                 "avgX_" \
+                    avgX_avgRatio_fit_outFilename=output_template.replace("*", \
+                                                                 "avgX_avgRatio_" \
                                                                  + flav_str[iflav]\
                                                                  + "_fit_" \
                                                                  "tsink" \
@@ -813,7 +834,32 @@ if rank == 0:
                                                                  + fncs.signToString( momList[ imom ][2] ) \
                                                                  + str(momList[ imom ][2]) )
 
-                    rw.writeFitDataFile( avgX_fit_outFilename, avgX_fit_avg, avgX_fit_err, fitStart[ irange ], fitEnd[ irange ] )
+                    rw.writeFitDataFile( avgX_avgRatio_fit_outFilename, avgX_avgRatio_fit_avg, avgX_avgRatio_fit_err, fitStart[ irange ], fitEnd[ irange ] )
+
+                    avgX_avgTwopThreep_fit_outFilename = ""
+
+                    avgX_avgTwopThreep_fit_outFilename=output_template.replace("*", \
+                                                                 "avgX_avgTwopThreep_" \
+                                                                 + flav_str[iflav]\
+                                                                 + "_fit_" \
+                                                                 "tsink" \
+                                                                 + str( ts ) \
+                                                                 + "_" \
+                                                                 + str(fitStart[irange]) \
+                                                                 + "_" \
+                                                                 + str(fitEnd[irange]) + "_" \
+                                                                 + fncs.signToString( momList[ imom ][0] ) \
+                                                                 + str(momList[ imom ][0]) + "_" \
+                                                                 + fncs.signToString( momList[ imom ][1] ) \
+                                                                 + str(momList[ imom ][1]) + "_" \
+                                                                 + fncs.signToString( momList[ imom ][2] ) \
+                                                                 + str(momList[ imom ][2]) )
+
+                    rw.writeFitDataFile( avgX_avgTwopThreep_fit_outFilename, \
+                                         avgX_avgTwopThreep_fit_avg, \
+                                         avgX_avgTwopThreep_fit_err, \
+                                         fitStart[ irange ], \
+                                         fitEnd[ irange ] )
 
                 # End loop over fit ranges
             # End loop over flavor
@@ -835,7 +881,38 @@ if rank == 0:
        
     # End loop over momenta
 
-    """
+    avgX_avgTwopThreep = np.zeros( ( flavNum, \
+                                     tsinkNum, \
+                                     binNum_glob, T ) )
+
+    # Average over momenta
+
+    avgX_avgRatio = np.average( avgX_avgRatio, axis=0 )
+    threep_jk = np.average( threep_jk, axis=0 )
+    twop_boost_jk = np.average( twop_boost_jk, axis=0 )
+    
+    # Loop over tsink
+    for ts, its in zip( tsink, range( tsinkNum ) ) :
+        # Loop over flavor
+        for iflav in range( flavNum ):
+
+            avgX_avgTwopThreep[iflav,its]=ZvD1*pq.calcAvgX_momBoost(threep_jk[iflav, \
+                                                                              its], \
+                                                                    twop_boost_jk[:, \
+                                                                                  ts], \
+                                                                    mEff_fit, \
+                                                                    momSq, L )
+
+    # Average over bins
+
+    # avgX_avg[ flav, ts, t ]
+
+    avgX_avgRatio_avg = np.average( avgX_avgRatio, axis=-2 )
+    avgX_avgRatio_err = fncs.calcError( avgX_avgRatio, binNum_glob, axis=-2 )
+
+    avgX_avgTwopThreep_avg = np.average( avgX_avgTwopThreep, axis=-2 )
+    avgX_avgTwopThreep_err = fncs.calcError( avgX_avgTwopThreep, binNum_glob, axis=-2 )
+
     # Loop over tsink
     for ts, its in zip( tsink, range( tsinkNum ) ) :
         # Loop over flavor
@@ -843,13 +920,19 @@ if rank == 0:
 
             # Write <x> output files
     
-            avgX_outFilename = output_template.replace( "*", "avgX_" \
+            avgX_avgRatio_outFilename = output_template.replace( "*", "avgX_avgRatio_" \
                                                         + flav_str[ iflav ] \
                                                         + "_tsink" \
                                                         + str( ts ) )
+            rw.writeAvgDataFile( avgX_avgRatio_outFilename, avgX_avgRatio_avg[ iflav, its ], \
+                                 avgX_avgRatio_err[ iflav, its ] )
 
-            rw.writeAvgDataFile( avgX_outFilename, avgX_avg[ iflav, its ], \
-                                 avgX_err[ iflav, its ] )
+            avgX_avgTwopThreep_outFilename = output_template.replace( "*", "avgX_avgTwopThreep_" \
+                                                        + flav_str[ iflav ] \
+                                                        + "_tsink" \
+                                                        + str( ts ) )
+            rw.writeAvgDataFile( avgX_avgTwopThreep_outFilename, avgX_avgTwopThreep_avg[ iflav, its ], \
+                                 avgX_avgTwopThreep_err[ iflav, its ] )
 
             ###############
             # Fit plateau #
@@ -862,38 +945,54 @@ if rank == 0:
             # Loop over fit ranges
             for irange in range( len( fitStart ) ):
 
-                avgX_fit = []
+                avgX_avgRatio_fit = []
+                avgX_avgTwopThreep_fit = []
         
                 # Fit each bin
 
-                for x in avgX[ iflav, its ]:
+                for x in avgX_avgRatio[ iflav, its ]:
 
-                    avgX_fit.append(float(np.polyfit(range(fitStart[irange], \
+                    avgX_avgRatio_fit.append(float(np.polyfit(range(fitStart[irange], \
                                                            fitEnd[ irange ] \
                                                            + 1 ), \
                                                      x[ fitStart[ irange ] \
                                                         : fitEnd[ irange ] \
                                                         + 1 ], \
                                                      0, \
-                                                     w=avgX_err[iflav, its, \
+                                                     w=avgX_avgRatio_err[iflav, its, \
                                                                 fitStart[irange] \
                                                                 :fitEnd[irange] \
                                                                 + 1 ] ) ) )
 
-                avgX_fit = np.array( avgX_fit )
+                for x in avgX_avgTwopThreep[ iflav, its ]:
+
+                    avgX_avgTwopThreep_fit.append(float(np.polyfit(range(fitStart[irange], \
+                                                           fitEnd[ irange ] \
+                                                           + 1 ), \
+                                                     x[ fitStart[ irange ] \
+                                                        : fitEnd[ irange ] \
+                                                        + 1 ], \
+                                                     0, \
+                                                     w=avgX_avgTwopThreep_err[iflav, its, \
+                                                                fitStart[irange] \
+                                                                :fitEnd[irange] \
+                                                                + 1 ] ) ) )
+
+                avgX_avgRatio_fit = np.array( avgX_avgRatio_fit )
+                avgX_avgTwopThreep_fit = np.array( avgX_avgTwopThreep_fit )
 
                 # Average over bins
 
-                avgX_fit_avg = np.average( avgX_fit )
+                avgX_avgRatio_fit_avg = np.average( avgX_avgRatio_fit )
+                avgX_avgRatio_fit_err = fncs.calcError( avgX_avgRatio_fit, binNum_glob )
                 
-                avgX_fit_err = fncs.calcError( avgX_fit, binNum_glob )
+                avgX_avgTwopThreep_fit_avg = np.average( avgX_avgTwopThreep_fit )
+                avgX_avgTwopThreep_fit_err = fncs.calcError( avgX_avgTwopThreep_fit, binNum_glob )
                 
                 # Write output files
 
-                avgX_fit_outFilename = ""
-
-                avgX_fit_outFilename=output_template.replace("*", \
-                                                             "avgX_" \
+                avgX_avgRatio_fit_outFilename=output_template.replace("*", \
+                                                             "avgX_avgRatio_" \
                                                              + flav_str[iflav]\
                                                              + "_fit_" \
                                                              "tsink" \
@@ -902,15 +1001,33 @@ if rank == 0:
                                                              + str(fitStart[irange]) \
                                                              + "_" \
                                                              + str(fitEnd[irange]))
+                rw.writeFitDataFile( avgX_avgRatio_fit_outFilename, \
+                                     avgX_avgRatio_fit_avg, \
+                                     avgX_avgRatio_fit_err, \
+                                     fitStart[ irange ], \
+                                     fitEnd[ irange ] )
 
-                rw.writeFitDataFile( avgX_fit_outFilename, avgX_fit_avg, avgX_fit_err, fitStart[ irange ], fitEnd[ irange ] )
+                avgX_avgTwopThreep_fit_outFilename=output_template.replace("*", \
+                                                             "avgX_avgTwopThreep_" \
+                                                             + flav_str[iflav]\
+                                                             + "_fit_" \
+                                                             "tsink" \
+                                                             + str( ts ) \
+                                                             + "_" \
+                                                             + str(fitStart[irange]) \
+                                                             + "_" \
+                                                             + str(fitEnd[irange]))
+                rw.writeFitDataFile( avgX_avgTwopThreep_fit_outFilename, \
+                                     avgX_avgTwopThreep_fit_avg, \
+                                     avgX_avgTwopThreep_fit_err, \
+                                     fitStart[ irange ], \
+                                     fitEnd[ irange ] )
             
             # End loop over fit ranges
         # End loop over flavor
     # End loop over tsink
-    """
+
 # End if first process
-comm.Barrier()
 
 ##################
 # Two-state Fit  #
