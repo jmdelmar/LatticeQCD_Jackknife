@@ -14,7 +14,7 @@ ratioNum = 10
 
 particle_list = [ "pion", "kaon", "nucleon" ]
 
-format_list = [ "gpu", "cpu" ]
+format_list = [ "gpu", "cpu", "ASCII" ]
 
 #########################
 # Parse input arguments #
@@ -67,7 +67,7 @@ parser.add_argument( "-f", "--data_format", action='store', \
 parser.add_argument( "-c", "--config_list", action='store', \
                      type=str, default="" )
 
-parser.add_argument( "-m", "--momenta_list", action='store', \
+parser.add_argument( "-m", "--momentum_list", action='store', \
                      type=str, default="" )
 
 args = parser.parse_args()
@@ -162,7 +162,7 @@ else: # particle == nulceon
 
 if args.momentum_list:
 
-    momList = rw.readTxtFile( momList_filename, 3, dtype=int )
+    momList = rw.readTxtFile( args.momentum_list, dtype=int )
 
     if dataFormat == "ASCII":
         
@@ -270,7 +270,7 @@ finalMomNum = len( finalMomList )
 ############################
 
 # Zero momentum two-point functions
-# twop[ c, t ]
+# twop[ c, q, t ]
 
 t0 = time.time()
 
@@ -278,63 +278,44 @@ if dataFormat == "cpu":
 
     twop_loc = rw.getDatasets( twopDir, configList_loc, twop_template, \
                                "msq0000", "arr" )[ :, 0, 0, :, 0 ].real
+    # CJL: add non-zero Q functionality
+
+elif dataFormat == "ASCII":
+
+    # Determine length of time dimension.
+    # 2nd output is not really configuration number because
+    # files are not formatted like that.
+
+    T, dummy = rw.detTimestepAndConfigNum( twopDir + \
+                                           twop_template.replace( "*", \
+                                                                  configList_loc[0] ) )
+
+    # Get 5th column of two-point files for each configuration
+
+    twop_loc = rw.getTxtData( twopDir, \
+                              configList_loc, \
+                              twop_template, \
+                              dtype=float).reshape( len( configList_loc ), \
+                                                    momNum, T, 6 )[ ..., 4 ]
 
 else:
         
     twop_loc = rw.getDatasets( twopDir, configList_loc, \
                                twop_template, \
                                "twop" )[ :, 0, 0, ..., 0, 0 ]
+    # CJL: Have to check which axis Q is on
 
-# CJL: Write function to read ASCII format
 
 twop_loc = np.asarray( twop_loc, order='c' )
 
 mpi_fncs.mpiPrint( "Read two-point functions from HDF5 files " \
                    + "in {:.3} seconds".format( time.time() - t0 ), rank )
 
-# Boosted two-point functions
-# twop_boost[ mom, c, t ]
-
-if momSq > 0:
-
-    t0 = time.time()
-
-    if dataFormat == "cpu":
-
-        twop_boost_loc = rw.getDatasets( twopDir, configList_loc, \
-                                         twop_template, \
-                                         "msq{:0>4}".format( momSq ), \
-                                         "arr" )[ :, 0, 0, ... ].real
-
-    else:
-        
-        twop_boost_loc = rw.getDatasets( twopDir, configList_loc, \
-                                         twop_template, \
-                                         "twop" )[ :, 0, 0, ..., 0, 0 ]
-
-    # twop_boost_loc[ c, t, mom ] -> twop_boost_loc [mom, c, t ]
-    
-    twop_boost_loc = np.moveaxis( twop_boost_loc, -1, 0 )
-
-    twop_boost_loc = np.asarray( twop_boost_loc, order='c' )
-
-    mpi_fncs.mpiPrint( "Read boosted two-point functions from HDF5 files " \
-                       + "in {:.3} seconds".format( time.time() - t0 ), \
-                       rank )
-
-else:
-
-    twop_boost_loc = np.array( [] )
-
 T = twop_loc.shape[ -1 ]
-
-# Time dimension length after fold
-
-T_fold = T // 2 + 1
 
 # Gather two-point functions
 
-twop = np.zeros( ( configNum, T ) )
+twop = np.zeros( ( configNum, momNum, T ), dtype=float )
 
 comm.Allgather( twop_loc, twop )
 
@@ -342,13 +323,16 @@ comm.Allgather( twop_loc, twop )
 # Jackknife and fold two-point functions #
 ##########################################
 
+mpi_fncs.mpiPrint(twop[10,0,:],rank)
+exit()
+
 # Time dimension length after fold
 
 T_fold = T // 2 + 1
 
 if binNum_loc:
 
-    twop_jk_loc = fncs.jackknifeBinSubset( twop, binSize, bin_glob[ rank ] )
+    twop_jk_loc = fncs.jackknifeBinSubset( twop[:,0,:], binSize, bin_glob[ rank ] )
 
     # twop_fold[ b, t ]
 
@@ -364,15 +348,13 @@ else:
 
     mEff_loc = np.array( [] )
 
-recvCount, recvOffset = mpi_fncs.recvCountOffset( procNum, binNum )
-
 ##################
 # Effective mass #
 ##################
 
 if rank == 0:
 
-    twop_jk = np.zeros( ( binNum_glob, T ) )
+    twop_jk = np.zeros( ( binNum_glob, momNum, T ) )
     mEff = np.zeros( ( binNum_glob, T_fold ) )
 
 else:
@@ -380,11 +362,13 @@ else:
     twop_jk = None
     mEff = None
 
-comm.Gatherv( twop_jk_loc, [ twop_jk, recvCount * T, \
-                             recvOffset * T, MPI.DOUBLE ], root=0 )
+recvCount, recvOffset = mpi_fncs.recvCountOffset( procNum, binNum )
+
+comm.Gatherv( twop_jk_loc, [ twop_jk, recvCount * momNum * T, \
+                             recvOffset * momNum * T, MPI.DOUBLE ], root=0 )
 comm.Gatherv( mEff_loc, [ mEff, recvCount * T_fold, \
                           recvOffset * T_fold, MPI.DOUBLE ], root=0 )
-
+exit()
 if rank == 0:
 
     # mEff_avg[ t ]

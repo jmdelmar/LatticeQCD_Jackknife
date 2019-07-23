@@ -1,4 +1,5 @@
 import numpy as np
+import mpi_functions as mpi_fncs
 
 def energy( mEff, Qsq, L ):
 
@@ -82,6 +83,8 @@ def mEffFromSymTwop( twop ):
     mEff = np.zeros( twop.shape )
 
     for t in range( 1, halfT - 1 ):
+
+        #mpi_fncs.mpiPrint( "t={}: twop[t-1]={}, twop[t+1]={}, twop[T/2-1]={}".format(t,twop[...,t-1]
 
         mEff[ ..., t ] = 1.0 / 2.0 \
                          * np.log( ( twop[ ..., t - 1 ] \

@@ -694,17 +694,43 @@ def readAvgXFile( threepDir, configList, threep_tokens,
                 exit()                
 
 
-def readTxtFile( filename, columnNum, **kwargs ):
+def getTxtData( configDir, configList, fn_template, **kwargs ):
+
+    configNum = len( configList )
+
+    data = fncs.initEmptyList( configNum, 1 )
+
+    # Loop over config indices
+    for c in range( configNum ):
+        
+        filename = configDir + fn_template.replace( "*", configList[ c ] )
+
+        # Get data
+
+        data[ c ] = readTxtFile( filename, **kwargs )
+
+    # End loop over configs
+
+    return np.array( data )
+
+
+def readTxtFile( filename, **kwargs ):
 
     with open( filename, "r" ) as txtFile:
 
-        lineNum = len( txtFile.readlines() )
-        
+        lines = txtFile.readlines()
+
+        lineNum = len( lines )
+
+        columnNum = len( lines[0].split() )
+
         # Go back to beginning of file
         
         txtFile.seek( 0 )
 
-        data = np.array( txtFile.read().split(), **kwargs ).reshape( lineNum, columnNum )
+        data = np.array( txtFile.read().split(), \
+                         **kwargs ).reshape( lineNum, \
+                                             columnNum )
 
     return data
 
