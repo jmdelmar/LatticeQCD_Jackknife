@@ -4,6 +4,7 @@ import numpy as np
 from os import listdir as ls
 from glob import glob
 import functions as fncs
+import mpi_functions as mpi_fncs
 
 
 #######################
@@ -352,11 +353,6 @@ def getHDF5File_wNames( configDir, configList, fn_template, \
     return dataset, datasetName
 
 
-########################
-# ASCII read functions #
-########################
-
-
 # Get the real part of gxDx, gyDy, gzDz, and gtDt
 # three-point functions at zero-momentum
 
@@ -370,7 +366,7 @@ def getHDF5File_wNames( configDir, configList, fn_template, \
 #                             keyword
 
 def readAvgXFile( threepDir, configList, threep_tokens,
-                   ts, momList, particle, dataFormat, **kwargs ):
+                  ts, momList, particle, dataFormat, **kwargs ):
 
     # Set filename template
 
@@ -692,6 +688,640 @@ def readAvgXFile( threepDir, configList, threep_tokens,
                     + particle + " not supported." )
 
                 exit()                
+
+
+# Get the real part of gxDx, gyDy, gzDz, and gtDt
+# three-point functions at zero-momentum
+
+# threepDir: Head directory which contains sub-directories
+# configList: List of sub-directory names
+# threep_template: Filename template
+# ts: Tsink
+# particle: Which particle to do
+# dataFormat: Which format the data files to be read are in
+# dsetname (kwarg, optional): List of datasets to read. Overrides
+#                             keyword
+
+def readAvgX2File( threepDir, configList, threep_tokens,
+                   ts, momList, particle, dataFormat, comm, **kwargs ):
+
+    # Set filename template
+
+    if dataFormat == "cpu":
+        
+        threep_template = threep_tokens[0] + str(ts) \
+                          + threep_tokens[1] \
+                          + fncs.signToString( momList[0] ) \
+                          + str(momList[0]) + "_" \
+                          + fncs.signToString( momList[1] ) \
+                          + str(momList[1]) + "_" \
+                          + fncs.signToString( momList[2] ) \
+                          + str(momList[2])
+
+    else:
+
+        threep_template = threep_tokens[0] + \
+                          fncs.signToString( momList[0] ) \
+                          + str(momList[0]) + "_" \
+                          + fncs.signToString( momList[1] ) \
+                          + str(momList[1]) + "_" \
+                          + fncs.signToString( momList[2] ) \
+                          + str(momList[2]) \
+                          + threep_tokens[1]
+
+    if particle == "nucleon":
+        """
+        if dataFormat == "cpu":
+
+            filename_u_gxDx = threep_template + str( ts ) + ".up.h5"
+
+            threep_u_gxDx = getDatasets( threepDir, \
+                                            configList, \
+                                            filename_u_gxDx, \
+                                            "=der:gxDx:sym=", \
+                                            "msq0000", \
+                                            "arr" )[ :, 0, 0, :, 0 ].real
+
+            filename_u_gyDy = threep_template + str( ts ) + ".up.h5"
+
+            threep_u_gyDy = getDatasets( threepDir, \
+                                            configList, \
+                                            filename_u_gyDy, \
+                                            "=der:gyDy:sym=", \
+                                            "msq0000", \
+                                            "arr" )[ :, 0, 0, :, 0 ].real
+
+            filename_u_gzDz = threep_template + str( ts ) + ".up.h5"
+
+            threep_u_gzDz = getDatasets( threepDir, \
+                                            configList, \
+                                            filename_u_gzDz, \
+                                            "=der:gzDz:sym=", \
+                                            "msq0000", \
+                                            "arr" )[ :, 0, 0, :, 0 ].real
+
+            filename_u_gtDt = threep_template + str( ts ) + ".up.h5"
+
+            threep_u_gtDt = getDatasets( threepDir, \
+                                            configList, \
+                                            filename_u_gtDt, \
+                                            "=der:g0D0:sym=", \
+                                            "msq0000", \
+                                            "arr" )[ :, 0, 0, :, 0 ].real
+
+            filename_d_gxDx = threep_template + str( ts ) + ".dn.h5"
+
+            threep_d_gxDx = getDatasets( threepDir, \
+                                            configList, \
+                                            filename_d_gxDx, \
+                                            "=der:gxDx:sym=", \
+                                            "msq0000", \
+                                            "arr" )[ :, 0, 0, :, 0 ].real
+
+            filename_d_gyDy = threep_template + str( ts ) + ".dn.h5"
+
+            threep_d_gyDy = getDatasets( threepDir, \
+                                            configList, \
+                                            filename_d_gyDy, \
+                                            "=der:gyDy:sym=", \
+                                            "msq0000", \
+                                            "arr" )[ :, 0, 0, :, 0 ].real
+
+            filename_d_gzDz = threep_template + str( ts ) + ".dn.h5"
+
+            threep_d_gzDz = getDatasets( threepDir, \
+                                            configList, \
+                                            filename_d_gzDz, \
+                                            "=der:gzDz:sym=", \
+                                            "msq0000", \
+                                            "arr" )[ :, 0, 0, :, 0 ].real
+
+            filename_d_gtDt = threep_template + str( ts ) + ".dn.h5"
+
+            threep_d_gtDt = getDatasets( threepDir, \
+                                            configList, \
+                                            filename_d_gtDt, \
+                                            "=der:g0D0:sym=", \
+                                            "msq0000", \
+                                            "arr" )[ :, 0, 0, :, 0 ].real
+            
+            threep_gxDx = threep_u_gxDx - threep_d_gxDx
+
+            threep_gyDy = threep_u_gyDy - threep_d_gyDy
+
+            threep_gzDz = threep_u_gzDz - threep_d_gzDz
+
+            threep_gtDt = threep_u_gtDt - threep_d_gtDt
+
+            return [ threep_gxDx, threep_gyDy, threep_gzDz, threep_gtDt ]
+
+        else:
+
+            print( "GPU format not supported for nucleon, yet." )
+
+            exit()
+        """
+        mpi_fncs.mpiPrintError( "Error (readWrite.readAvgX2File): " \
+                                + "Nucleon not supported, yet.", comm )
+    else: # Particle is meson
+        
+        if dataFormat == "gpu":
+            """
+            threep_gxDx = getDatasets( threepDir, \
+                                          configList, \
+                                          threep_template, \
+                                          "tsink_" + str( ts ), \
+                                          "oneD", \
+                                          "dir_00", \
+                                          "up", \
+                                          "threep" )[ :, 0, 0, ..., 0, 1, 0 ]
+
+            threep_gyDy = getDatasets( threepDir, \
+                                          configList, \
+                                          threep_template, \
+                                          "tsink_" + str( ts ), \
+                                          "oneD", \
+                                          "dir_01", \
+                                          "up", \
+                                          "threep" )[ :, 0, 0, ..., 0, 2, 0 ]
+    
+            threep_gzDz = getDatasets( threepDir, \
+                                          configList, \
+                                          threep_template, \
+                                          "tsink_" + str( ts ), \
+                                          "oneD", \
+                                          "dir_02", \
+                                          "up", \
+                                          "threep" )[ :, 0, 0, ..., 0, 3, 0 ]
+
+            threep_gtDt = getDatasets( threepDir, \
+                                       configList, \
+                                       threep_template, \
+                                       "tsink_" + str( ts ), \
+                                       "oneD", \
+                                       "dir_03", \
+                                       "up", \
+                                       "threep" )[ :, 0, 0, ..., 0, 4, 0 ]
+
+            threep_s_gxDx = np.array( [] )
+            
+            threep_s_gyDy = np.array( [] )
+        
+            threep_s_gzDz = np.array( [] )
+    
+            threep_s_gtDt = np.array( [] )
+
+            if particle == "kaon":
+            
+                threep_s_gxDx = getDatasets( threepDir, \
+                                                configList, \
+                                                threep_template, \
+                                                "tsink_" + str( ts ), \
+                                                "oneD", \
+                                                "dir_00", \
+                                                "strange", \
+                                                "threep" )[ :, 0, 0, ..., \
+                                                            0, 1, 0 ]
+
+                threep_s_gyDy = getDatasets( threepDir, \
+                                                configList, \
+                                                threep_template, \
+                                                "tsink_" + str( ts ), \
+                                                "oneD", \
+                                                "dir_01", \
+                                                "strange", \
+                                                "threep" )[ :, 0, 0, ..., \
+                                                            0, 2, 0 ]
+    
+                threep_s_gzDz = getDatasets( threepDir, \
+                                                configList, \
+                                                threep_template, \
+                                                "tsink_" + str( ts ), \
+                                                "oneD", \
+                                                "dir_02", \
+                                                "strange", \
+                                                "threep" )[ :, 0, 0, ..., \
+                                                            0, 3, 0 ]
+
+                threep_s_gtDt = getDatasets( threepDir, \
+                                                configList, \
+                                                threep_template, \
+                                                "tsink_" + str( ts ), \
+                                                "oneD", \
+                                                "dir_03", \
+                                                "strange", \
+                                                "threep" )[ :, 0, 0, ..., \
+                                                            0, 4, 0 ]
+            
+                return [ threep_gxDx, threep_gyDy, \
+                         threep_gzDz, threep_gtDt, \
+                         threep_s_gxDx, threep_s_gyDy, \
+                         threep_s_gzDz, threep_s_gtDt ]
+
+            elif particle == "pion": 
+
+                return [ threep_gxDx, threep_gyDy, \
+                         threep_gzDz, threep_gtDt ]
+
+            else: 
+
+                print( "Error (readAvgXFile): Particle " \
+                    + particle + " not supported." )
+
+                exit()                
+            """
+            mpi_fncs.mpiPrintError( "Error (readWrite.readAvgX2File): " \
+                                    + "GPU format not supported, yet.", \
+                                    comm )
+
+        elif dataFormat == "cpu":
+
+            filename = threep_template + ".up.h5"
+
+            dsetname_pre = "/thrp/ave16/P0/dt{}/up/".format( ts )
+
+            dsetname_insertion = [ "der2:g0DxDy", \
+                                   "der2:g0DxDz", \
+                                   "der2:g0DyDz" ]
+
+            dsetname_post = "/msq0000/arr"
+
+            threep_g0DxDy = getDatasets( threepDir, \
+                                         configList, \
+                                         filename, \
+                                         dsetname=[ dsetname_pre \
+                                                    + dsetname_insertion[ 0 ] \
+                                                    + dsetname_post ] )[ :, 0, 0, \
+                                                                         :, 0 ].real
+            threep_g0DxDz = getDatasets( threepDir, \
+                                         configList, \
+                                         filename, \
+                                         dsetname=[ dsetname_pre \
+                                                    + dsetname_insertion[ 1 ] \
+                                                    + dsetname_post ] )[ :, 0, 0, \
+                                                                         :, 0 ].real
+            threep_g0DyDz= getDatasets( threepDir, \
+                                        configList, \
+                                        filename, \
+                                        dsetname=[ dsetname_pre \
+                                                   + dsetname_insertion[ 2 ] \
+                                                   + dsetname_post ] )[ :, 0, 0, \
+                                                                        :, 0 ].real
+            """
+            threep_g0DxDy = getDatasets( threepDir, \
+                                         configList, \
+                                         filename, \
+                                         dsetname=[ dsetname_pre \
+                                                    + dsetname_insertion[ 0 ] \
+                                                    + dsetname_post ] )[ :, 0, 0, \
+                                                                         :, 0 ].imag
+            threep_g0DxDz = getDatasets( threepDir, \
+                                         configList, \
+                                         filename, \
+                                         dsetname=[ dsetname_pre \
+                                                    + dsetname_insertion[ 1 ] \
+                                                    + dsetname_post ] )[ :, 0, 0, \
+                                                                         :, 0 ].imag
+            threep_g0DyDz= getDatasets( threepDir, \
+                                        configList, \
+                                        filename, \
+                                        dsetname=[ dsetname_pre \
+                                                   + dsetname_insertion[ 2 ] \
+                                                   + dsetname_post ] )[ :, 0, 0, \
+                                                                        :, 0 ].imag
+            """
+            if particle == "kaon":
+            
+                filename_s = threep_template + ".strange.h5"
+
+                dsetname_s_pre = "/thrp/ave16/P0/dt{}/strange/".format( ts )
+
+                threep_s_g0DxDy = getDatasets( threepDir, \
+                                               configList, \
+                                               filename_s, \
+                                               dsetname=[ dsetname_s_pre \
+                                                          + dsetname_insertion[ 0 ] \
+                                                          + dsetname_post ] )[ :, 0, 0, :, 0 ].real
+                threep_s_g0DxDz = getDatasets( threepDir, \
+                                               configList, \
+                                               filename_s, \
+                                               dsetname=[ dsetname_s_pre \
+                                                          + dsetname_insertion[ 1 ] \
+                                                          + dsetname_post ] )[ :, 0, 0, :, 0 ].real
+                threep_s_g0DyDz = getDatasets( threepDir, \
+                                               configList, \
+                                               filename_s, \
+                                               dsetname=[ dsetname_s_pre \
+                                                          + dsetname_insertion[ 2 ] \
+                                                          + dsetname_post ] )[ :, 0, 0, :, 0 ].real
+
+                return [ threep_g0DxDy, threep_g0DxDz, \
+                         threep_g0DyDz, \
+                         threep_s_g0DxDy, threep_s_g0DxDz, \
+                         threep_s_g0DyDz ]
+
+            elif particle == "pion": 
+
+                return [ threep_g0DxDy, threep_g0DxDz, \
+                         threep_g0DyDz ]
+
+            else: 
+
+                mpi_fncs.mpiPrintErr( "Error (readAvgX2File): Particle " \
+                    + particle + " not supported.", comm )
+
+
+# Get the real part of gxDx, gyDy, gzDz, and gtDt
+# three-point functions at zero-momentum
+
+# threepDir: Head directory which contains sub-directories
+# configList: List of sub-directory names
+# threep_template: Filename template
+# ts: Tsink
+# particle: Which particle to do
+# dataFormat: Which format the data files to be read are in
+# dsetname (kwarg, optional): List of datasets to read. Overrides
+#                             keyword
+
+def readAvgX3File( threepDir, configList, threep_tokens,
+                   ts, momList, particle, dataFormat, comm, **kwargs ):
+
+    # Set filename template
+
+    if dataFormat == "cpu":
+        
+        threep_template = threep_tokens[0] + str(ts) \
+                          + threep_tokens[1] \
+                          + fncs.signToString( momList[0] ) \
+                          + str(momList[0]) + "_" \
+                          + fncs.signToString( momList[1] ) \
+                          + str(momList[1]) + "_" \
+                          + fncs.signToString( momList[2] ) \
+                          + str(momList[2])
+
+    else:
+
+        threep_template = threep_tokens[0] + \
+                          fncs.signToString( momList[0] ) \
+                          + str(momList[0]) + "_" \
+                          + fncs.signToString( momList[1] ) \
+                          + str(momList[1]) + "_" \
+                          + fncs.signToString( momList[2] ) \
+                          + str(momList[2]) \
+                          + threep_tokens[1]
+
+    if particle == "nucleon":
+        """
+        if dataFormat == "cpu":
+
+            filename_u_gxDx = threep_template + str( ts ) + ".up.h5"
+
+            threep_u_gxDx = getDatasets( threepDir, \
+                                            configList, \
+                                            filename_u_gxDx, \
+                                            "=der:gxDx:sym=", \
+                                            "msq0000", \
+                                            "arr" )[ :, 0, 0, :, 0 ].real
+
+            filename_u_gyDy = threep_template + str( ts ) + ".up.h5"
+
+            threep_u_gyDy = getDatasets( threepDir, \
+                                            configList, \
+                                            filename_u_gyDy, \
+                                            "=der:gyDy:sym=", \
+                                            "msq0000", \
+                                            "arr" )[ :, 0, 0, :, 0 ].real
+
+            filename_u_gzDz = threep_template + str( ts ) + ".up.h5"
+
+            threep_u_gzDz = getDatasets( threepDir, \
+                                            configList, \
+                                            filename_u_gzDz, \
+                                            "=der:gzDz:sym=", \
+                                            "msq0000", \
+                                            "arr" )[ :, 0, 0, :, 0 ].real
+
+            filename_u_gtDt = threep_template + str( ts ) + ".up.h5"
+
+            threep_u_gtDt = getDatasets( threepDir, \
+                                            configList, \
+                                            filename_u_gtDt, \
+                                            "=der:g0D0:sym=", \
+                                            "msq0000", \
+                                            "arr" )[ :, 0, 0, :, 0 ].real
+
+            filename_d_gxDx = threep_template + str( ts ) + ".dn.h5"
+
+            threep_d_gxDx = getDatasets( threepDir, \
+                                            configList, \
+                                            filename_d_gxDx, \
+                                            "=der:gxDx:sym=", \
+                                            "msq0000", \
+                                            "arr" )[ :, 0, 0, :, 0 ].real
+
+            filename_d_gyDy = threep_template + str( ts ) + ".dn.h5"
+
+            threep_d_gyDy = getDatasets( threepDir, \
+                                            configList, \
+                                            filename_d_gyDy, \
+                                            "=der:gyDy:sym=", \
+                                            "msq0000", \
+                                            "arr" )[ :, 0, 0, :, 0 ].real
+
+            filename_d_gzDz = threep_template + str( ts ) + ".dn.h5"
+
+            threep_d_gzDz = getDatasets( threepDir, \
+                                            configList, \
+                                            filename_d_gzDz, \
+                                            "=der:gzDz:sym=", \
+                                            "msq0000", \
+                                            "arr" )[ :, 0, 0, :, 0 ].real
+
+            filename_d_gtDt = threep_template + str( ts ) + ".dn.h5"
+
+            threep_d_gtDt = getDatasets( threepDir, \
+                                            configList, \
+                                            filename_d_gtDt, \
+                                            "=der:g0D0:sym=", \
+                                            "msq0000", \
+                                            "arr" )[ :, 0, 0, :, 0 ].real
+            
+            threep_gxDx = threep_u_gxDx - threep_d_gxDx
+
+            threep_gyDy = threep_u_gyDy - threep_d_gyDy
+
+            threep_gzDz = threep_u_gzDz - threep_d_gzDz
+
+            threep_gtDt = threep_u_gtDt - threep_d_gtDt
+
+            return [ threep_gxDx, threep_gyDy, threep_gzDz, threep_gtDt ]
+
+        else:
+
+            print( "GPU format not supported for nucleon, yet." )
+
+            exit()
+        """
+        mpi_fncs.mpiPrintError( "Error (readWrite.readAvgX2File): " \
+                                + "Nucleon not supported, yet.", comm )
+    else: # Particle is meson
+        
+        if dataFormat == "gpu":
+            """
+            threep_gxDx = getDatasets( threepDir, \
+                                          configList, \
+                                          threep_template, \
+                                          "tsink_" + str( ts ), \
+                                          "oneD", \
+                                          "dir_00", \
+                                          "up", \
+                                          "threep" )[ :, 0, 0, ..., 0, 1, 0 ]
+
+            threep_gyDy = getDatasets( threepDir, \
+                                          configList, \
+                                          threep_template, \
+                                          "tsink_" + str( ts ), \
+                                          "oneD", \
+                                          "dir_01", \
+                                          "up", \
+                                          "threep" )[ :, 0, 0, ..., 0, 2, 0 ]
+    
+            threep_gzDz = getDatasets( threepDir, \
+                                          configList, \
+                                          threep_template, \
+                                          "tsink_" + str( ts ), \
+                                          "oneD", \
+                                          "dir_02", \
+                                          "up", \
+                                          "threep" )[ :, 0, 0, ..., 0, 3, 0 ]
+
+            threep_gtDt = getDatasets( threepDir, \
+                                       configList, \
+                                       threep_template, \
+                                       "tsink_" + str( ts ), \
+                                       "oneD", \
+                                       "dir_03", \
+                                       "up", \
+                                       "threep" )[ :, 0, 0, ..., 0, 4, 0 ]
+
+            threep_s_gxDx = np.array( [] )
+            
+            threep_s_gyDy = np.array( [] )
+        
+            threep_s_gzDz = np.array( [] )
+    
+            threep_s_gtDt = np.array( [] )
+
+            if particle == "kaon":
+            
+                threep_s_gxDx = getDatasets( threepDir, \
+                                                configList, \
+                                                threep_template, \
+                                                "tsink_" + str( ts ), \
+                                                "oneD", \
+                                                "dir_00", \
+                                                "strange", \
+                                                "threep" )[ :, 0, 0, ..., \
+                                                            0, 1, 0 ]
+
+                threep_s_gyDy = getDatasets( threepDir, \
+                                                configList, \
+                                                threep_template, \
+                                                "tsink_" + str( ts ), \
+                                                "oneD", \
+                                                "dir_01", \
+                                                "strange", \
+                                                "threep" )[ :, 0, 0, ..., \
+                                                            0, 2, 0 ]
+    
+                threep_s_gzDz = getDatasets( threepDir, \
+                                                configList, \
+                                                threep_template, \
+                                                "tsink_" + str( ts ), \
+                                                "oneD", \
+                                                "dir_02", \
+                                                "strange", \
+                                                "threep" )[ :, 0, 0, ..., \
+                                                            0, 3, 0 ]
+
+                threep_s_gtDt = getDatasets( threepDir, \
+                                                configList, \
+                                                threep_template, \
+                                                "tsink_" + str( ts ), \
+                                                "oneD", \
+                                                "dir_03", \
+                                                "strange", \
+                                                "threep" )[ :, 0, 0, ..., \
+                                                            0, 4, 0 ]
+            
+                return [ threep_gxDx, threep_gyDy, \
+                         threep_gzDz, threep_gtDt, \
+                         threep_s_gxDx, threep_s_gyDy, \
+                         threep_s_gzDz, threep_s_gtDt ]
+
+            elif particle == "pion": 
+
+                return [ threep_gxDx, threep_gyDy, \
+                         threep_gzDz, threep_gtDt ]
+
+            else: 
+
+                print( "Error (readAvgXFile): Particle " \
+                    + particle + " not supported." )
+
+                exit()                
+            """
+            mpi_fncs.mpiPrintError( "Error (readWrite.readAvgX2File): " \
+                                    + "GPU format not supported, yet.", \
+                                    comm )
+
+        elif dataFormat == "cpu":
+
+            filename = threep_template + ".up.h5"
+
+            dsetname = "/thrp/ave16/P0/dt{}".format( ts ) \
+                       + "/up/der3:g0DxDyDz/msq0000/arr"
+
+            threep = getDatasets( threepDir, \
+                                  configList, \
+                                  filename, \
+                                  dsetname=[ dsetname ] )[ :, \
+                                                           0, \
+                                                           0, \
+                                                           :, \
+                                                           0 ].real
+
+            if particle == "kaon":
+            
+                filename_s = threep_template + ".strange.h5"
+
+                dsetname_s = "/thrp/ave16/P0/dt{}".format( ts ) \
+                             + "/strange/der3:g0DxDyDz/msq0000/arr"
+
+                threep_s = getDatasets( threepDir, \
+                                        configList, \
+                                        filename_s, \
+                                        dsetname=[ dsetname_s ] )[ :, \
+                                                                   0, \
+                                                                   0, \
+                                                                   :, \
+                                                                   0 ].real
+
+                return [ threep, threep_s ]
+
+            elif particle == "pion":
+
+                return threep
+
+            else: 
+
+                mpi_fncs.mpiPrintErr( "Error (readAvgX2File): Particle " \
+                    + particle + " not supported.", comm )
+
+
+########################
+# ASCII read functions #
+########################
 
 
 # Reads an ASCII file with two columns where the data of 
