@@ -5,6 +5,14 @@ import re
 from os import listdir as ls
 from glob import glob
 
+def particleList():
+
+    return [ "nucleon", "pion", "kaon" ]
+
+def dataFormatList():
+
+    return [ "cpu", "gpu", "ASCII" ]
+
 # Calculates the jackknife error from the standard deviation.
 # Can be given any keyword arguments accepted by numpy.std(),
 # otherwise, calculates the error along the first axis.
@@ -393,6 +401,41 @@ def check_sources( filenames, sourceNum ):
             check = False
 
     return check
+
+
+def setFlavorStrings( particle, dataFormat ):
+
+    # Check inputs
+
+    assert particle in particleList(), \
+        "Particle " + particle + " is not supported."
+
+    assert dataFormat in dataFormatList(), \
+        "Data format " + dataFormat + " is not supported."
+
+    # Set flavors
+
+    if particle == "nucleon":
+
+        if dataFormat == "cpu" or dataFormat == "ASCII":
+
+            flavor = [ "up", "dn" ]
+
+        elif dataFormat == "gpu":
+
+            flavor = [ "up", "down" ]
+
+    elif particle == "pion":
+
+        flavor = [ "up" ]
+
+    elif particle == "kaon":
+
+        flavor = [ "up", "strange" ]
+
+    flavorNum = len( flavor )
+
+    return flavor, flavorNum
 
 
 # Average over configurations, excluding one bin.

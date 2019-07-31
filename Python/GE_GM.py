@@ -1,3 +1,4 @@
+from sys import stderr
 import time
 import numpy as np
 import argparse as argp
@@ -9,12 +10,16 @@ import physQuants as pq
 import lqcdjk_fitting as fit
 from mpi4py import MPI
 
+tsf = True
+
+rangeEnd = 25
+
 L = 64.0
 ratioNum = 10
 
-particle_list = [ "pion", "kaon", "nucleon" ]
+particle_list = fncs.particleList()
 
-format_list = [ "gpu", "cpu", "ASCII" ]
+format_list = fncs.dataFormatList()
 
 #########################
 # Parse input arguments #
@@ -67,7 +72,7 @@ parser.add_argument( "-f", "--data_format", action='store', \
 parser.add_argument( "-c", "--config_list", action='store', \
                      type=str, default="" )
 
-parser.add_argument( "-m", "--momentum_list", action='store', \
+parser.add_argument( "-m", "--momentum_transfer_list", action='store', \
                      type=str, default="" )
 
 args = parser.parse_args()
@@ -145,28 +150,36 @@ assert configNum % procNum == 0, "Number of configurations " \
 
 if particle == "pion":
 
+    projector = [ "" ]
+
     flavNum = 1
     flav_str = [ "u" ]
 
 elif particle == "kaon":
+
+    projector = [ "" ]
 
     flavNum = 2
     flav_str = [ "u", "s" ]
 
 else: # particle == nulceon
 
+    projector = [ "0", "4", "5", "6" ]
+
     flavNum = 2
     flav_str = [ "u", "d" ]
 
+projNum = len( projector )
+
 # Momentum list
 
-if args.momentum_list:
+if args.momentum_transfer_list:
 
-    momList = rw.readTxtFile( args.momentum_list, dtype=int )
+    Q = rw.readTxtFile( args.momentum_transfer_list, dtype=int )
 
     if dataFormat == "ASCII":
         
-        momList = -1.0* momList
+        Q = -1.0 * Q
 
 else:
 
@@ -175,7 +188,7 @@ else:
         mpi_fncs.mpiPrint( "No momentum list given, will read momentum " \
                            + "from three-point function files", rank )
 
-        momList = rw.getDatasets( threepDir, configList, threep_template, \
+        Q = rw.getDatasets( threepDir, configList, threep_template, \
                                   "Momenta_list" )[ :, 0, 0, ... ]
     elif dataFormat == "ASCII":
 
@@ -187,9 +200,9 @@ else:
         mpi_fncs.mpiPrintError( "ERROR: No momentum list given. " \
                                 + "I'll fix this later. -CJL", comm )
 
-momNum = len( momList )
+QNum = len( Q )
 
-Qsq, Qsq_start, Qsq_end = fncs.processMomList( momList )
+Qsq, Qsq_start, Qsq_end = fncs.processMomList( Q )
 
 QsqNum = len( Qsq )
 
@@ -296,7 +309,7 @@ elif dataFormat == "ASCII":
                               configList_loc, \
                               twop_template, \
                               dtype=float).reshape( len( configList_loc ), \
-                                                    momNum, T, 6 )[ ..., 4 ]
+                                                    QNum, T, 6 )[ ..., 4 ]
 
 else:
         
@@ -315,7 +328,7 @@ T = twop_loc.shape[ -1 ]
 
 # Gather two-point functions
 
-twop = np.zeros( ( configNum, momNum, T ), dtype=float )
+twop = np.zeros( ( configNum, QNum, T ), dtype=float )
 
 comm.Allgather( twop_loc, twop )
 
@@ -323,17 +336,20 @@ comm.Allgather( twop_loc, twop )
 # Jackknife and fold two-point functions #
 ##########################################
 
-mpi_fncs.mpiPrint(twop[10,0,:],rank)
-exit()
-
 # Time dimension length after fold
 
 T_fold = T // 2 + 1
 
 if binNum_loc:
 
-    twop_jk_loc = fncs.jackknifeBinSubset( twop[:,0,:], binSize, bin_glob[ rank ] )
+    twop_jk_loc = np.zeros( ( binNum_loc, QNum, T ) )
 
+    for q in range( QNum ):
+
+        twop_jk_loc[:,q,:] = fncs.jackknifeBinSubset( twop[:,q,:], \
+                                                      binSize, \
+                                                      bin_glob[ rank ] )
+    """
     # twop_fold[ b, t ]
 
     twop_fold = fncs.fold( twop_jk_loc )
@@ -341,6 +357,8 @@ if binNum_loc:
     # mEff[ b, t ]
 
     mEff_loc = pq.mEffFromSymTwop( twop_fold )
+    """
+    mEff_loc = pq.mEff( twop_jk_loc[:,0,:] )
 
 else:
 
@@ -354,8 +372,8 @@ else:
 
 if rank == 0:
 
-    twop_jk = np.zeros( ( binNum_glob, momNum, T ) )
-    mEff = np.zeros( ( binNum_glob, T_fold ) )
+    twop_jk = np.zeros( ( binNum_glob, QNum, T ) )
+    mEff = np.zeros( ( binNum_glob, T ) )
 
 else:
 
@@ -364,11 +382,11 @@ else:
 
 recvCount, recvOffset = mpi_fncs.recvCountOffset( procNum, binNum )
 
-comm.Gatherv( twop_jk_loc, [ twop_jk, recvCount * momNum * T, \
-                             recvOffset * momNum * T, MPI.DOUBLE ], root=0 )
-comm.Gatherv( mEff_loc, [ mEff, recvCount * T_fold, \
-                          recvOffset * T_fold, MPI.DOUBLE ], root=0 )
-exit()
+comm.Gatherv( twop_jk_loc, [ twop_jk, recvCount * QNum * T, \
+                             recvOffset * QNum * T, MPI.DOUBLE ], root=0 )
+comm.Gatherv( mEff_loc, [ mEff, recvCount * T, \
+                          recvOffset * T, MPI.DOUBLE ], root=0 )
+
 if rank == 0:
 
     # mEff_avg[ t ]
@@ -383,10 +401,10 @@ if rank == 0:
 
     try:
     
-        fitResults = fit.mEffTwopFit( mEff, twop_jk, \
-                                      rangeEnd, 0, L, tsf )
+        fitResults = fit.mEffTwopFit( mEff, twop_jk[ :, 0, : ], \
+                                      rangeEnd_twop, 0, L, tsf )
     
-    except Exception as error:
+    except fit.lqcdjk_BadFitError as error:
         
         mpi_fncs.mpiPrintErr( "ERROR (lqcdjk_fitting.mEffTwopFit):" \
                               + str( error ), comm )
@@ -400,12 +418,12 @@ if rank == 0:
     curve = np.zeros( ( binNum_glob, 50 ) )
 
     t_s = np.concatenate( ( np.linspace( rangeStart, \
-                                         rangeEnd, 25 ), \
-                            np.linspace( T - rangeEnd, \
+                                         rangeEnd_twop, 25 ), \
+                            np.linspace( T - rangeEnd_twop, \
                                          T- rangeStart, 25 ) ) )
                     
     twopFit_str = "2s" + str( rangeStart ) \
-                  + ".2e" + str( rangeEnd )
+                  + ".2e" + str( rangeEnd_twop )
 
     if tsf:
 
@@ -475,22 +493,20 @@ if rank == 0:
     rw.writeAvgDataFile_wX( curveOutputFilename, t_s, curve_avg, curve_err )
         
     rw.writeFitDataFile( chiSqOutputFilename, chiSq_avg, \
-                         chiSq_err, rangeStart, rangeEnd )
+                         chiSq_err, rangeStart, rangeEnd_twop )
 
     mEff_fit_avg = np.average( mEff_fit, axis=0 )
     mEff_fit_err = fncs.calcError( mEff_fit, binNum_glob )
 
     mEff_range_str = "2s" + str( mEff_rangeStart ) \
-                     + ".2e" + str( rangeEnd )
+                     + ".2e" + str( rangeEnd_twop )
 
     mEff_outputFilename = output_template.replace( "*", "mEff_fit_" \
                                                    + mEff_range_str )
     rw.writeFitDataFile( mEff_outputFilename, mEff_fit_avg, \
-                         mEff_fit_err, mEff_rangeStart, rangeEnd )
+                         mEff_fit_err, mEff_rangeStart, rangeEnd_twop )
 
 # End if first process
-
-comm.Barrier()
 
 if momSq > 0:
 
@@ -507,8 +523,6 @@ if rank == 0:
     twop_boost_jk = np.zeros( ( finalMomNum, binNum_glob, T ) )
     threep_jk = np.zeros( ( finalMomNum, flavNum, \
                             tsinkNum, binNum_glob, T ) )
-    avgX = np.zeros( ( finalMomNum, flavNum, \
-                       tsinkNum, binNum_glob, T ) )
 
 else:
 
@@ -520,9 +534,9 @@ else:
     #                     for f in flav_str ] \
     #                   for imom in range( finalMomNum ) ] )
 
-# CJL: Also loop over Q
+comm.Barrier()
 
-# Loop over momenta
+# Loop over final momenta
 for imom in range( finalMomNum ):
 
     if momSq > 0:
@@ -549,43 +563,45 @@ for imom in range( finalMomNum ):
 
         twop_boost_jk = np.array( [ twop_jk ] )
 
-    ##############################
-    # Read three-point functions #
-    ##############################
+# End loop over final momenta
 
-    t0 = time.time()
+##############################
+# Read three-point functions #
+##############################
 
-    # Loop over tsink
-    for ts, its in zip( tsink, range( tsinkNum ) ) :
+t0 = time.time()
+
+# threep[ ts ][ p, flav, proj, conf, Qsq, curr, t ]
+
+threep = fncs.initEmptyList( tsinkNum, 1 )
+
+# Loop over tsink
+for ts, its in zip( tsink, range( tsinkNum ) ) :
+
+    if particle == "nucleon":
+
+        threep[ its ] = np.zeros( ( finalMomNum, flavNum, \
+                                    projNum, configNum, \
+                                    QNum, 4, ts + 1 ) )
+
+    else:
+
+        threep[ its ] = np.zeros( ( finalMomNum, flavNum, \
+                                    projNum, configNum, \
+                                    QNum, 4, T ) )
     
+    # Loop over final momenta
+    for imom in range( finalMomNum ):
+
         t0_ts = time.time()
 
-        # Get the real part of gxDx, gyDy, gzDz, and gtDt
-        # three-point functions at zero-momentum
-        # threep[ c, t ]
+        # threep_loc[ flav, proj, conf, Qsq, curr, t ]
 
-        # CJL: Change this to read for GE/GM
-
-        threeps = rw.readAvgXFile( threepDir, configList_loc, \
-                                   threep_tokens, ts, finalMomList[ imom ], \
-                                   particle, dataFormat )
-
-        threep_gxDx = threeps[0]
-        threep_gyDy = threeps[1]
-        threep_gzDz = threeps[2]
-        threep_gtDt = threeps[3]
-    
-        threep_s_gxDx = []
-        threep_s_gyDy = []
-        threep_s_gzDz = []
-        threep_s_gtDt = []
-
-        if particle == "kaon":
-
-            threep_s_gxDx = threeps[4]
-            threep_s_gyDy = threeps[5]
-            threep_s_gzDz = threeps[6]
-            threep_s_gtDt = threeps[7]
+        threep_loc = rw.readEMFormFactorFile( threepDir, configList_loc, \
+                                              threep_tokens, Qsq, QNum, \
+                                              ts, projector, \
+                                              finalMomList[ imom ], \
+                                              particle, dataFormat )
 
         mpi_fncs.mpiPrint( "Read three-point functions from HDF5 files " \
                            + "for tsink {} in {:.4}".format( ts, \
@@ -593,34 +609,11 @@ for imom in range( finalMomNum ):
                                                              - t0_ts ) \
                            + " seconds.", rank )
 
-        threep_loc = np.zeros( ( flavNum, binNum_loc, T ) )
-            
-        # Subtract average over directions from gtDt
+        mpi_fncs.mpiPrintAllRanks(threep_loc.shape, comm)
 
-        threep_loc = threep_gtDt - \
-                     0.25 * ( threep_gtDt \
-                              + threep_gxDx \
-                              + threep_gyDy \
-                              + threep_gzDz )
+        comm.Allgather( threep_loc, threep[ its ][ imom ] )
 
-        threep_loc = np.asarray( threep_loc, order='c' )
-    
-        threep = np.zeros( ( flavNum, configNum, T ) )
-
-        comm.Allgather( threep_loc, threep[ 0 ] )
-
-        if particle == "kaon":
-
-            threep_loc = threep_s_gtDt - \
-                              0.25 * ( threep_s_gtDt \
-                                       + threep_s_gxDx \
-                                       + threep_s_gyDy \
-                                       + threep_s_gzDz )
-
-            threep_loc = np.asarray( threep_loc, order='c' )
-    
-            comm.Allgather( threep_loc, threep[ 1 ] )
-
+        """
         # Loop over flavor
         for iflav in range( flavNum ):
 
@@ -634,11 +627,12 @@ for imom in range( finalMomNum ):
             comm.Gatherv( threep_jk_loc, [ threep_jk[ imom, iflav, its ], \
                                            recvCount * T, recvOffset * T, \
                                            MPI.DOUBLE ], root=0 )
-
+        """
         # End loop over flavor
     # End loop over tsink
 # End loop over momenta
 
+exit()
 if rank == 0:
         
     avgX = np.zeros( ( flavNum, \

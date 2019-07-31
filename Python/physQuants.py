@@ -84,8 +84,6 @@ def mEffFromSymTwop( twop ):
 
     for t in range( 1, halfT - 1 ):
 
-        #mpi_fncs.mpiPrint( "t={}: twop[t-1]={}, twop[t+1]={}, twop[T/2-1]={}".format(t,twop[...,t-1]
-
         mEff[ ..., t ] = 1.0 / 2.0 \
                          * np.log( ( twop[ ..., t - 1 ] \
                                      + np.sqrt(twop[ ..., \
@@ -111,7 +109,7 @@ def mEff( twop ):
 
     # Loop through timestep, excluding the last timestep
 
-    for t in range( len( twop ) - 1 ):
+    for t in range( twop.shape[ -1 ] - 1 ):
 
         mEff[ ..., t ] = np.log( twop[ ..., t ] / twop[ ..., t + 1 ] )
 

@@ -745,7 +745,6 @@ if rank == 0:
         # End loop over flavor
     # End loop over tsink
 # End if first process
-comm.Barrier()
 
 ##################
 # Two-state Fit  #

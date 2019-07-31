@@ -5,9 +5,9 @@ from scipy.optimize import least_squares, minimize
 # Exception thrown if good fit cannot be found.
 # The definition of a good fit can vary on fitting routine.
 
-#class lqcdjk_BadFitError(Exception):
-#    def __init__(self, mismatch):
-#        Exception.__init__(self, mismatch)
+class lqcdjk_BadFitError(Exception):
+    def __init__(self, mismatch):
+        Exception.__init__(self, mismatch)
 
 
 # Fit the effective mass using two different methods and vary the fit range
@@ -103,10 +103,10 @@ def mEffTwopFit( mEff, twop, rangeEnd, pSq, L, tsf ):
         # End loop over twop fit start
     # End loop over effective mass fit start
 
-    raise Exception( "fitTwop() could not find a good fit with " \
-                     + "given effective masses, " \
-                     + "two-point functions, " \
-                     + "and range end." )
+    raise lqcdjk_BadFitError( "fitTwop() could not find a good fit with " \
+                              + "given effective masses, " \
+                              + "two-point functions, " \
+                              + "and range end." )
 
     return -1
 
