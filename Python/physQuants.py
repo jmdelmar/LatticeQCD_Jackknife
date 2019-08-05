@@ -25,8 +25,8 @@ def kineFactor_GE_GM( ratio_err, mEff, Q, L ):
 
     assert len( Q ) == momNum, "Error (kineFactor_GE_GM): " \
         + "momentum dimension of ratio errors " \
-        + momNum + " and momentum transfers " \
-        + len( Q ) + " do not match. "
+        + str( momNum ) + " and momentum transfers " \
+        + str( len( Q ) ) + " do not match. "
 
     # kineFactor[ b, Q, r, [GE,GM] ]
 
@@ -54,6 +54,49 @@ def kineFactor_GE_GM( ratio_err, mEff, Q, L ):
                 / KK( mEff[ b ], Qsq, L )
 
     return kineFactor
+
+
+def calc_gE_gM( decomp, ratio, ratio_err, Qsq_start, Qsq_end ):
+
+    binNum = decomp.shape[ 0 ]
+
+    gE = np.zeros( ( binNum ) )
+    gM = np.zeros( ( binNum ) )
+
+    for b in range( binNum ):
+
+        gE[ b ] = 2.0 * np.sum( decomp[ b, ..., 0 ] \
+                                * ratio[ b, \
+                                         Qsq_start \
+                                         : Qsq_end + 1 ] \
+                                / ratio_err[ Qsq_start \
+                                             : Qsq_end \
+                                             + 1 ] )
+
+        gM[ b ] = 2.0 * np.sum( decomp[ b, ..., 1 ] \
+                                * ratio[ b, \
+                                         Qsq_start \
+                                         : Qsq_end + 1 ] \
+                                / ratio_err[ Qsq_start \
+                                             : Qsq_end \
+                                             + 1 ] )
+    
+    return gE, gM
+
+
+def calc_GE_GM( gE, gM, mEff, Qsq, L ):
+
+    # gE[ b ], gM[ b ], mEff[ b ]
+    # Qsq, L
+
+    GE = gE \
+         + ( energy( mEff, Qsq, L ) - mEff ) \
+         / ( energy( mEff, Qsq, L ) + mEff ) * gM
+
+    GM = 2.0 * mEff * ( energy( mEff, Qsq, L ) - mEff ) \
+         / ( 4.0 * mEff + 1 ) * ( gM - gE )
+
+    return GE, GM
 
 
 # Convert Q^2 from units of (2pi/L)^2 to GeV^2
