@@ -723,6 +723,9 @@ def twoStateErrorFunction( fitParams, tsink_twop, ti, tsink, twop, twop_err, thr
 
 def fitGenFormFactor( vals, vals_err, fitStart, fitEnd ):
 
+    # vals[ b, Q, ratio, t ]
+    # vals_err[ Q, ratio, t ]
+
     fit = np.empty( vals.shape[ :-1 ] )
 
     # Loop over bins
@@ -731,15 +734,15 @@ def fitGenFormFactor( vals, vals_err, fitStart, fitEnd ):
         for iq in range( vals.shape[ 1 ] ):
             # Loop over ratio
             for ir in range( vals.shape[ 2 ] ):
-            
-                fit[ b, iq, ir ] = np.polyfit( range( fitStart, \
+
+                fit[ b, iq, ir ] = np.polyfit(range( fitStart, \
                                                       fitEnd + 1 ), \
                                                vals[ b, iq, ir, \
                                                      fitStart \
                                                      : fitEnd + 1 ], \
                                                0, w=vals_err[ iq, ir, \
                                                               fitStart \
-                                                              : fitEnd + 1 ] )
+                                                              : fitEnd + 1 ])
 
     return fit
 

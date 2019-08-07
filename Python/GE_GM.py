@@ -90,6 +90,8 @@ comm = MPI.COMM_WORLD
 procNum = comm.Get_size()
 rank = comm.Get_rank()
 
+mpi_fncs.mpiPrint(procNum,rank)
+
 # Input directories and filename templates
 
 threepDir = args.threep_dir
@@ -342,13 +344,9 @@ twop = np.zeros( ( configNum, QNum, T ), dtype=float )
 
 comm.Allgather( twop_loc, twop )
 
-##########################################
-# Jackknife and fold two-point functions #
-##########################################
-
-# Time dimension length after fold
-
-T_fold = T // 2 + 1
+#################################
+# Jackknife two-point functions #
+#################################
 
 if binNum_loc:
 
@@ -359,15 +357,6 @@ if binNum_loc:
         twop_jk_loc[:,q,:] = fncs.jackknifeBinSubset( twop[:,q,:], \
                                                       binSize, \
                                                       bin_glob[ rank ] )
-    """
-    # twop_fold[ b, t ]
-
-    twop_fold = fncs.fold( twop_jk_loc )
-
-    # mEff[ b, t ]
-
-    mEff_loc = pq.mEffFromSymTwop( twop_fold )
-    """
     mEff_loc = pq.mEff( twop_jk_loc[:,0,:] )
 
 else:
@@ -392,16 +381,22 @@ else:
 
 recvCount, recvOffset = mpi_fncs.recvCountOffset( procNum, binNum )
 
-comm.Gatherv( twop_jk_loc, [ twop_jk, recvCount * QNum * T, \
-                             recvOffset * QNum * T, MPI.DOUBLE ], root=0 )
+#comm.Gatherv( twop_jk_loc, [ twop_jk, recvCount * QNum * T, \
+#                             recvOffset * QNum * T, MPI.DOUBLE ], root=0 )
 comm.Gatherv( mEff_loc, [ mEff, recvCount * T, \
                           recvOffset * T, MPI.DOUBLE ], root=0 )
 
 if rank == 0:
 
-    # Fit the effective mass and two-point functions 
+    # mEff_avg[ t ]
 
+    mEff_avg = np.average( mEff, axis=0 )
     mEff_err = fncs.calcError( mEff, binNum_glob )
+
+    avgOutputFilename = output_template.replace( "*", "mEff_avg" )
+    rw.writeAvgDataFile( avgOutputFilename, mEff_avg, mEff_err )
+
+    # Fit the effective mass and two-point functions 
 
     mEff_fit = np.zeros( binNum_glob )
 
@@ -516,14 +511,6 @@ if rank == 0:
     rw.writeFitDataFile( chiSqOutputFilename, chiSq_avg, \
                          chiSq_err, rangeStart, rangeEnd_mEff )
     """
-    # mEff_avg[ t ]
-
-    mEff_avg = np.average( mEff, axis=0 )
-    mEff_err = fncs.calcError( mEff, binNum_glob )
-
-    avgOutputFilename = output_template.replace( "*", "mEff_avg" )
-    rw.writeAvgDataFile( avgOutputFilename, mEff_avg, mEff_err )
-
     # mEff_fit_avg
 
     mEff_fit_avg = np.average( mEff_fit, axis=0 )
@@ -538,7 +525,7 @@ if rank == 0:
                          mEff_fit_err, rangeStart_mEff, rangeEnd_mEff )
 
 # End if first process
-
+"""
 if momSq > 0:
 
     twop_boost = np.zeros( ( finalMomNum, configNum, T ) )
@@ -559,11 +546,11 @@ else:
     #avgX = np.array( [ [ [ None for ts in tsink ] \
     #                     for f in flav_str ] \
     #                   for imom in range( finalMomNum ) ] )
-
-# Loop over final momenta
-for imom in range( finalMomNum ):
-
-    if momSq > 0:
+"""
+if momSq > 0:
+        
+    # Loop over final momenta
+    for imom in range( finalMomNum ):
 
         #########################################
         # Jackknife boosted two-point functions #
@@ -571,30 +558,29 @@ for imom in range( finalMomNum ):
 
         if binNum_loc:
 
-            twop_boost_jk_loc = fncs.jackknifeBinSubset( twop_boost[ imom ], \
+            twop_boost_jk = fncs.jackknifeBinSubset( twop_boost[ imom ], \
                                                          binSize, \
                                                          bin_glob[ rank ] )
 
         else:
 
-            twop_boost_jk_loc = np.array( [] )
-
-        comm.Gatherv( twop_boost_jk_loc, [ twop_boost_jk[ imom ], \
+            twop_boost_jk = np.array( [] )
+        """
+        comm.Gatherv( twop_boost_jk, [ twop_boost_jk[ imom ], \
                                            recvCount * T, recvOffset * T, \
                                            MPI.DOUBLE ], root=0 )
+        """
+    # End loop over final momenta
 
-    else:
+else:
 
-        twop_boost_jk = np.array( [ twop_jk ] )
-
-# End loop over final momenta
+    twop_boost_jk = np.array( [ twop_jk_loc ] )
 
 ##############################
 # Read three-point functions #
 ##############################
 
-t0 = time.time()
-
+"""
 # threep_jk[ ts ][ p, flav, b, Q, ratio, t ]
 
 if rank == 0:
@@ -605,7 +591,7 @@ else:
 
     threep_jk = np.array( [ [ None for ts in tsink ]
                             for imom in range( finalMomNum ) ] )
-
+"""
 # Loop over tsink
 for ts, its in zip( tsink, range( tsinkNum ) ) :
 
@@ -617,12 +603,6 @@ for ts, its in zip( tsink, range( tsinkNum ) ) :
 
         threepTimeNum = T
 
-    if rank == 0:
-
-        threep_jk[ its ] = np.zeros( ( finalMomNum, flavNum, \
-                                       binNum_glob, QNum, \
-                                       ratioNum, threepTimeNum ) )
-    
     # Loop over final momenta
     for ip in range( finalMomNum ):
 
@@ -648,8 +628,10 @@ for ts, its in zip( tsink, range( tsinkNum ) ) :
 
             threep_tmp = np.copy( threep_loc )
 
-            threep_loc[ 0 ] = threep_tmp[ 0 ] - threep_tmp[ 1 ]
-            threep_loc[ 1 ] = threep_tmp[ 0 ] + threep_tmp[ 1 ]
+            threep_loc[ 0 ] = 0.5 * ( threep_tmp[ 0 ] \
+                                      - threep_tmp[ 1 ] )
+            threep_loc[ 1 ] = 0.5 * ( threep_tmp[ 0 ] \
+                                      + threep_tmp[ 1 ] )
 
         #mpi_fncs.mpiPrintAllRanks(threep_loc.shape, comm)
 
@@ -670,133 +652,143 @@ for ts, its in zip( tsink, range( tsinkNum ) ) :
         # 9       P6g2
         # CJL: this might be different for mesons
 
-        threep_loc = np.stack ( [ threep_loc[ :, 0, :, :, 0, : ], \
-                                  threep_loc[ :, 0, :, :, 1, : ], \
-                                  threep_loc[ :, 0, :, :, 2, : ], \
-                                  threep_loc[ :, 0, :, :, 3, : ], \
-                                  threep_loc[ :, 1, :, :, 2, : ], \
-                                  threep_loc[ :, 1, :, :, 3, : ], \
-                                  threep_loc[ :, 2, :, :, 1, : ], \
-                                  threep_loc[ :, 2, :, :, 3, : ], \
-                                  threep_loc[ :, 3, :, :, 1, : ], \
-                                  threep_loc[ :, 3, :, :, 2, : ] ], \
+        threep_loc = np.stack ( [ threep_loc[ :, 0, :, :, 0, : ].real, \
+                                  threep_loc[ :, 0, :, :, 1, : ].imag, \
+                                  threep_loc[ :, 0, :, :, 2, : ].imag, \
+                                  threep_loc[ :, 0, :, :, 3, : ].imag, \
+                                  threep_loc[ :, 1, :, :, 2, : ].real, \
+                                  threep_loc[ :, 1, :, :, 3, : ].real, \
+                                  threep_loc[ :, 2, :, :, 1, : ].real, \
+                                  threep_loc[ :, 2, :, :, 3, : ].real, \
+                                  threep_loc[ :, 3, :, :, 1, : ].real, \
+                                  threep_loc[ :, 3, :, :, 2, : ].real ], \
                                 axis=3 )
+        
+        mpi_fncs.mpiPrint(threep_loc.shape,rank)
 
         threep = np.zeros( ( flavNum, configNum, QNum, \
                              ratioNum, threepTimeNum ) )
 
         comm.Allgather( threep_loc, threep )
 
-        # Jackknife
-        # threep_jk_loc[ flav, b, Q, ratio, t ]
+        mpi_fncs.mpiPrint(threep.shape,rank)
+        mpi_fncs.mpiPrint(np.average(threep,axis=1),rank)
 
-        if binNum_loc:
+        exit()
+        #CJL: HERE
 
-            threep_jk_loc = np.zeros( ( flavNum, binNum_loc, \
-                                        QNum, ratioNum, \
-                                        threepTimeNum ) )
+        # Loop over flavor
+        for iflav in range( flavNum ):
+            # If bin on this process
+            if binNum_loc:
 
-            # Loop over flavor
-            for iflav in range( flavNum ):
-                # Loop over Q
-                for iq in range( QNum ):
-                    # Loop over ratio
-                    for ir in range( ratioNum ):
-
-                        threep_jk_loc[ iflav, :, iq, ir, : ] = fncs.jackknifeBinSubset( threep[ iflav, :, iq, ir, : ], \
-                                                                                        binSize, \
-                                                                                        bin_glob[ rank ] )
-
-            # End loop over flavor
-
-        else:
-
-            threep_jk_loc = np.array( [] )
-            
-        size_WO_bin = flavNum * QNum * ratioNum * threepTimeNum
-
-        comm.Gatherv( threep_jk_loc, \
-                      [ threep_jk[ its ][ ip ], \
-                        recvCount * size_WO_bin, \
-                        recvOffset * size_WO_bin, \
-                        MPI.DOUBLE ], root=0 )
-
-    # End loop over p
-# End loop over tsink
-
-####################
-# Calculate ratios #
-####################
-
-mEff_fit = np.random.rand( binNum_glob )
-twop_jk = np.random.rand( binNum_glob, QNum, 128 )
-threep_jk = fncs.initEmptyList( tsinkNum, 1 )
-
-if rank == 0:
-
-    # Loop over tsink
-    for ts, its in zip( tsink, range( tsinkNum ) ) :
-
-        threep_jk[ its ] = np.random.rand( finalMomNum, flavNum, \
-                                           binNum_glob, QNum, \
-                                           ratioNum, ts+1 )
-
-        # ratio_fit[ p, flav, b, Q, ratio ]
-
-        ratio_fit = np.zeros( ( finalMomNum, flavNum, binNum_glob, \
-                                QNum, ratioNum ) )
-
-        # Loop over p
-        for ip in range( finalMomNum ) :
-            # Loop over flavor
-            for iflav in range( flavNum ):
-
-                # ratio[ b, Q, ratio, t ]
-
-                ratio = np.zeros( ( threep_jk[ its ][ ip, iflav ].shape ) )
+                ratio_loc = np.zeros( ( binNum_loc, QNum, \
+                                        ratioNum, threepTimeNum ) )
 
                 # Loop over ratio
                 for ir in range( ratioNum ):
-                    # Loop over time
-                    for t in range( ratio.shape[ -1 ] ):
 
-                        ratio[ :, :, ir, t ] = threep_jk[ its ][ ip, \
-                                                                 iflav, \
-                                                                 :, :, \
-                                                                 ir, t ] \
-                            / twop_jk[ ..., ts ]
+                    # Jackknife
+                    # threep_jk[ b, Q, t ]
 
-                ratio_err = fncs.calcError( ratio, binNum_glob )
+                    threep_jk = np.zeros( ( binNum_loc, QNum, \
+                                            threepTimeNum ) )
 
-                ratio_fit[ip, iflav]=fit.fitGenFormFactor(ratio, \
-                                                          ratio_err, \
-                                                          rangeStart_ratio, \
-                                                          rangeEnd_ratio)
-            # End loop over flavor
-        # End loop over final momentum
-    
-        # ratio_fit_err[ p, flav, Q, ratio ]
+                    # Loop over Q
+                    for iq in range( QNum ):
 
-        ratio_fit_err = fncs.calcError( ratio_fit, \
-                                        binNum_glob, axis=-3 )
+                        threep_jk[:, \
+                                  iq, \
+                                  :]=fncs.jackknifeBinSubset(threep[iflav, \
+                                                                    :, iq, \
+                                                                    ir, \
+                                                                    : ], \
+                                                             binSize, \
+                                                             bin_glob[rank])
 
-        # Loop over p
-        for ip in range( finalMomNum ) :
-            # Loop over flavor
-            for iflav in range( flavNum ):
+                    # End loop over Q
+
+                    #mpi_fncs.mpiPrint(threep_jk,rank)
+
+                    ####################
+                    # Calculate ratios #
+                    ####################
+
+                    ratio_loc[...,ir,:] = pq.calcRatio_Q( threep_jk, \
+                                                          twop_boost_jk[ ip ], \
+                                                          ts )
+
+                # End loop over ratio
+            # End if bin on process
+            else:
+
+                ratio_loc = np.array( [] )
+        
+            ratio = np.zeros( ( binNum_glob, QNum, \
+                                ratioNum, threepTimeNum ) )
+
+            comm.Allgatherv( ratio_loc, \
+                             [ ratio, \
+                               recvCount * QNum \
+                               * ratioNum * threepTimeNum, \
+                               recvOffset * QNum \
+                               * ratioNum * threepTimeNum, \
+                               MPI.DOUBLE ] )
+
+            ratio_err = fncs.calcError( ratio, binNum_glob )
+
+            #mpi_fncs.mpiPrintAllRanks(ratio_err,comm)
+
+            if binNum_loc:
+
+                # ratio_fit[ b, Q, ratio ]
+             
+                ratio_fit_loc=fit.fitGenFormFactor(ratio_loc, \
+                                                   ratio_err, \
+                                                   rangeStart_ratio, \
+                                                   rangeEnd_ratio)
+
+            else: 
+
+                ratio_fit_loc = []
+
+            ratio_fit = np.zeros( ( binNum_glob, QNum, ratioNum ) )
+
+            comm.Gatherv( ratio_fit_loc, \
+                          [ ratio_fit, \
+                            recvCount * QNum * ratioNum, \
+                            recvOffset * QNum * ratioNum, \
+                            MPI.DOUBLE ], root=0 )
+
+            # ratio_fit_err[ Q, ratio ]
+
+            ratio_fit_err = fncs.calcError( ratio_fit, binNum_glob )        
+            
+            if rank == 0:
 
                 ###############################
                 # Calculate kinematic factors #
                 ###############################
 
                 # kineFacter[ b, Q, r, [ GE, GM ] ]
+                
+                #print("ratio_fit_err:")
+                #print(ratio_fit_err)
+                #print("mEff_fit")                
+                #print(mEff_fit[0])
 
-                kineFactor = pq.kineFactor_GE_GM( ratio_fit_err[ ip, \
-                                                                 iflav ], \
+                kineFactor = pq.kineFactor_GE_GM( ratio_fit_err, \
                                                   mEff_fit, Q, L )
+
+                #print(kineFactor[0])
 
                 GE = np.zeros( ( QsqNum, binNum_glob ) )
                 GM = np.zeros( ( QsqNum, binNum_glob ) )
+
+                gE = np.zeros( ( QsqNum, binNum_glob ) )
+                gM = np.zeros( ( QsqNum, binNum_glob ) )
+
+                decomp_avg = [ [] for qsq in range( QsqNum ) ]
 
                 for qsq in range( QsqNum ):
 
@@ -816,12 +808,24 @@ if rank == 0:
                     u, s, vT = np.linalg.svd( kineFactor_Qsq, \
                                               full_matrices=False )
 
+                    #print("U")
+                    #print(u[0])
+                    #print("S")
+                    #print(s[0])
+                    #print("V^T")
+                    #print(vT[0])
+
                     ##############################
                     # Calculate ( v s^-1 u^T )^T #
                     ##############################
 
                     uT = np.transpose( u, ( 0, 2, 1 ) )
                     v = np.transpose( vT, ( 0, 2, 1 ) )
+
+                    #print("U^T")
+                    #print(uT[0])
+                    #print("V")
+                    #print(v[0])
 
                     smat = np.zeros( ( u.shape[-1], vT.shape[-2] ) )
                     smat_inv = np.zeros( ( binNum_glob, ) \
@@ -836,53 +840,40 @@ if rank == 0:
 
                     # End loop over bins
 
+                    #print("S")
+                    #print(smat)
+                    #print("S^-1")
+                    #print(smat_inv[0])
+
                     # decomp[ b, Q, ratio, [ GE, GM ] ]
 
                     decomp=np.transpose(v@smat_inv@uT, \
-                                         (0,2,1)).reshape(binNum_glob, \
-                                                          Qsq_end[ qsq ] \
-                                                          - Qsq_start[ qsq ] \
-                                                          + 1, \
-                                                          ratioNum,2)
-
-                    decomp_err = fncs.calcError( decomp, binNum_glob )
-                    print( "Decomp error:" )
-                    print( decomp_err )
-
-                    gE = np.zeros( ( binNum_glob ) )
-                    gM = np.zeros( ( binNum_glob ) )
-
-                    gE, gM  = pq.calc_gE_gM( decomp, \
-                                             ratio_fit[ ip, \
-                                                        iflav ], \
-                                             ratio_fit_err[ ip, \
-                                                            iflav ], \
-                                             Qsq_start[ qsq ], \
-                                             Qsq_end[ qsq ] )
+                                         (0,2,1))
                     
-                    gE_err = fncs.calcError( gE, binNum_glob )
-                    print( "gE error:" )
-                    print( gE_err )
+                    decomp_avg[ qsq ] = np.average( decomp, \
+                                                    axis=0 )
 
-                    gM_err = fncs.calcError( gM, binNum_glob )
-                    print( "gM error:" )
-                    print( gM_err )
+                    decomp = decomp.reshape(binNum_glob, \
+                                            Qsq_end[ qsq ] \
+                                            - Qsq_start[ qsq ] \
+                                            + 1, \
+                                            ratioNum,2)
 
-                    #print( gE, gM )
-                    #exit()
-
-                    GE[ qsq ], GM[ qsq ] = pq.calc_GE_GM( gE, gM, mEff_fit, \
-                                                          Qsq[ qsq ], L )
-
+                    gE[ qsq ], gM[ qsq ]  = pq.calc_gE_gM( decomp, \
+                                                           ratio_fit, \
+                                                           ratio_fit_err, \
+                                                           Qsq_start[ qsq ],\
+                                                           Qsq_end[ qsq ] )
+                    
                 # End loop over Q^2
 
                 # Average over bins
 
-                GE_avg = np.average( GE, axis=-1 )
-                GE_err = fncs.calcError( GE, binNum_glob, axis=-1 )
+                gE_avg = np.average( gE, axis=-1 )
+                gE_err = fncs.calcError( gE, binNum_glob, axis=-1 )
 
-                GM_avg = np.average( GM, axis=-1 )
-                GM_err = fncs.calcError( GM, binNum_glob, axis=-1 )
+                gM_avg = np.average( gM, axis=-1 )
+                gM_err = fncs.calcError( gM, binNum_glob, axis=-1 )
 
                 ################
                 # Write output #
@@ -891,20 +882,27 @@ if rank == 0:
                 output_filename = output_template.replace( "*", \
                                                            particle + "_" \
                                                            + flav_str[iflav] \
-                                                           + "_GE_tsink" \
+                                                           + "_decomp_tsink" \
                                                            + str( ts ) )
-                rw.writeAvgDataFile_wX( output_filename, Qsq, \
-                                           GE_avg, GE_err )
+                rw.writeSVDOutputFile( output_filename, decomp_avg, Qsq )
 
                 output_filename = output_template.replace( "*", \
                                                            particle + "_" \
                                                            + flav_str[iflav] \
-                                                           + "_GM_tsink" \
+                                                           + "_gE_tsink" \
                                                            + str( ts ) )
                 rw.writeAvgDataFile_wX( output_filename, Qsq, \
-                                           GM_avg, GM_err )
+                                           gE_avg, gE_err )
 
-            # End loop over flavor
-        # End loop over final momentum
-    # End loop over tsink
-# End if first process
+                output_filename = output_template.replace( "*", \
+                                                           particle + "_" \
+                                                           + flav_str[iflav] \
+                                                           + "_gM_tsink" \
+                                                           + str( ts ) )
+                rw.writeAvgDataFile_wX( output_filename, Qsq, \
+                                           gM_avg, gM_err )
+
+            # End if first process
+        # End loop over flavor
+    # End loop over p
+# End loop over tsink

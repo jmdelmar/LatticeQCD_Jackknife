@@ -93,8 +93,8 @@ def calc_GE_GM( gE, gM, mEff, Qsq, L ):
          + ( energy( mEff, Qsq, L ) - mEff ) \
          / ( energy( mEff, Qsq, L ) + mEff ) * gM
 
-    GM = 2.0 * mEff * ( energy( mEff, Qsq, L ) - mEff ) \
-         / ( 4.0 * mEff + 1 ) * ( gM - gE )
+    GM = 2 * mEff / ( energy( mEff, Qsq, L ) + mEff ) \
+         * ( gM - gE )
 
     return GE, GM
 
@@ -250,7 +250,27 @@ def twopCosh( t, energy, tsink ):
     return np.exp( - energy * t ) + np.exp( - energy * ( tsink - t ) )
 
 
-# Calcualte the electromagnetic form factor.
+def calcRatio_Q( threep, twop, tsink ):
+    
+    # threep[ ..., Q, t ]
+    # twop[ ..., Q, t ]
+
+    ratio = np.zeros( threep.shape )
+    
+    for q in range( threep.shape[ -2 ] ):
+        for t in range( threep.shape[ -1 ] ):
+
+            ratio[..., q, t] = threep[ ..., q, t ] / twop[ ..., 0, tsink ] \
+                               * np.sqrt( np.abs( twop[ ..., q, tsink - t ] \
+                                                  * twop[ ..., 0, t ] \
+                                                  * twop[ ..., 0, tsink ] \
+                                                  / ( twop[ ..., 0, tsink - t ] \
+                                                      * twop[ ..., q, t ] \
+                                                      * twop[ ..., q, tsink ] ) ) )  
+
+    return ratio
+
+# Calculate the electromagnetic form factor.
 
 # threep:
 

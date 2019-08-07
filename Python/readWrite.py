@@ -736,7 +736,7 @@ def readEMFF_cpu( threepDir, configList, threep_template, Qsq, ts, proj, \
     threep = getDatasets( threepDir, \
                           configList, \
                           threep_template, \
-                          dsetname=dsetname )[:,0,:,:,0].real
+                          dsetname=dsetname )[:,0,:,:,0]
 
     # Reshape threep[ conf, Qsq*curr, t ] 
     # -> threep[ conf, Qsq, curr, t ]
@@ -759,13 +759,19 @@ def readEMFF_ASCII( threepDir, configList, threep_template, \
     # threep[ conf, QNum*t*curr ]
     
     threep = getTxtData( threepDir, configList, \
-                         threep_template, dtype=float )[ ..., 4 ]
+                            threep_template, dtype=float )[ ..., 4:6 ]
 
     if "comm" in kwargs:
 
-        print( "FLAG", kwargs["comm"].Get_rank() )
+            mpi_fncs.mpiPrint( threep, kwargs["comm"].Get_rank() )
+
+    threep = threep[ ..., 0 ] + threep[ ..., 1 ] * 1j
 
     T = threep.shape[ -1 ] // QNum // insertionNum
+
+    if "comm" in kwargs:
+
+            mpi_fncs.mpiPrint( threep, kwargs["comm"].Get_rank() )
 
     # Reshape threep[ conf, Q*t*curr ] 
     # -> threep[ conf, Q, t, curr ]
@@ -808,12 +814,13 @@ def readEMFormFactorFile( threepDir, configList, threep_tokens, Qsq, QNum, \
                                                    momBoost[0], \
                                                    momBoost[1], \
                                                    momBoost[2], \
-                                                   flavor[ iflav ] )
+                                                   flav )
 
                 threep[ iflav ][ ip ] = readEMFF_cpu( threepDir, \
                                                       configList, \
                                                       threep_template, \
-                                                      Qsq, ts, p, particle )
+                                                      Qsq, ts, p, particle, \
+                                                      **kwargs )
 
 
             elif dataFormat == "gpu":
@@ -824,26 +831,28 @@ def readEMFormFactorFile( threepDir, configList, threep_tokens, Qsq, QNum, \
                                                        momBoost[0], \
                                                        momBoost[1], \
                                                        momBoost[2], \
-                                                       threep_tokens[1] )
+                                                       threep_tokens[1], **kwargs )
 
             elif dataFormat == "ASCII":
 
-                template = "{0}{1}{2}{3}{4}"
+                template = "{0}{1}{2}{3}{4}{5}"
 
                 threep_template = template.format( threep_tokens[0], p, \
                                                    threep_tokens[1], ts, \
                                                    threep_tokens[2], \
                                                    flav )
 
+                #print(threep_template)
+
                 threep[ iflav ][ ip ] = readEMFF_ASCII( threepDir, \
                                                         configList, \
                                                         threep_template, \
-                                                        QNum, 4 )
-
+                                                        QNum, 4, **kwargs )
+                """
                 if "comm" in kwargs:
 
                     print( "FLAG {} {}".format( flav, p), kwargs["comm"].Get_rank() )
-
+                """
         # End loop over projection
     # End loop over flavor
 
@@ -1248,11 +1257,21 @@ def writeAvgDataFile_wX( filename, x, y, error ):
 
     with open( filename, "w" ) as output:
 
-        for ix, iy, ierr in zip( x, y, error ):
+        if x.dtype == int:
 
-            output.write( "{:<20.15f}{:<20.15f}{:.15f}\n".format( ix, \
-                                                                  iy, \
-                                                                  ierr) )
+            for ix, iy, ierr in zip( x, y, error ):
+
+                output.write( "{:<20d}{:<20.10f}{:.10f}\n".format( ix, \
+                                                                      iy, \
+                                                                      ierr) )
+
+        else:
+
+            for ix, iy, ierr in zip( x, y, error ):
+
+                output.write( "{:<20.10f}{:<20.10f}{:.10f}\n".format( ix, \
+                                                                      iy, \
+                                                                      ierr) )
 
     print( "Wrote " + filename )
 
@@ -1302,10 +1321,11 @@ def writeSVDOutputFile( filename, data, Qsq ):
         for q in range( len( data ) ):
 
             for r in range( data[ q ].shape[ 0 ] ):
-                
-                output.write("{:<10}{:<10}{:<20.10}{:<.10}\n".format(r, Qsq[ q ], \
-                                                              data[q][r,0], \
-                                                              data[q][r,1]))
+
+                output.write("{:<10}{:<10}{:<20.10}{:<.10}\n".format(r, \
+                                                                     Qsq[q], \
+                                                                     data[q][r,0], \
+                                                                     data[q][r,1]))
 
     print( "Wrote " + filename )
 
