@@ -5,9 +5,9 @@ from scipy.optimize import least_squares, minimize
 # Exception thrown if good fit cannot be found.
 # The definition of a good fit can vary on fitting routine.
 
-#class lqcdjk_BadFitError(Exception):
-#    def __init__(self, mismatch):
-#        Exception.__init__(self, mismatch)
+class lqcdjk_BadFitError(Exception):
+    def __init__(self, mismatch):
+        Exception.__init__(self, mismatch)
 
 
 # Fit the effective mass using two different methods and vary the fit range
@@ -103,10 +103,10 @@ def mEffTwopFit( mEff, twop, rangeEnd, pSq, L, tsf ):
         # End loop over twop fit start
     # End loop over effective mass fit start
 
-    raise Exception( "fitTwop() could not find a good fit with " \
-                     + "given effective masses, " \
-                     + "two-point functions, " \
-                     + "and range end." )
+    raise lqcdjk_BadFitError( "fitTwop() could not find a good fit with " \
+                              + "given effective masses, " \
+                              + "two-point functions, " \
+                              + "and range end." )
 
     return -1
 
@@ -720,4 +720,29 @@ def twoStateErrorFunction( fitParams, tsink_twop, ti, tsink, twop, twop_err, thr
     
     #return np.concatenate( ( twopErr, threepErr ) )
 """
+
+def fitGenFormFactor( vals, vals_err, fitStart, fitEnd ):
+
+    # vals[ b, Q, ratio, t ]
+    # vals_err[ Q, ratio, t ]
+
+    fit = np.empty( vals.shape[ :-1 ] )
+
+    # Loop over bins
+    for b in range( vals.shape[ 0 ] ):
+        # Loop over Q
+        for iq in range( vals.shape[ 1 ] ):
+            # Loop over ratio
+            for ir in range( vals.shape[ 2 ] ):
+
+                fit[ b, iq, ir ] = np.polyfit(range( fitStart, \
+                                                      fitEnd + 1 ), \
+                                               vals[ b, iq, ir, \
+                                                     fitStart \
+                                                     : fitEnd + 1 ], \
+                                               0, w=vals_err[ iq, ir, \
+                                                              fitStart \
+                                                              : fitEnd + 1 ])
+
+    return fit
 

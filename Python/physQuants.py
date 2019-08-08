@@ -1,4 +1,5 @@
 import numpy as np
+import mpi_functions as mpi_fncs
 
 def energy( mEff, Qsq, L ):
 
@@ -24,8 +25,8 @@ def kineFactor_GE_GM( ratio_err, mEff, Q, L ):
 
     assert len( Q ) == momNum, "Error (kineFactor_GE_GM): " \
         + "momentum dimension of ratio errors " \
-        + momNum + " and momentum transfers " \
-        + len( Q ) + " do not match. "
+        + str( momNum ) + " and momentum transfers " \
+        + str( len( Q ) ) + " do not match. "
 
     # kineFactor[ b, Q, r, [GE,GM] ]
 
@@ -40,19 +41,62 @@ def kineFactor_GE_GM( ratio_err, mEff, Q, L ):
             kineFactor[ b, q ] = [ [ ( energy( mEff[ b ], \
                                                Qsq, L ) \
                                        + mEff[ b ] ), 0 ], \
-                                   [ 2.0 * np.pi / L * Q[ q, 0 ], 0 ], \
-                                   [ 2.0 * np.pi / L * Q[ q, 1 ], 0 ], \
-                                   [ 2.0 * np.pi / L * Q[ q, 2 ], 0 ], \
-                                   [ 0, 2.0 * np.pi / L * Q[ q, 2 ] ], \
-                                   [ 0, -2.0 * np.pi / L * Q[ q, 1 ] ], \
+                                   [ -2.0 * np.pi / L * Q[ q, 0 ], 0 ], \
+                                   [ -2.0 * np.pi / L * Q[ q, 1 ], 0 ], \
+                                   [ -2.0 * np.pi / L * Q[ q, 2 ], 0 ], \
                                    [ 0, -2.0 * np.pi / L * Q[ q, 2 ] ], \
-                                   [ 0, 2.0 * np.pi / L * Q[ q, 0 ] ], \
                                    [ 0, 2.0 * np.pi / L * Q[ q, 1 ] ], \
-                                   [ 0, -2.0 * np.pi / L * Q[ q, 0 ] ] ] \
+                                   [ 0, 2.0 * np.pi / L * Q[ q, 2 ] ], \
+                                   [ 0, -2.0 * np.pi / L * Q[ q, 0 ] ], \
+                                   [ 0, -2.0 * np.pi / L * Q[ q, 1 ] ], \
+                                   [ 0, 2.0 * np.pi / L * Q[ q, 0 ] ] ] \
                 / np.repeat( ratio_err[ q ], 2).reshape( 10 ,2 ) \
                 / KK( mEff[ b ], Qsq, L )
 
     return kineFactor
+
+
+def calc_gE_gM( decomp, ratio, ratio_err, Qsq_start, Qsq_end ):
+
+    binNum = decomp.shape[ 0 ]
+
+    gE = np.zeros( ( binNum ) )
+    gM = np.zeros( ( binNum ) )
+
+    for b in range( binNum ):
+
+        gE[ b ] = 2.0 * np.sum( decomp[ b, ..., 0 ] \
+                                * ratio[ b, \
+                                         Qsq_start \
+                                         : Qsq_end + 1 ] \
+                                / ratio_err[ Qsq_start \
+                                             : Qsq_end \
+                                             + 1 ] )
+
+        gM[ b ] = 2.0 * np.sum( decomp[ b, ..., 1 ] \
+                                * ratio[ b, \
+                                         Qsq_start \
+                                         : Qsq_end + 1 ] \
+                                / ratio_err[ Qsq_start \
+                                             : Qsq_end \
+                                             + 1 ] )
+    
+    return gE, gM
+
+
+def calc_GE_GM( gE, gM, mEff, Qsq, L ):
+
+    # gE[ b ], gM[ b ], mEff[ b ]
+    # Qsq, L
+
+    GE = gE \
+         + ( energy( mEff, Qsq, L ) - mEff ) \
+         / ( energy( mEff, Qsq, L ) + mEff ) * gM
+
+    GM = 2 * mEff / ( energy( mEff, Qsq, L ) + mEff ) \
+         * ( gM - gE )
+
+    return GE, GM
 
 
 # Convert Q^2 from units of (2pi/L)^2 to GeV^2
@@ -108,7 +152,7 @@ def mEff( twop ):
 
     # Loop through timestep, excluding the last timestep
 
-    for t in range( len( twop ) - 1 ):
+    for t in range( twop.shape[ -1 ] - 1 ):
 
         mEff[ ..., t ] = np.log( twop[ ..., t ] / twop[ ..., t + 1 ] )
 
@@ -206,7 +250,27 @@ def twopCosh( t, energy, tsink ):
     return np.exp( - energy * t ) + np.exp( - energy * ( tsink - t ) )
 
 
-# Calcualte the electromagnetic form factor.
+def calcRatio_Q( threep, twop, tsink ):
+    
+    # threep[ ..., Q, t ]
+    # twop[ ..., Q, t ]
+
+    ratio = np.zeros( threep.shape )
+    
+    for q in range( threep.shape[ -2 ] ):
+        for t in range( threep.shape[ -1 ] ):
+
+            ratio[..., q, t] = threep[ ..., q, t ] / twop[ ..., 0, tsink ] \
+                               * np.sqrt( np.abs( twop[ ..., q, tsink - t ] \
+                                                  * twop[ ..., 0, t ] \
+                                                  * twop[ ..., 0, tsink ] \
+                                                  / ( twop[ ..., 0, tsink - t ] \
+                                                      * twop[ ..., q, t ] \
+                                                      * twop[ ..., q, tsink ] ) ) )  
+
+    return ratio
+
+# Calculate the electromagnetic form factor.
 
 # threep:
 

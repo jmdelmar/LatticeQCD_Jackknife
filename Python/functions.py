@@ -4,6 +4,15 @@ import numpy as np
 import re
 from os import listdir as ls
 from glob import glob
+import mpi_functions as mpi_fncs
+
+def particleList():
+
+    return [ "nucleon", "pion", "kaon" ]
+
+def dataFormatList():
+
+    return [ "cpu", "gpu", "ASCII" ]
 
 # Calculates the jackknife error from the standard deviation.
 # Can be given any keyword arguments accepted by numpy.std(),
@@ -395,13 +404,67 @@ def check_sources( filenames, sourceNum ):
     return check
 
 
+def setFlavorStrings( particle, dataFormat ):
+
+    # Check inputs
+
+    assert particle in particleList(), \
+        "Particle " + particle + " is not supported."
+
+    assert dataFormat in dataFormatList(), \
+        "Data format " + dataFormat + " is not supported."
+
+    # Set flavors
+
+    if particle == "nucleon":
+
+        if dataFormat == "cpu" or dataFormat == "ASCII":
+
+            flavor = [ "up", "dn" ]
+
+        elif dataFormat == "gpu":
+
+            flavor = [ "up", "down" ]
+
+    elif particle == "pion":
+
+        flavor = [ "up" ]
+
+    elif particle == "kaon":
+
+        flavor = [ "up", "strange" ]
+
+    flavorNum = len( flavor )
+
+    return flavor, flavorNum
+
+
 # Average over configurations, excluding one bin.
 
 # vals: Values to be averaged
 # binSize: Size of bin to be exclude
 # ibin: index of bin to be exclude
 
-def jackknifeBin( vals, binSize, ibin ):
+def jackknifeBin( vals, binSize, ibin, **kwargs ):
+
+    if "comm" in kwargs:
+
+        mpi_fncs.mpiPrint(binSize,kwargs["comm"].Get_rank())
+        mpi_fncs.mpiPrint(ibin,kwargs["comm"].Get_rank())
+        mpi_fncs.mpiPrint(vals.shape,kwargs["comm"].Get_rank())
+        mpi_fncs.mpiPrint(vals,kwargs["comm"].Get_rank())
+        mpi_fncs.mpiPrint(vals[ : ibin * binSize, \
+                                ... ], \
+                          kwargs["comm"].Get_rank())
+        mpi_fncs.mpiPrint(vals[ ( ibin + 1 ) * binSize :, \
+                                ... ], \
+                          kwargs["comm"].Get_rank())
+        mpi_fncs.mpiPrint(np.average( np.vstack( ( vals[ : ibin * binSize, \
+                                          ... ], \
+                                    vals[ ( ibin + 1 ) * binSize :, \
+                                          ... ] ) ), \
+                                      axis=0 ), \
+                          kwargs["comm"].Get_rank() )
 
     return np.average( np.vstack( ( vals[ : ibin * binSize, \
                                           ... ], \
@@ -417,7 +480,7 @@ def jackknifeBin( vals, binSize, ibin ):
 # binSize: Size of bin to be excluded
 # bin_glob: Global indices for subset of bins
 
-def jackknifeBinSubset( vals, binSize, bin_glob ):
+def jackknifeBinSubset( vals, binSize, bin_glob, **kwargs ):
 
     assert len( vals ) % binSize == 0, "Number of configurations " \
         + str( len( vals ) ) + " not evenly divided by bin size " \
@@ -431,7 +494,9 @@ def jackknifeBinSubset( vals, binSize, bin_glob ):
 
     for b in range( binNum_loc ):
 
-        vals_jk[ b ] = jackknifeBin( vals, binSize, bin_glob[ b ] )
+        vals_jk[ b ] = jackknifeBin( vals, binSize, \
+                                     bin_glob[ b ], \
+                                     **kwargs)
 
     return np.array( vals_jk )
 

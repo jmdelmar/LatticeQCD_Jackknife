@@ -4,7 +4,7 @@ import numpy as np
 from os import listdir as ls
 from glob import glob
 import functions as fncs
-
+import mpi_functions as mpi_fncs
 
 #######################
 # HDF5 read functions #
@@ -352,11 +352,6 @@ def getHDF5File_wNames( configDir, configList, fn_template, \
     return dataset, datasetName
 
 
-########################
-# ASCII read functions #
-########################
-
-
 # Get the real part of gxDx, gyDy, gzDz, and gtDt
 # three-point functions at zero-momentum
 
@@ -694,17 +689,218 @@ def readAvgXFile( threepDir, configList, threep_tokens,
                 exit()                
 
 
-def readTxtFile( filename, columnNum, **kwargs ):
+def readEMFF_cpu( threepDir, configList, threep_template, Qsq, ts, proj, \
+                  particle, **kwargs ):
+
+    QsqNum = len( Qsq )
+
+    insertionCurrent = [ "=noe:g0=" , \
+                         "=noe:gx=" , \
+                         "=noe:gy=" , \
+                         "=noe:gz=" ]
+                         
+    insertionNum = len( insertionCurrent )
+
+    # Set data set names
+
+    dsetname = [ "" for qc in range( QsqNum * insertionNum ) ]
+                
+    # Loop over Qsq
+    for qsq, iqsq in zip( Qsq, range( QsqNum ) ):
+        # Loop over insertion current
+        for c, ic in zip( insertionCurrent, range( insertionNum ) ):
+            
+            if particle == "nucleon":
+
+                template = "/thrp/ave16/P{}/dt{}/{}/{}/msq{:.4}/arr"
+                    
+                dsetname[ iqsq * QsqNum + ic ] = template.format( proj, \
+                                                                  ts, \
+                                                                  flav, \
+                                                                  c, Qsq )
+
+            else:
+
+                template = "/thrp/ave16/dt{}/{}/{}/msq{:.4}/arr"
+                    
+                dsetname[ iqsq * QsqNum + ic ] = template.format( ts, \
+                                                                  flav, \
+                                                                  c, Qsq )
+
+        # End loop over insertion current
+    # End loop over Qsq
+
+    # Read three-point files
+    # threep[ conf, Qsq*curr, t ]
+
+    threep = getDatasets( threepDir, \
+                          configList, \
+                          threep_template, \
+                          dsetname=dsetname )[:,0,:,:,0]
+
+    # Reshape threep[ conf, Qsq*curr, t ] 
+    # -> threep[ conf, Qsq, curr, t ]
+    
+    threep = threep.reshape( threep.shape[ 0 ], QsqNum, \
+                             insertionNum, threep.shape[ -1 ] )
+                        
+    return threep
+
+    
+def readEMFF_gpu( threepDir, configList, threep_tokens, \
+                  QsqList, ts, proj, momBoost, particle, \
+                  dataFormat, **kwargs ):
+
+    return
+
+def readEMFF_ASCII( threepDir, configList, threep_template, \
+                    QNum, insertionNum, **kwargs ):
+
+    # threep[ conf, QNum*t*curr ]
+    
+    threep = getTxtData( threepDir, configList, \
+                            threep_template, dtype=float )[ ..., 4:6 ]
+
+    if "comm" in kwargs:
+
+            mpi_fncs.mpiPrint( threep, kwargs["comm"].Get_rank() )
+
+    threep = threep[ ..., 0 ] + threep[ ..., 1 ] * 1j
+
+    T = threep.shape[ -1 ] // QNum // insertionNum
+
+    if "comm" in kwargs:
+
+            mpi_fncs.mpiPrint( threep, kwargs["comm"].Get_rank() )
+
+    # Reshape threep[ conf, Q*t*curr ] 
+    # -> threep[ conf, Q, t, curr ]
+    
+    threep = threep.reshape( threep.shape[ :-1 ] + \
+                             ( QNum, T, insertionNum ) )
+
+    # threep[ conf, Q, t, curr ] 
+    # -> threep[ conf, Q, curr, t ]
+
+    threep = np.moveaxis( threep, -1, -2 )
+
+    return threep
+
+
+def readEMFormFactorFile( threepDir, configList, threep_tokens, Qsq, QNum, \
+                          ts, proj, momBoost, particle, dataFormat, \
+                          **kwargs ):
+
+    flavor, flavorNum = fncs.setFlavorStrings( particle, dataFormat )
+
+    projNum = len( proj )
+
+    threep = fncs.initEmptyList( np.zeros( ( flavorNum, projNum ) ), 2 )
+
+    # Loop over flavor
+    for flav, iflav in zip( flavor, range( flavorNum ) ):
+        # Loop over projection
+        for p, ip in zip( proj, range( projNum ) ):
+
+            # Set filename template
+    
+            if dataFormat == "cpu":
+                
+                template = "{0}{1}{2}{3:+}_{4:+}_{5:+}.{6}.h5"
+    
+                threep_template = template.format( threep_tokens[0], \
+                                                   ts, \
+                                                   threep_tokens[1], \
+                                                   momBoost[0], \
+                                                   momBoost[1], \
+                                                   momBoost[2], \
+                                                   flav )
+
+                threep[ iflav ][ ip ] = readEMFF_cpu( threepDir, \
+                                                      configList, \
+                                                      threep_template, \
+                                                      Qsq, ts, p, particle, \
+                                                      **kwargs )
+
+
+            elif dataFormat == "gpu":
+
+                    template = "{0}{1:+}{2:+}{3:+}{4}"
+
+                    threep_template = template.format( threep_tokens[0], \
+                                                       momBoost[0], \
+                                                       momBoost[1], \
+                                                       momBoost[2], \
+                                                       threep_tokens[1], **kwargs )
+
+            elif dataFormat == "ASCII":
+
+                template = "{0}{1}{2}{3}{4}{5}"
+
+                threep_template = template.format( threep_tokens[0], p, \
+                                                   threep_tokens[1], ts, \
+                                                   threep_tokens[2], \
+                                                   flav )
+
+                #print(threep_template)
+
+                threep[ iflav ][ ip ] = readEMFF_ASCII( threepDir, \
+                                                        configList, \
+                                                        threep_template, \
+                                                        QNum, 4, **kwargs )
+                """
+                if "comm" in kwargs:
+
+                    print( "FLAG {} {}".format( flav, p), kwargs["comm"].Get_rank() )
+                """
+        # End loop over projection
+    # End loop over flavor
+
+    return np.array( threep )
+
+
+########################
+# ASCII read functions #
+########################
+
+
+def getTxtData( configDir, configList, fn_template, **kwargs ):
+
+    configNum = len( configList )
+
+    data = fncs.initEmptyList( configNum, 1 )
+
+    # Loop over config indices
+    for c in range( configNum ):
+        
+        filename = configDir + fn_template.replace( "*", configList[ c ] )
+
+        # Get data
+
+        data[ c ] = readTxtFile( filename, **kwargs )
+
+    # End loop over configs
+
+    return np.array( data )
+
+
+def readTxtFile( filename, **kwargs ):
 
     with open( filename, "r" ) as txtFile:
 
-        lineNum = len( txtFile.readlines() )
-        
+        lines = txtFile.readlines()
+
+        lineNum = len( lines )
+
+        columnNum = len( lines[0].split() )
+
         # Go back to beginning of file
         
         txtFile.seek( 0 )
 
-        data = np.array( txtFile.read().split(), **kwargs ).reshape( lineNum, columnNum )
+        data = np.array( txtFile.read().split(), \
+                         **kwargs ).reshape( lineNum, \
+                                             columnNum )
 
     return data
 
@@ -1061,11 +1257,21 @@ def writeAvgDataFile_wX( filename, x, y, error ):
 
     with open( filename, "w" ) as output:
 
-        for ix, iy, ierr in zip( x, y, error ):
+        if x.dtype == int:
 
-            output.write( "{:<20.15f}{:<20.15f}{:.15f}\n".format( ix, \
-                                                                  iy, \
-                                                                  ierr) )
+            for ix, iy, ierr in zip( x, y, error ):
+
+                output.write( "{:<20d}{:<20.10f}{:.10f}\n".format( ix, \
+                                                                      iy, \
+                                                                      ierr) )
+
+        else:
+
+            for ix, iy, ierr in zip( x, y, error ):
+
+                output.write( "{:<20.10f}{:<20.10f}{:.10f}\n".format( ix, \
+                                                                      iy, \
+                                                                      ierr) )
 
     print( "Wrote " + filename )
 
@@ -1115,10 +1321,11 @@ def writeSVDOutputFile( filename, data, Qsq ):
         for q in range( len( data ) ):
 
             for r in range( data[ q ].shape[ 0 ] ):
-                
-                output.write("{:<10}{:<10}{:<20.10}{:<.10}\n".format(r, Qsq[ q ], \
-                                                              data[q][r,0], \
-                                                              data[q][r,1]))
+
+                output.write("{:<10}{:<10}{:<20.10}{:<.10}\n".format(r, \
+                                                                     Qsq[q], \
+                                                                     data[q][r,0], \
+                                                                     data[q][r,1]))
 
     print( "Wrote " + filename )
 
