@@ -90,8 +90,6 @@ comm = MPI.COMM_WORLD
 procNum = comm.Get_size()
 rank = comm.Get_rank()
 
-mpi_fncs.mpiPrint(procNum,rank)
-
 # Input directories and filename templates
 
 threepDir = args.threep_dir
@@ -664,8 +662,6 @@ for ts, its in zip( tsink, range( tsinkNum ) ) :
                                   threep_loc[ :, 3, :, :, 2, : ].real ], \
                                 axis=3 )
         
-        mpi_fncs.mpiPrint(threep_loc.shape,rank)
-
         threep = np.zeros( ( flavNum, configNum, QNum, \
                              ratioNum, threepTimeNum ) )
 
@@ -679,12 +675,6 @@ for ts, its in zip( tsink, range( tsinkNum ) ) :
                             threep[ iflav ] )
 
         # End loop over flavor
-
-        mpi_fncs.mpiPrint(threep.shape,rank)
-        mpi_fncs.mpiPrint(threep[:,12,...],rank)
-
-        exit()
-        #CJL: HERE
 
         # Loop over flavor
         for iflav in range( flavNum ):
@@ -797,8 +787,6 @@ for ts, its in zip( tsink, range( tsinkNum ) ) :
                 gE = np.zeros( ( QsqNum, binNum_glob ) )
                 gM = np.zeros( ( QsqNum, binNum_glob ) )
 
-                decomp_avg = [ [] for qsq in range( QsqNum ) ]
-
                 for qsq in range( QsqNum ):
 
                     ###############
@@ -859,9 +847,6 @@ for ts, its in zip( tsink, range( tsinkNum ) ) :
                     decomp=np.transpose(v@smat_inv@uT, \
                                          (0,2,1))
                     
-                    decomp_avg[ qsq ] = np.average( decomp, \
-                                                    axis=0 )
-
                     decomp = decomp.reshape(binNum_glob, \
                                             Qsq_end[ qsq ] \
                                             - Qsq_start[ qsq ] \
@@ -891,14 +876,7 @@ for ts, its in zip( tsink, range( tsinkNum ) ) :
                 output_filename = output_template.replace( "*", \
                                                            particle + "_" \
                                                            + flav_str[iflav] \
-                                                           + "_decomp_tsink" \
-                                                           + str( ts ) )
-                rw.writeSVDOutputFile( output_filename, decomp_avg, Qsq )
-
-                output_filename = output_template.replace( "*", \
-                                                           particle + "_" \
-                                                           + flav_str[iflav] \
-                                                           + "_gE_tsink" \
+                                                           + "_GE_tsink" \
                                                            + str( ts ) )
                 rw.writeAvgDataFile_wX( output_filename, Qsq, \
                                            gE_avg, gE_err )
@@ -906,7 +884,7 @@ for ts, its in zip( tsink, range( tsinkNum ) ) :
                 output_filename = output_template.replace( "*", \
                                                            particle + "_" \
                                                            + flav_str[iflav] \
-                                                           + "_gM_tsink" \
+                                                           + "_GM_tsink" \
                                                            + str( ts ) )
                 rw.writeAvgDataFile_wX( output_filename, Qsq, \
                                            gM_avg, gM_err )

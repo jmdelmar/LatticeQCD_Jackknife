@@ -41,15 +41,15 @@ def kineFactor_GE_GM( ratio_err, mEff, Q, L ):
             kineFactor[ b, q ] = [ [ ( energy( mEff[ b ], \
                                                Qsq, L ) \
                                        + mEff[ b ] ), 0 ], \
-                                   [ 2.0 * np.pi / L * Q[ q, 0 ], 0 ], \
-                                   [ 2.0 * np.pi / L * Q[ q, 1 ], 0 ], \
-                                   [ 2.0 * np.pi / L * Q[ q, 2 ], 0 ], \
-                                   [ 0, 2.0 * np.pi / L * Q[ q, 2 ] ], \
-                                   [ 0, -2.0 * np.pi / L * Q[ q, 1 ] ], \
+                                   [ -2.0 * np.pi / L * Q[ q, 0 ], 0 ], \
+                                   [ -2.0 * np.pi / L * Q[ q, 1 ], 0 ], \
+                                   [ -2.0 * np.pi / L * Q[ q, 2 ], 0 ], \
                                    [ 0, -2.0 * np.pi / L * Q[ q, 2 ] ], \
-                                   [ 0, 2.0 * np.pi / L * Q[ q, 0 ] ], \
                                    [ 0, 2.0 * np.pi / L * Q[ q, 1 ] ], \
-                                   [ 0, -2.0 * np.pi / L * Q[ q, 0 ] ] ] \
+                                   [ 0, 2.0 * np.pi / L * Q[ q, 2 ] ], \
+                                   [ 0, -2.0 * np.pi / L * Q[ q, 0 ] ], \
+                                   [ 0, -2.0 * np.pi / L * Q[ q, 1 ] ], \
+                                   [ 0, 2.0 * np.pi / L * Q[ q, 0 ] ] ] \
                 / np.repeat( ratio_err[ q ], 2).reshape( 10 ,2 ) \
                 / KK( mEff[ b ], Qsq, L )
 
