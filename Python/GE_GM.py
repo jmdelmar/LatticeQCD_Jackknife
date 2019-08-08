@@ -669,10 +669,19 @@ for ts, its in zip( tsink, range( tsinkNum ) ) :
         threep = np.zeros( ( flavNum, configNum, QNum, \
                              ratioNum, threepTimeNum ) )
 
-        comm.Allgather( threep_loc, threep )
+        # Allgather threep for each flavor so that 
+        # everything is in the correct order
+
+        # Loop over flavor
+        for iflav in range( flavNum ):
+
+            comm.Allgather( threep_loc[ iflav ], \
+                            threep[ iflav ] )
+
+        # End loop over flavor
 
         mpi_fncs.mpiPrint(threep.shape,rank)
-        mpi_fncs.mpiPrint(np.average(threep,axis=1),rank)
+        mpi_fncs.mpiPrint(threep[:,12,...],rank)
 
         exit()
         #CJL: HERE
