@@ -1289,7 +1289,7 @@ def readAvgX3File( threepDir, configList, threep_tokens,
                                                            0, \
                                                            0, \
                                                            :, \
-                                                           0 ].real
+                                                           0 ].imag
 
             if particle == "kaon":
             
@@ -1305,7 +1305,7 @@ def readAvgX3File( threepDir, configList, threep_tokens,
                                                                    0, \
                                                                    0, \
                                                                    :, \
-                                                                   0 ].real
+                                                                   0 ].imag
 
                 return [ threep, threep_s ]
 
