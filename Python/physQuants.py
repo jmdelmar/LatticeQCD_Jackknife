@@ -1,4 +1,5 @@
 import numpy as np
+import lqcdjk_fitting as fit
 import mpi_functions as mpi_fncs
 
 def energy( mEff, Qsq, L ):
@@ -164,6 +165,15 @@ def mEff( twop ):
     return mEff
 
 
+# avgXKineFactor = E/(m(1/2*m^2-2*E^2))
+
+def avgXKineFactor( mEff, momSq, L ):
+
+    return energy( mEff, momSq, L ) \
+        / ( mEff * ( 0.5 * mEff ** 2 \
+                     - 2.0 * energy( mEff, momSq, L ) ** 2 ) )
+
+
 # Calculate the quark momentum fraction <x> for three-point functions with
 # zero final momentum.
 
@@ -203,13 +213,9 @@ def calcAvgX_momBoost( threep, twop_tsink, mEff, momSq, L ):
     # momSq
     # L
 
-    # prefactor = 8/3 * E / ( E^2 + p^2 )
+    # prefactor = E/(m(1/2*m^2-2*E))
 
-    preFactor = -8.0 / 3.0 * energy( mEff, momSq, L ) \
-                / ( energy( mEff, momSq, L ) ** 2 \
-                    + ( 2.0 * np.pi / L ) ** 2 * momSq )
-
-    #preFactor = 1.0
+    preFactor = avgXKineFactor( mEff, momSq, L )
 
     avgX = np.zeros( threep.shape )
 
@@ -219,6 +225,80 @@ def calcAvgX_momBoost( threep, twop_tsink, mEff, momSq, L ):
 
     return avgX
 
+
+def calcAvgX_twopTwoStateFit( threep, tsink, mEff, momSq, L, T, \
+                              c0, c1, E0, E1 ):
+
+    # threep[ b, t ]
+    # tsink
+    # mEff[ b ]
+    # momSq
+    # L
+    # T
+    # c0[ b ]
+    # c1[ b ]
+    # E0[ b ]
+    # E1[ b ]
+    
+    binNum = threep.shape[0]
+
+    # prefactor = E/(m(1/2*m^2-2*E))
+
+    preFactor = np.repeat( avgXKineFactor( mEff, momSq, L ), \
+                           T ).reshape( binNum, T )
+
+    c0_cp = np.repeat( c0, T ).reshape( binNum, T )
+    c1_cp = np.repeat( c1, T ).reshape( binNum, T )
+    E0_cp = np.repeat( E0, T ).reshape( binNum, T )
+    E1_cp = np.repeat( E1, T ).reshape( binNum, T )
+
+    avgX = preFactor * threep \
+           / fit.twoStateTwop( tsink, T, \
+                               c0_cp, c1_cp, \
+                               E0_cp, E1_cp )
+    return avgX
+
+
+def calcAvgX_twopOneStateFit( threep, tsink, mEff, momSq, L, T, G, E ):
+
+    # threep[ b, t ]
+    # tsink
+    # mEff[ b ]
+    # momSq
+    # L
+    # T
+    # G[ b ]
+    # E[ b ]
+    
+    binNum = threep.shape[0]
+
+    # prefactor = E/(m(1/2*m^2-2*E))
+
+    preFactor = energy( mEff, momSq, L ) \
+                / ( mEff * ( 0.5 * mEff ** 2 \
+                             - 2.0 * energy( mEff, momSq, L ) ** 2 ) )
+
+    G_cp = np.repeat( G, T ).reshape( binNum, T )
+    E_cp = np.repeat( E, T ).reshape( binNum, T )
+    
+    avgX = preFactor * threep \
+           / fit.oneStateTwop( tsink, T, \
+                               G_cp, E_cp )
+
+    return avgX
+
+
+def calcAvgX_twoStateFit( a00, c0, mEff, momSq, L, ZvD1 ):
+
+    # a00[ b ]
+    # c0 [ b ]
+    # mEff[ b ]
+    # momSq
+    # L
+    # ZvD1
+
+    return ZvD1 * avgXKineFactor( mEff, momSq, L ) \
+        * a00 / c0
 
 # Calculate the axial charge gA.
 

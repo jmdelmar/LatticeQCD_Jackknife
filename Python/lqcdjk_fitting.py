@@ -1,5 +1,6 @@
 import numpy as np
 import functions as fncs
+import physQuants as pq
 from scipy.optimize import least_squares, minimize
 
 # Exception thrown if good fit cannot be found.
@@ -746,3 +747,164 @@ def fitGenFormFactor( vals, vals_err, fitStart, fitEnd ):
 
     return fit
 
+
+def calcTwopOneStateCurve( G, E, T, rangeStart, rangeEnd ):
+
+    binNum = c0.shape
+
+    curve = np.zeros( ( binNum, 100 ) )
+
+    ts = np.concatenate( ( np.linspace( rangeStart, \
+                                         rangeEnd, 50 ), \
+                            np.linspace( T - rangeEnd, \
+                                         T- rangeStart, 50 ) ) )
+
+    for b in range( binNum ):
+        for t in range( ts.shape[ -1 ] ):
+                
+            curve[ b, t ] = oneStateTwop( t_s[ t ], T, \
+                                              G[ b ], E[ b ] )
+
+    
+    return curve, ts
+
+
+def calcTwopTwoStateCurve( c0, c1, E0, E1, T, rangeStart, rangeEnd ):
+
+    binNum = c0.shape[ 0 ]
+
+    curve = np.zeros( ( binNum, 100 ) )
+
+    ts = np.concatenate( ( np.linspace( rangeStart, \
+                                         rangeEnd, 50 ), \
+                            np.linspace( T - rangeEnd, \
+                                         T- rangeStart, 50 ) ) )
+
+    for b in range( binNum ):
+        for t in range( ts.shape[ -1 ] ):
+                
+            curve[ b, t ] = twoStateTwop( ts[ t ], T, \
+                                          c0[ b ], c1[ b ], \
+                                          E0[ b ], E1[ b ] )
+
+    
+    return curve, ts
+
+
+def calcThreepTwoStateCurve( a00, a01, a11, E0, E1, T, tsink, \
+                             ti_to_fit, neglect ):
+
+    # a00[ b ] 
+    # a01[ b ] 
+    # a11[ b ] 
+    # tsink[ ts ] 
+    # ti_to_fit[ ts ][ t ]
+    # neglect
+
+    tsinkNum = len( tsink )
+
+    binNum = a00.shape[ 0 ]
+
+    ti = np.zeros( ( tsinkNum, 100 ) )
+    curve = np.zeros( ( binNum, tsinkNum, 100 ) )
+            
+    for b in range( binNum ):
+        for ts in range( tsinkNum ):
+
+            ti[ ts ] = np.linspace( ti_to_fit[ ts ][ 0 ], \
+            ti_to_fit[ ts ][ -1 ], \
+            num = 100 )
+            """
+            ti[ts]=np.concatenate((np.linspace(ti_to_fit[ts][0],\
+                                               ti_to_fit[ts][tsink[ts] - 2\
+                                                         * neglect], \
+                                               num = 50), \
+                                   np.linspace(ti_to_fit[ts][tsink[ts] - 2\
+                                                         * neglect + 1],\
+                                               ti_to_fit[ts][-1], \
+                                               num = 50)))
+            """
+            for t in range( len( ti[ ts ] ) ):
+                
+                curve[b,ts,t] = twoStateThreep( ti[ ts, t ], \
+                                                tsink[ ts ], \
+                                                T, \
+                                                a00[ b ], \
+                                                a01[ b ], \
+                                                a11[ b ], \
+                                                E0[ b ], \
+                                                E1[ b ] )
+
+            # End loop over insertion time
+        # End loop over tsink
+    # End loop over bin
+
+    return curve, ti
+
+
+def calcAvgXTwoStateCurve( a00, a01, a11, c0, c1, E0, E1, momSq, L, T, \
+                           ZvD1, tsink, ti_to_fit, neglect ):
+
+    # a00[ b ] 
+    # a01[ b ] 
+    # a11[ b ] 
+    # c0[ b ] 
+    # c11[ b ] 
+    # E0[ b ] 
+    # E1[ b ] 
+    # momSq
+    # ZvD1
+    # L
+    # T
+    # tsink[ ts ] 
+    # ti_to_fit[ ts ][ t ]
+    # neglect
+
+    tsinkNum = len( tsink )
+
+    binNum = a00.shape[ 0 ]
+
+    curve = np.zeros( ( binNum, tsinkNum, 100 ) )
+    ti = np.zeros( ( tsinkNum, 100 ) )
+            
+    for b in range( binNum ):
+        for ts in range( tsinkNum ):
+
+            ti[ ts ] = np.linspace( ti_to_fit[ ts ][ 0 ], \
+            ti_to_fit[ ts ][ -1 ], \
+            num = 100 )
+            """
+            ti[ts]=np.concatenate((np.linspace(ti_to_fit[ts][0],\
+                                               ti_to_fit[ts][tsink[ts] - 2\
+                                                         * neglect], \
+                                               num = 50), \
+                                   np.linspace(ti_to_fit[ts][tsink[ts] - 2\
+                                                         * neglect + 1],\
+                                               ti_to_fit[ts][-1], \
+                                               num = 50)))
+            """
+            for t in range( len( ti[ ts ] ) ):
+                
+                curve[ b, ts, t ] = ZvD1 \
+                                    * pq.avgXKineFactor( E0[ b ], \
+                                                         momSq, \
+                                                         L ) \
+                                    * twoStateThreep( ti[ ts, t ], \
+                                                      tsink[ ts ], \
+                                                      T, \
+                                                      a00[ b ], \
+                                                      a01[ b ], \
+                                                      a11[ b ], \
+                                                      E0[ b ], \
+                                                      E1[ b ] ) \
+                                    / twoStateTwop( tsink[ ts ], \
+                                                    T, \
+                                                    c0[ b ], \
+                                                    c1[ b ], \
+                                                    E0[ b ], \
+                                                    E1[ b ] )
+            # End loop over insertion time
+        # End loop over tsink
+    # End loop over bin
+
+    return curve, ti
