@@ -11,6 +11,106 @@ class lqcdjk_BadFitError(Exception):
         Exception.__init__(self, mismatch)
 
 
+def testmEffTwopFit( mEff, twop, rangeEnd, pSq, L, tsf ):
+
+    binNum = mEff.shape[ 0 ]
+    T = 2 * ( twop.shape[ -1 ] - 1 )
+
+    mEff_err = fncs.calcError( mEff, binNum )
+
+    results = []
+
+    # Loop over plateau fit range starts
+    for mEff_rangeStart in range( 8, rangeEnd - 5 ):
+
+        mEff_fit = np.zeros( binNum )
+        mEff_chiSq = np.zeros( binNum )
+
+        t_to_fit = range( mEff_rangeStart, \
+                          rangeEnd + 1 )
+
+        # Loop over bins
+        for b in range( binNum ):
+
+            # Perform the plateau fit
+
+            mEff_fit[ b ], mEff_chiSq[ b ], \
+                dum, dum, dum = np.polyfit( t_to_fit, \
+                                            mEff[ b, \
+                                                  mEff_rangeStart \
+                                                  : rangeEnd + 1 ], 0, \
+                                            w=mEff_err[ mEff_rangeStart \
+                                                        : rangeEnd + 1 ] ** -1, \
+                                            full=True )
+            
+        # End loop over bins
+
+        # Average over bins
+
+        mEff_fit_avg = np.average( mEff_fit )
+        mEff_fit_err = fncs.calcError( mEff_fit, binNum )
+
+        mEff_chiSq_pdf = np.average( mEff_chiSq ) / ( len( t_to_fit ) - 1 )
+
+        for twop_rangeStart in range( 1, 8 ):
+
+            # Two-state fit
+
+            if tsf:
+
+                # fitParams[ b, param ]
+
+                fitParams, chiSq = twoStateFit_twop( twop, \
+                                                     twop_rangeStart, \
+                                                     rangeEnd, T )
+
+                E_avg = np.average( fitParams[ :, 2 ] )
+                E_err = fncs.calcError( fitParams[ :, 2 ], binNum )
+
+                dof = twop_rangeStart - rangeEnd + 1 - 4
+
+            # One-state fit
+
+            else:
+
+                # Perform one-state fit
+                
+                fitParams, chiSq = oneStateFit_twop( twop, \
+                                                     twop_rangeStart, \
+                                                     rangeEnd, T )
+                
+                E_avg = np.average( fitParams[ :, 1 ], axis=0 )
+                E_err = fncs.calcError( fitParams[ :, 1 ], binNum )
+
+                dof = twop_rangeStart - rangeEnd + 1 - 2
+
+            # End if no two-state fit
+
+            chiSq_pdf = chiSq / dof
+
+            mass = np.sqrt( E_avg ** 2 \
+                            - ( 2.0 * np.pi / L ) ** 2 * pSq )
+
+            # Check if the fits are good
+
+            relDiff = np.abs( mEff_fit_avg - mass ) \
+                      / ( 0.5 * ( mEff_fit_avg + mass ) )
+        
+            if 0.5 * E_err > relDiff \
+               and 0.5 * mEff_fit_err > relDiff:
+                
+                results.append( ( fitParams, chiSq, \
+                                  mEff_fit, mEff_chiSq, \
+                                  twop_rangeStart, \
+                                  mEff_rangeStart ) )
+
+            # End if relDiff < dm/2
+        # End loop over twop fit start
+    # End loop over effective mass fit start
+
+    return results
+
+
 # Fit the effective mass using two different methods and vary the fit range
 # starting point until the relative difference between the masses calculated
 # by both methods is less than half of both their jackkinfe errors. 
@@ -25,7 +125,7 @@ class lqcdjk_BadFitError(Exception):
 def mEffTwopFit( mEff, twop, rangeEnd, pSq, L, tsf ):
 
     binNum = mEff.shape[ 0 ]
-    T = twop.shape[ -1 ]
+    T = 2 * ( twop.shape[ -1 ] - 1 )
 
     mEff_err = fncs.calcError( mEff, binNum )
 
@@ -126,11 +226,8 @@ def twoStateFit_twop( twop, twop_rangeStart, twop_rangeEnd, T ):
 
     # Set two-point functions to fit based on fit range start and end
 
-    twop_to_fit = np.concatenate( ( twop[ :, twop_rangeStart : \
-                                          twop_rangeEnd + 1 ], \
-                                    twop[ :, T - twop_rangeEnd : \
-                                          T - twop_rangeStart + 1 ] ), \
-                                  axis=1 )
+    twop_to_fit = twop[ :, twop_rangeStart : \
+                        twop_rangeEnd + 1 ]
 
     # fit[b]
 
@@ -144,10 +241,8 @@ def twoStateFit_twop( twop, twop_rangeStart, twop_rangeEnd, T ):
     twop_avg = np.average( twop_to_fit, axis=0 )
     twop_err = fncs.calcError( twop_to_fit, binNum )
     
-    tsink = np.concatenate( ( range( twop_rangeStart, \
-                                     twop_rangeEnd + 1 ), \
-                              range( T - twop_rangeEnd, \
-                                     T - twop_rangeStart + 1 ) ) )
+    tsink = np.array( range( twop_rangeStart, \
+                             twop_rangeEnd + 1 ) )
 
     # Find fit parameters of mean values to use as initial guess
 
@@ -748,16 +843,50 @@ def fitGenFormFactor( vals, vals_err, fitStart, fitEnd ):
     return fit
 
 
-def calcTwopOneStateCurve( G, E, T, rangeStart, rangeEnd ):
+def calcmEffTwoStateCurve( c0, c1, E0, E1, T, rangeStart, rangeEnd ):
 
-    binNum = c0.shape
+    binNum = c0.shape[ 0 ]
 
     curve = np.zeros( ( binNum, 100 ) )
 
-    ts = np.concatenate( ( np.linspace( rangeStart, \
-                                         rangeEnd, 50 ), \
-                            np.linspace( T - rangeEnd, \
-                                         T- rangeStart, 50 ) ) )
+    ts = np.linspace( rangeStart, \
+                      rangeEnd, 100 )
+
+    for b in range( binNum ):
+
+        twop_halfT = twoStateTwop( T // 2, T, \
+                                   c0[ b ], c1[ b ], \
+                                   E0[ b ], E1[ b ] )
+
+        for t in range( ts.shape[ -1 ] ):
+                
+            twop_tp1 = twoStateTwop( ts[ t ] + 1, T, \
+                                     c0[ b ], c1[ b ], \
+                                     E0[ b ], E1[ b ] )
+
+            twop_tm1 = twoStateTwop( ts[ t ] - 1, T, \
+                                     c0[ b ], c1[ b ], \
+                                     E0[ b ], E1[ b ] )
+
+            curve[ b, t ] = 0.5 * np.log(( twop_tm1 \
+                                           + np.sqrt( twop_tm1 ** 2 \
+                                                      - twop_halfT ** 2 )) \
+                                         / ( twop_tp1 \
+                                             + np.sqrt( twop_tp1 ** 2 \
+                                                        - twop_halfT ** 2 )))
+
+    
+    return curve, ts
+
+
+def calcTwopOneStateCurve( G, E, T, rangeStart, rangeEnd ):
+
+    binNum = c0.shape[ 0 ]
+
+    curve = np.zeros( ( binNum, 100 ) )
+
+    ts = np.linspace( rangeStart, \
+                      rangeEnd, 100 )
 
     for b in range( binNum ):
         for t in range( ts.shape[ -1 ] ):
@@ -775,10 +904,8 @@ def calcTwopTwoStateCurve( c0, c1, E0, E1, T, rangeStart, rangeEnd ):
 
     curve = np.zeros( ( binNum, 100 ) )
 
-    ts = np.concatenate( ( np.linspace( rangeStart, \
-                                         rangeEnd, 50 ), \
-                            np.linspace( T - rangeEnd, \
-                                         T- rangeStart, 50 ) ) )
+    ts = np.linspace( rangeStart, \
+                      rangeEnd, 100 )
 
     for b in range( binNum ):
         for t in range( ts.shape[ -1 ] ):
@@ -842,8 +969,10 @@ def calcThreepTwoStateCurve( a00, a01, a11, E0, E1, T, tsink, \
     return curve, ti
 
 
-def calcAvgXTwoStateCurve( a00, a01, a11, c0, c1, E0, E1, momSq, L, T, \
-                           ZvD1, tsink, ti_to_fit, neglect ):
+def calcAvgXTwoStateCurve_const_ts( a00, a01, a11, c0, c1, \
+                                    E0, E1, momSq, L, T, \
+                                    ZvD1, tsink, ti_to_fit, \
+                                    neglect ):
 
     # a00[ b ] 
     # a01[ b ] 
@@ -897,14 +1026,72 @@ def calcAvgXTwoStateCurve( a00, a01, a11, c0, c1, E0, E1, momSq, L, T, \
                                                       a11[ b ], \
                                                       E0[ b ], \
                                                       E1[ b ] ) \
+                                    / c0[ b ] / np.exp( -E0[ b ] \
+                                                        * tsink[ ts ] )
+                """
                                     / twoStateTwop( tsink[ ts ], \
                                                     T, \
                                                     c0[ b ], \
                                                     c1[ b ], \
                                                     E0[ b ], \
                                                     E1[ b ] )
+                """
             # End loop over insertion time
         # End loop over tsink
     # End loop over bin
 
     return curve, ti
+
+
+def calcAvgXTwoStateCurve_const_ti( a00, a01, a11, c0, c1, \
+                                    E0, E1, momSq, L, T, \
+                                    ZvD1, firstTs, lastTs ):
+
+    # a00[ b ] 
+    # a01[ b ] 
+    # a11[ b ] 
+    # c0[ b ] 
+    # c11[ b ] 
+    # E0[ b ] 
+    # E1[ b ] 
+    # momSq
+    # L
+    # T
+    # ZvD1
+    #firstTs
+    #lastTs
+
+    binNum = a00.shape[ 0 ]
+
+    curve = np.zeros( ( binNum, 100 ) )
+    tsink = np.linspace( firstTs, lastTs, num=100 )
+            
+    for b in range( binNum ):
+        for ts in range( len( tsink ) ):
+                
+            curve[ b, ts ] = ZvD1 \
+                             * pq.avgXKineFactor( E0[ b ], \
+                                                  momSq, \
+                                                  L ) \
+                             * twoStateThreep( tsink[ ts ] / 2, \
+                                               tsink[ ts ], \
+                                               T, \
+                                               a00[ b ], \
+                                               a01[ b ], \
+                                               a11[ b ], \
+                                               E0[ b ], \
+                                               E1[ b ] ) \
+                             / c0[ b ] / np.exp( -E0[ b ] \
+                                                 * tsink[ ts ] )
+            """
+            / twoStateTwop( tsink[ ts ], \
+            T, \
+            c0[ b ], \
+            c1[ b ], \
+            E0[ b ], \
+            E1[ b ] )
+            """
+        # End loop over tsink
+    # End loop over bin
+
+    return curve, tsink

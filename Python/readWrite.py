@@ -382,14 +382,7 @@ def readAvgXFile( threepDir, configList, threep_tokens,
 
     else:
 
-        threep_template = threep_tokens[0] + \
-                          fncs.signToString( momList[0] ) \
-                          + str(momList[0]) + "_" \
-                          + fncs.signToString( momList[1] ) \
-                          + str(momList[1]) + "_" \
-                          + fncs.signToString( momList[2] ) \
-                          + str(momList[2]) \
-                          + threep_tokens[1]
+        threep_template = threep_tokens[0]
 
     if particle == "nucleon":
 
@@ -398,74 +391,74 @@ def readAvgXFile( threepDir, configList, threep_tokens,
             filename_u_gxDx = threep_template + str( ts ) + ".up.h5"
 
             threep_u_gxDx = getDatasets( threepDir, \
-                                            configList, \
-                                            filename_u_gxDx, \
-                                            "=der:gxDx:sym=", \
-                                            "msq0000", \
-                                            "arr" )[ :, 0, 0, :, 0 ].real
+                                         configList, \
+                                         filename_u_gxDx, \
+                                         "=der:gxDx:sym=", \
+                                         "msq0000", \
+                                         "arr" )[ :, 0, 0, :, 0 ].real
 
             filename_u_gyDy = threep_template + str( ts ) + ".up.h5"
 
             threep_u_gyDy = getDatasets( threepDir, \
-                                            configList, \
-                                            filename_u_gyDy, \
-                                            "=der:gyDy:sym=", \
-                                            "msq0000", \
-                                            "arr" )[ :, 0, 0, :, 0 ].real
+                                         configList, \
+                                         filename_u_gyDy, \
+                                         "=der:gyDy:sym=", \
+                                         "msq0000", \
+                                         "arr" )[ :, 0, 0, :, 0 ].real
 
             filename_u_gzDz = threep_template + str( ts ) + ".up.h5"
 
             threep_u_gzDz = getDatasets( threepDir, \
-                                            configList, \
-                                            filename_u_gzDz, \
-                                            "=der:gzDz:sym=", \
-                                            "msq0000", \
-                                            "arr" )[ :, 0, 0, :, 0 ].real
+                                         configList, \
+                                         filename_u_gzDz, \
+                                         "=der:gzDz:sym=", \
+                                         "msq0000", \
+                                         "arr" )[ :, 0, 0, :, 0 ].real
 
             filename_u_gtDt = threep_template + str( ts ) + ".up.h5"
 
             threep_u_gtDt = getDatasets( threepDir, \
-                                            configList, \
-                                            filename_u_gtDt, \
-                                            "=der:g0D0:sym=", \
-                                            "msq0000", \
-                                            "arr" )[ :, 0, 0, :, 0 ].real
+                                         configList, \
+                                         filename_u_gtDt, \
+                                         "=der:g0D0:sym=", \
+                                         "msq0000", \
+                                         "arr" )[ :, 0, 0, :, 0 ].real
 
             filename_d_gxDx = threep_template + str( ts ) + ".dn.h5"
 
             threep_d_gxDx = getDatasets( threepDir, \
-                                            configList, \
-                                            filename_d_gxDx, \
-                                            "=der:gxDx:sym=", \
-                                            "msq0000", \
-                                            "arr" )[ :, 0, 0, :, 0 ].real
+                                         configList, \
+                                         filename_d_gxDx, \
+                                         "=der:gxDx:sym=", \
+                                         "msq0000", \
+                                         "arr" )[ :, 0, 0, :, 0 ].real
 
             filename_d_gyDy = threep_template + str( ts ) + ".dn.h5"
 
             threep_d_gyDy = getDatasets( threepDir, \
-                                            configList, \
-                                            filename_d_gyDy, \
-                                            "=der:gyDy:sym=", \
-                                            "msq0000", \
-                                            "arr" )[ :, 0, 0, :, 0 ].real
+                                         configList, \
+                                         filename_d_gyDy, \
+                                         "=der:gyDy:sym=", \
+                                         "msq0000", \
+                                         "arr" )[ :, 0, 0, :, 0 ].real
 
             filename_d_gzDz = threep_template + str( ts ) + ".dn.h5"
 
             threep_d_gzDz = getDatasets( threepDir, \
-                                            configList, \
-                                            filename_d_gzDz, \
-                                            "=der:gzDz:sym=", \
-                                            "msq0000", \
-                                            "arr" )[ :, 0, 0, :, 0 ].real
+                                         configList, \
+                                         filename_d_gzDz, \
+                                         "=der:gzDz:sym=", \
+                                         "msq0000", \
+                                         "arr" )[ :, 0, 0, :, 0 ].real
 
             filename_d_gtDt = threep_template + str( ts ) + ".dn.h5"
 
             threep_d_gtDt = getDatasets( threepDir, \
-                                            configList, \
-                                            filename_d_gtDt, \
-                                            "=der:g0D0:sym=", \
-                                            "msq0000", \
-                                            "arr" )[ :, 0, 0, :, 0 ].real
+                                         configList, \
+                                         filename_d_gtDt, \
+                                         "=der:g0D0:sym=", \
+                                         "msq0000", \
+                                         "arr" )[ :, 0, 0, :, 0 ].real
             
             threep_gxDx = threep_u_gxDx - threep_d_gxDx
 
@@ -488,31 +481,31 @@ def readAvgXFile( threepDir, configList, threep_tokens,
         if dataFormat == "gpu":
 
             threep_gxDx = getDatasets( threepDir, \
-                                          configList, \
-                                          threep_template, \
-                                          "tsink_" + str( ts ), \
-                                          "oneD", \
-                                          "dir_00", \
-                                          "up", \
-                                          "threep" )[ :, 0, 0, ..., 0, 1, 0 ]
+                                       configList, \
+                                       threep_template, \
+                                       "tsink_" + str( ts ), \
+                                       "oneD", \
+                                       "dir_00", \
+                                       "up", \
+                                       "threep" )[ :, 0, 0, ..., 0, 1, 0 ]
 
             threep_gyDy = getDatasets( threepDir, \
-                                          configList, \
-                                          threep_template, \
-                                          "tsink_" + str( ts ), \
-                                          "oneD", \
-                                          "dir_01", \
-                                          "up", \
-                                          "threep" )[ :, 0, 0, ..., 0, 2, 0 ]
+                                       configList, \
+                                       threep_template, \
+                                       "tsink_" + str( ts ), \
+                                       "oneD", \
+                                       "dir_01", \
+                                       "up", \
+                                       "threep" )[ :, 0, 0, ..., 0, 2, 0 ]
     
             threep_gzDz = getDatasets( threepDir, \
-                                          configList, \
-                                          threep_template, \
-                                          "tsink_" + str( ts ), \
-                                          "oneD", \
-                                          "dir_02", \
-                                          "up", \
-                                          "threep" )[ :, 0, 0, ..., 0, 3, 0 ]
+                                       configList, \
+                                       threep_template, \
+                                       "tsink_" + str( ts ), \
+                                       "oneD", \
+                                       "dir_02", \
+                                       "up", \
+                                       "threep" )[ :, 0, 0, ..., 0, 3, 0 ]
 
             threep_gtDt = getDatasets( threepDir, \
                                        configList, \
@@ -534,44 +527,44 @@ def readAvgXFile( threepDir, configList, threep_tokens,
             if particle == "kaon":
             
                 threep_s_gxDx = getDatasets( threepDir, \
-                                                configList, \
-                                                threep_template, \
-                                                "tsink_" + str( ts ), \
-                                                "oneD", \
-                                                "dir_00", \
-                                                "strange", \
-                                                "threep" )[ :, 0, 0, ..., \
-                                                            0, 1, 0 ]
-
+                                             configList, \
+                                             threep_template, \
+                                             "tsink_" + str( ts ), \
+                                             "oneD", \
+                                             "dir_00", \
+                                             "strange", \
+                                             "threep" )[ :, 0, 0, ..., \
+                                                         0, 1, 0 ]
+                
                 threep_s_gyDy = getDatasets( threepDir, \
-                                                configList, \
-                                                threep_template, \
-                                                "tsink_" + str( ts ), \
-                                                "oneD", \
-                                                "dir_01", \
-                                                "strange", \
-                                                "threep" )[ :, 0, 0, ..., \
-                                                            0, 2, 0 ]
+                                             configList, \
+                                             threep_template, \
+                                             "tsink_" + str( ts ), \
+                                             "oneD", \
+                                             "dir_01", \
+                                             "strange", \
+                                             "threep" )[ :, 0, 0, ..., \
+                                                         0, 2, 0 ]
     
                 threep_s_gzDz = getDatasets( threepDir, \
-                                                configList, \
-                                                threep_template, \
-                                                "tsink_" + str( ts ), \
-                                                "oneD", \
-                                                "dir_02", \
-                                                "strange", \
-                                                "threep" )[ :, 0, 0, ..., \
-                                                            0, 3, 0 ]
+                                             configList, \
+                                             threep_template, \
+                                             "tsink_" + str( ts ), \
+                                             "oneD", \
+                                             "dir_02", \
+                                             "strange", \
+                                             "threep" )[ :, 0, 0, ..., \
+                                                         0, 3, 0 ]
 
                 threep_s_gtDt = getDatasets( threepDir, \
-                                                configList, \
-                                                threep_template, \
-                                                "tsink_" + str( ts ), \
-                                                "oneD", \
-                                                "dir_03", \
-                                                "strange", \
-                                                "threep" )[ :, 0, 0, ..., \
-                                                            0, 4, 0 ]
+                                             configList, \
+                                             threep_template, \
+                                             "tsink_" + str( ts ), \
+                                             "oneD", \
+                                             "dir_03", \
+                                             "strange", \
+                                             "threep" )[ :, 0, 0, ..., \
+                                                         0, 4, 0 ]
             
                 return [ threep_gxDx, threep_gyDy, \
                          threep_gzDz, threep_gtDt, \

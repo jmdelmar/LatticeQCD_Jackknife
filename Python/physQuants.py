@@ -165,12 +165,12 @@ def mEff( twop ):
     return mEff
 
 
-# avgXKineFactor = E/(m(1/2*m^2-2*E^2))
+# avgXKineFactor = E/(2m(1/2*m^2-2*E^2))
 
 def avgXKineFactor( mEff, momSq, L ):
 
     return energy( mEff, momSq, L ) \
-        / ( mEff * ( 0.5 * mEff ** 2 \
+        / ( 2* mEff * ( 0.5 * mEff ** 2 \
                      - 2.0 * energy( mEff, momSq, L ) ** 2 ) )
 
 
@@ -222,6 +222,34 @@ def calcAvgX_momBoost( threep, twop_tsink, mEff, momSq, L ):
     for t in range( threep.shape[ 1 ] ):
 
         avgX[ :, t ] = preFactor * threep[ :, t ] / twop_tsink
+
+    return avgX
+
+
+def calcAvgX_twopFit( threep, tsink, mEff, momSq, L, \
+                              c0, E0 ):
+
+    # threep[ b, t ]
+    # tsink
+    # mEff[ b ]
+    # momSq
+    # L
+    # c0[ b ]
+    # E0[ b ]
+    
+    binNum = threep.shape[ 0 ]
+    T = threep.shape[ -1 ]
+
+    # prefactor = E/(m(1/2*m^2-2*E))
+
+    preFactor = np.repeat( avgXKineFactor( mEff, momSq, L ), \
+                           T ).reshape( binNum, T )
+
+    c0_cp = np.repeat( c0, T ).reshape( binNum, T )
+    E0_cp = np.repeat( E0, T ).reshape( binNum, T )
+
+    avgX = preFactor * threep \
+           / c0_cp / np.exp( -E0_cp * tsink )
 
     return avgX
 
