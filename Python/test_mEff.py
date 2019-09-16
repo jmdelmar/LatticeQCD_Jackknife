@@ -249,43 +249,56 @@ if rank == 0:
 
     # Fit the effective mass and two-point functions 
 
-    fitResults = fit.testmEffTwopFit( mEff, twop_fold, \
-                                      rangeEnd, 0, L, tsf )
+    # fitResults( fitParams, chiSq, t_low )
+
+    mEff_fitResults, \
+        twop_tsf_fitResults, \
+        mEff_tsf_fitResults = fit.testmEffTwopFit( mEff, twop_fold, \
+                                                   rangeEnd, 0, L, tsf )
 
     t_low_str_template = "t_low_{0:0>2}"
     
-    for fitR in fitResults:
+    for fitR in mEff_fitResults:
 
         fitParams = fitR[ 0 ]
         chiSq = fitR[ 1 ]
-        mEff_fit = fitR[ 2 ]
-        mEff_chiSq = fitR[ 3 ]
-        rangeStart = fitR[ 4 ]
-        mEff_rangeStart = fitR[ 5 ]
+        rangeStart = fitR[ 2 ]
 
-        twopFit_str = t_low_str_template.format( rangeStart )
-        mEffFit_str = t_low_str_template.format( mEff_rangeStart )
+        t_low_str = t_low_str_template.format( rangeStart )
+
+        chiSq_avg = np.average( chiSq, axis=0 )
+        chiSq_err = fncs.calcError( chiSq, binNum_glob )
+            
+        mEff_fit_avg = np.average( fitParams, axis=0 )
+        mEff_fit_err = fncs.calcError( fitParams, binNum_glob )
+
+        mEff_outputFilename = output_template.replace( "*", "mEff_fit_" + t_low_str )
+        rw.writeFitDataFile( mEff_outputFilename, mEff_fit_avg, \
+                             mEff_fit_err, rangeStart, rangeEnd )
+
+        mEff_chiSqOutputFilename \
+            = output_template.replace( "*", \
+                                       "mEff_chiSq_" \
+                                       + t_low_str )
+        rw.writeFitDataFile( mEff_chiSqOutputFilename, chiSq_avg, \
+                             chiSq_err, rangeStart, rangeEnd )
+
+    # End loop over mEff fit results
+
+    for fitR in twop_tsf_fitResults:
+
+        fitParams = fitR[ 0 ]
+        chiSq = fitR[ 1 ]
+        rangeStart = fitR[ 2 ]
+
+        t_low_str = t_low_str_template.format( rangeStart )
 
         if tsf:
 
-            c0 = fitParams[ :, 0 ]
-            c1 = fitParams[ :, 1 ]
-            E0 = fitParams[ :, 2 ]
-            E1 = fitParams[ :, 3 ]
-
-            # Calculate fitted curve
-
-            curve, t_s = fit.calcTwopTwoStateCurve( c0, c1, E0, E1, T, \
-                                                rangeStart, rangeEnd )
-            
-            curveOutputFilename \
-                = output_template.replace( "*", \
-                                           "twop_twoStateFit_curve_" \
-                                           + twopFit_str )
             chiSqOutputFilename \
                 = output_template.replace( "*", \
                                            "twop_twoStateFit_chiSq_" \
-                                           + twopFit_str )
+                                           + t_low_str )
 
             fitParams_avg = np.concatenate( ( [ 0, 0, 0 ], \
                                               np.average( fitParams, \
@@ -297,77 +310,105 @@ if rank == 0:
             fitParamsOutputFilename \
                 = output_template.replace( "*", \
                                            "twop_twoStateFitParams_" \
-                                           + twopFit_str )
+                                           + t_low_str )
             rw.writeTSFParamsFile( fitParamsOutputFilename, \
                                    fitParams_avg, fitParams_err )
 
-            mEff_curve, mEff_ts = fit.calcmEffTwoStateCurve( c0, c1, \
-                                                             E0, E1, T, \
-                                                             rangeStart, \
-                                                             rangeEnd )
+            # Calculate fitted curve
+
+            c0 = fitParams[ :, 0 ]
+            c1 = fitParams[ :, 1 ]
+            E0 = fitParams[ :, 2 ]
+            E1 = fitParams[ :, 3 ]
+
+            curve, ts = fit.calcmEffTwoStateCurve( c0, c1, \
+                                                   E0, E1, T, \
+                                                   rangeStart, \
+                                                   rangeEnd )
+
+            curve_avg = np.average( curve, axis=0 )
+            curve_err = fncs.calcError( curve, binNum_glob )
                         
-            mEff_curve_avg = np.average( mEff_curve, axis=0 )
-            mEff_curve_err = fncs.calcError( mEff_curve, binNum_glob )
-            
-            mEff_curveOutputFilename \
+            curveOutputFilename \
                 = output_template.replace( "*", \
-                                           "mEff_twoStateFit_curve_" \
-                                           + mEffFit_str )
-            rw.writeAvgDataFile_wX( mEff_curveOutputFilename, t_s, \
-                                    mEff_curve_avg, mEff_curve_err )
+                                           "twop_twoStateFit_curve_" \
+                                           + t_low_str )
+            rw.writeAvgDataFile_wX( curveOutputFilename, ts, \
+                                    curve_avg, curve_err )
         
         else: # One-state fit
 
-            G = fitParams[ :, 0 ]
-            E = fitParams[ :, 1 ]
-
-            # Calculate fitted curve
-
-            curve, t_s = fit.calcTwopOneStateCurve( G, E, T, \
-                                                    rangeStart, \
-                                                    rangeEnd )
-
-            curveOutputFilename \
-                = output_template.replace( "*", \
-                                           "twop_oneStateFit_curve_" \
-                                           + twopFit_str )
             chiSqOutputFilename \
                 = output_template.replace( "*", \
                                            "twop_oneStateFit_chiSq_" \
-                                           + twopFit_str )
+                                           + t_low_str )
                         
         # End if not two-state fit
 
-        curve_avg = np.average( curve, axis=0 )
-        curve_err = fncs.calcError( curve, binNum_glob )
-            
         chiSq_avg = np.average( chiSq, axis=0 )
         chiSq_err = fncs.calcError( chiSq, binNum_glob )
             
-        mEff_chiSq_avg = np.average( mEff_chiSq, axis=0 )
-        mEff_chiSq_err = fncs.calcError( mEff_chiSq, binNum_glob )
-            
         # Write output files
 
-        rw.writeAvgDataFile_wX( curveOutputFilename, t_s, \
-                                curve_avg, curve_err )
-        
         rw.writeFitDataFile( chiSqOutputFilename, chiSq_avg, \
                              chiSq_err, rangeStart, rangeEnd )
 
-        mEff_fit_avg = np.average( mEff_fit, axis=0 )
-        mEff_fit_err = fncs.calcError( mEff_fit, binNum_glob )
+    # End loop over fit results
 
-        mEff_outputFilename = output_template.replace( "*", "mEff_fit_" + mEffFit_str )
-        rw.writeFitDataFile( mEff_outputFilename, mEff_fit_avg, \
-                             mEff_fit_err, mEff_rangeStart, rangeEnd )
+    for fitR in mEff_tsf_fitResults:
 
-        mEff_chiSqOutputFilename \
+        fitParams = fitR[ 0 ]
+        chiSq = fitR[ 1 ]
+        rangeStart = fitR[ 2 ]
+
+        t_low_str = t_low_str_template.format( rangeStart )
+
+        c = fitParams[ :, 0 ]
+        E0 = fitParams[ :, 1 ]
+        E1 = fitParams[ :, 2 ]
+
+        fitParams_avg = np.concatenate( ( [ 0, 0, 0, 1 ], \
+                                          np.average( fitParams, \
+                                                      axis=0 ) ) )
+        fitParams_err = np.concatenate( ( [ 0, 0, 0, 1 ], \
+                                          fncs.calcError( fitParams, \
+                                                          binNum_glob ) ) )
+
+        chiSq_avg = np.average( chiSq, axis=0 )
+        chiSq_err = fncs.calcError( chiSq, binNum_glob )
+            
+        # Calculate fitted curve
+
+        curve, ts = fit.calcmEffTwoStateCurve( np.ones( binNum_glob ), \
+                                               c, E0, E1, T, \
+                                               rangeStart, \
+                                               rangeEnd )
+        
+        curve_avg = np.average( curve, axis=0 )
+        curve_err = fncs.calcError( curve, binNum_glob )
+                        
+        # Write output files
+
+        fitParamsOutputFilename \
             = output_template.replace( "*", \
-                                       "mEff_chiSq_" \
-                                       + mEffFit_str )
-        rw.writeFitDataFile( mEff_chiSqOutputFilename, mEff_chiSq_avg, \
-                             mEff_chiSq_err, rangeStart, rangeEnd )
+                                       "mEff_twoStateFitParams_" \
+                                       + t_low_str )
+        rw.writeTSFParamsFile( fitParamsOutputFilename, \
+                               fitParams_avg, fitParams_err )
 
+        chiSqOutputFilename \
+            = output_template.replace( "*", \
+                                       "mEff_twoStateFit_chiSq_" \
+                                       + t_low_str )
+        rw.writeFitDataFile( chiSqOutputFilename, chiSq_avg, \
+                             chiSq_err, rangeStart, rangeEnd )
+
+        curveOutputFilename \
+            = output_template.replace( "*", \
+                                       "mEff_twoStateFit_curve_" \
+                                       + t_low_str )
+        rw.writeAvgDataFile_wX( curveOutputFilename, ts, \
+                                curve_avg, curve_err )
+        
     # End loop over fit results
 # End if first process

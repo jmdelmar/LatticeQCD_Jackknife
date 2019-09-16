@@ -386,8 +386,10 @@ if rank == 0:
                                        "twop_twoStateFit_chiSq_" \
                                        + twopFit_str )
 
-        mEff_curve, mEff_ts = fit.calcmEffTwoStateCurve( c0, c1, E0, E1, T, \
-                                                         rangeStart, rangeEnd )
+        mEff_curve, mEff_ts = fit.calcmEffTwoStateCurve( c0, c1, \
+                                                         E0, E1, T, \
+                                                         rangeStart, \
+                                                         rangeEnd )
                         
         mEff_curveOutputFilename \
             = output_template.replace( "*", \
@@ -546,12 +548,12 @@ for imom in range( momBoostNum ):
 
         # Subtract average over directions from gtDt
 
-        #if rank == 0:
+        if rank == 0:
 
-            #print(np.average(threep_gxDx[:,:ts+1],axis=0))
-            #print(np.average(threep_gyDy[:,:ts+1],axis=0))
-            #print(np.average(threep_gzDz[:,:ts+1],axis=0))
-            #print(np.average(threep_gtDt[:,:ts+1],axis=0))
+            print(threep_gxDx[1,:ts+1])
+            print(threep_gyDy[1,:ts+1])
+            print(threep_gzDz[1,:ts+1])
+            print(threep_gtDt[1,:ts+1])
 
         threep_loc = threep_gtDt - \
                      0.25 * ( threep_gtDt \
