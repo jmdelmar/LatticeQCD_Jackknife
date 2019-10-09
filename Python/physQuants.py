@@ -14,6 +14,11 @@ def KK( mEff, Qsq, L ):
                         + mEff ) )
 
 
+def twopFit( c0, E0, t ):
+
+    return c0 * np.exp( -E0 * t )
+
+
 def kineFactor_GE_GM( ratio_err, mEff, Q, L ):
 
     # ratio_err[ Q, r ]
@@ -165,12 +170,12 @@ def mEff( twop ):
     return mEff
 
 
-# avgXKineFactor = E/(2m(1/2*m^2-2*E^2))
+# avgXKineFactor = 2E^2/(m(1/2*m^2-2*E^2))
 
 def avgXKineFactor( mEff, momSq, L ):
 
-    return energy( mEff, momSq, L ) \
-        / ( 2* mEff * ( 0.5 * mEff ** 2 \
+    return 2.0 * energy( mEff, momSq, L ) ** 2 \
+        / ( mEff * ( 0.5 * mEff ** 2 \
                      - 2.0 * energy( mEff, momSq, L ) ** 2 ) )
 
 
@@ -227,7 +232,7 @@ def calcAvgX_momBoost( threep, twop_tsink, mEff, momSq, L ):
 
 
 def calcAvgX_twopFit( threep, tsink, mEff, momSq, L, \
-                              c0, E0 ):
+                      c0, E0 ):
 
     # threep[ b, t ]
     # tsink
@@ -240,16 +245,17 @@ def calcAvgX_twopFit( threep, tsink, mEff, momSq, L, \
     binNum = threep.shape[ 0 ]
     T = threep.shape[ -1 ]
 
-    # prefactor = E/(m(1/2*m^2-2*E))
-
     preFactor = np.repeat( avgXKineFactor( mEff, momSq, L ), \
                            T ).reshape( binNum, T )
+    #preFactor=1.0
 
     c0_cp = np.repeat( c0, T ).reshape( binNum, T )
     E0_cp = np.repeat( E0, T ).reshape( binNum, T )
 
     avgX = preFactor * threep \
-           / c0_cp / np.exp( -E0_cp * tsink )
+           / twopFit( c0_cp, E0_cp, tsink )
+    #avgX = preFactor * threep \
+    #       / c0_cp / np.exp( -E0_cp * tsink )
 
     return avgX
 
@@ -272,8 +278,9 @@ def calcAvgX_twopTwoStateFit( threep, tsink, mEff, momSq, L, T, \
 
     # prefactor = E/(m(1/2*m^2-2*E))
 
-    preFactor = np.repeat( avgXKineFactor( mEff, momSq, L ), \
-                           T ).reshape( binNum, T )
+    preFactor=1.0
+    #preFactor = np.repeat( avgXKineFactor( mEff, momSq, L ), \
+    #                       T ).reshape( binNum, T )
 
     c0_cp = np.repeat( c0, T ).reshape( binNum, T )
     c1_cp = np.repeat( c1, T ).reshape( binNum, T )

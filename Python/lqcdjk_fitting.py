@@ -11,6 +11,42 @@ class lqcdjk_BadFitError(Exception):
         Exception.__init__(self, mismatch)
 
 
+# Wrapper for numpy.polyfit to fit a plateau line to data
+
+def fitPlateau( data, err, start, end ):
+
+    # data[ b, x ]
+    # err[ b ]
+    # start
+    # end
+
+    binNum = data.shape[ 0 ]
+
+    # x values to fit
+
+    x = range( start, \
+               end + 1 )
+
+    fit = np.zeros( binNum )
+    chiSq = np.zeros( binNum )
+
+    # Loop over bins
+    for b in range( binNum ):
+
+        fit[ b ], chiSq[ b ], \
+            dum, dum, dum = np.polyfit( x, \
+                                        data[ b, \
+                                              start \
+                                              : end + 1 ], 0, \
+                                        w=err[ start \
+                                               : end + 1 ] ** -1, \
+                                        full=True )
+        
+    # End loop over bin
+
+    return fit, chiSq
+
+
 def testmEffTwopFit( mEff, twop, rangeEnd, pSq, L, tsf ):
 
     binNum = mEff.shape[ 0 ]
@@ -23,36 +59,26 @@ def testmEffTwopFit( mEff, twop, rangeEnd, pSq, L, tsf ):
     mEff_tsf_results = []
 
     # Loop over plateau fit range starts
-    for mEff_rangeStart in range( 8, rangeEnd - 5 ):
+    for mEff_rangeStart in range( 5, rangeEnd - 5 ):
 
         mEff_fit = np.zeros( binNum )
         mEff_chiSq = np.zeros( binNum )
 
-        # Loop over bins
-        for b in range( binNum ):
+        # Perform the plateau fit
 
-            t_to_fit = range( mEff_rangeStart, \
-                              rangeEnd + 1 )
-
-            # Perform the plateau fit
-
-            mEff_fit[ b ], mEff_chiSq[ b ], \
-                dum, dum, dum = np.polyfit( t_to_fit, \
-                                            mEff[ b, \
-                                                  mEff_rangeStart \
-                                                  : rangeEnd + 1 ], 0, \
-                                            w=mEff_err[ mEff_rangeStart \
-                                                        : rangeEnd + 1 ] ** -1, \
-                                            full=True )
+        mEff_fit, mEff_chiSq, \
+            = fitPlateau( mEff, mEff_err, \
+                          mEff_rangeStart, mEff_rangeEnd)
             
-        # End loop over bins
-
         mEff_chiSq_pdf = mEff_chiSq / ( len( t_to_fit ) - 1 )
 
         mEff_results.append( ( mEff_fit, mEff_chiSq_pdf, \
                                mEff_rangeStart ) )
 
-    # End loop over mEff range start
+        mEff_fit_avg = np.average( mEff_fit, axis=0 )
+        mEff_fit_err = fncs.calcError( mEff_fit, binNum )
+
+    # End loop over effective mass fit start
 
     for twop_rangeStart in range( 1, 8 ):
 
@@ -68,7 +94,7 @@ def testmEffTwopFit( mEff, twop, rangeEnd, pSq, L, tsf ):
 
             E_avg = np.average( fitParams[ :, 2 ] )
             E_err = fncs.calcError( fitParams[ :, 2 ], binNum )
-
+                
             # Degress of freedom
 
             twop_dof = rangeEnd - twop_rangeStart + 1 - 4
@@ -78,10 +104,23 @@ def testmEffTwopFit( mEff, twop, rangeEnd, pSq, L, tsf ):
                                                                    twop_rangeStart, \
                                                                    rangeEnd, T )
 
-        # One-state fit
-        
-        else:
+            #E_avg = np.average( mEff_tsf_fitParams[:,1], axis=0 )
+            
+            #mass = np.sqrt( E_avg ** 2 \
+            #                - ( 2.0 * np.pi / L ) ** 2 * pSq )
 
+            #relDiff = np.abs( mEff_fit_avg - mass ) \
+            #          / ( 0.5 * ( mEff_fit_avg + mass ) )
+        
+            #goodFit = 0.5 * mEff_fit_err > relDiff
+
+            #print("t_low_plat={}< t_low_tsf={}:".format(mEff_rangeStart,twop_rangeStart))
+            #print("m_plat={}, m_tsf={}".format(mEff_fit_avg,mass))
+            #print("relDif={}, err={}, goodFit={}".format(relDiff,mEff_fit_err,goodFit))
+
+        
+        else: # One-state fit
+        
             # fitParams[ b, param ]
 
             fitParams, chiSq = oneStateFit_twop( twop, \
@@ -98,9 +137,6 @@ def testmEffTwopFit( mEff, twop, rangeEnd, pSq, L, tsf ):
         chiSq_pdf = chiSq / twop_dof
         mEff_tsf_chiSq_pdf = mEff_tsf_chiSq / mEff_tsf_dof
 
-        mass = np.sqrt( E_avg ** 2 \
-                        - ( 2.0 * np.pi / L ) ** 2 * pSq )
-
         twop_tsf_results.append( ( fitParams, chiSq_pdf, \
                                    twop_rangeStart ) )
         
@@ -108,7 +144,6 @@ def testmEffTwopFit( mEff, twop, rangeEnd, pSq, L, tsf ):
                                    twop_rangeStart ) )
 
     # End loop over twop fit start
-    # End loop over effective mass fit start
 
     return mEff_results, twop_tsf_results, mEff_tsf_results
 
@@ -124,30 +159,49 @@ def testmEffTwopFit( mEff, twop, rangeEnd, pSq, L, tsf ):
 # rangeEnd: The last t value to be include in the fit range
 # tsf: Perform two-state fit if True, else perform one-state fit
 
-def mEffTwopFit( mEff, twop, rangeEnd, pSq, L, tsf ):
+def mEffTwopFit( mEff, twop, rangeEnd, pSq, L, tsf, **kwargs ):
 
     binNum = mEff.shape[ 0 ]
     T = 2 * ( twop.shape[ -1 ] - 1 )
 
     mEff_err = fncs.calcError( mEff, binNum )
 
+    if "mEff_t_low_range" in kwargs \
+       and kwargs[ "mEff_t_low_range" ]:
+
+        mEff_t_low_range = kwargs[ "mEff_t_low_range" ]
+
+    else:
+
+        mEff_t_low_range = range( 10, rangeEnd - 10 )
+
+    if "twop_t_low_range" in kwargs \
+       and kwargs[ "twop_t_low_range" ]:
+
+        twop_t_low_range = kwargs[ "twop_t_low_range" ]
+
+    else:
+
+        twop_t_low_range = range( 1, 8 )
+
+    if "checkFit" in kwargs:
+
+        checkFit = kwargs[ "checkFit" ]
+
+    else:
+
+        checkFit = True
+
     # Loop over plateau fit range starts
-    for mEff_rangeStart in range( 10, rangeEnd - 2 ):
+    for mEff_t_low in mEff_t_low_range:
 
         mEff_fit = np.zeros( binNum )
 
-        # Loop over bins
-        for b in range( binNum ):
+        # Perform the plateau fit
 
-            # Perform the plateau fit
-
-            mEff_fit[ b ] = np.polyfit( range( mEff_rangeStart, \
-                                               rangeEnd + 1 ), \
-                                        mEff[ b, \
-                                              mEff_rangeStart \
-                                              : rangeEnd + 1 ], 0, \
-                                        w=mEff_err[ mEff_rangeStart \
-                                                    : rangeEnd + 1 ] )
+        mEff_fit, chiSq = fitPlateau( mEff, mEff_err, \
+                                      mEff_t_low, \
+                                      rangeEnd )
 
         # End loop over bins
 
@@ -156,7 +210,7 @@ def mEffTwopFit( mEff, twop, rangeEnd, pSq, L, tsf ):
         mEff_fit_avg = np.average( mEff_fit )
         mEff_fit_err = fncs.calcError( mEff_fit, binNum )
 
-        for twop_rangeStart in range( 1, rangeEnd - 2 ):
+        for twop_t_low in twop_t_low_range:
 
             # Two-state fit
 
@@ -164,21 +218,32 @@ def mEffTwopFit( mEff, twop, rangeEnd, pSq, L, tsf ):
 
                 # fitParams[ b, param ]
 
-                fitParams, chiSq = twoStateFit_twop( twop, \
-                                                     twop_rangeStart, \
+                dof = rangeEnd - twop_t_low + 1 - 3
+            
+                fitParams, chiSq = twoStateFit_mEff( mEff, \
+                                                     twop_t_low, \
                                                      rangeEnd, T )
+                
+                chiSq /= dof
 
-                E_avg = np.average( fitParams[ :, 2 ] )
-                E_err = fncs.calcError( fitParams[ :, 2 ], binNum )
+                E_avg = np.average( fitParams[ :, 1 ] )
+                E_err = fncs.calcError( fitParams[ :, 1 ], binNum )
+                    
+                #fitParams, chiSq = twoStateFit_twop( twop, \
+                #                                     twop_t_low, \
+                #                                     rangeEnd, T )
+                    
+                #E_avg = np.average( fitParams[ :, 2 ] )
+                #E_err = fncs.calcError( fitParams[ :, 2 ], binNum )
 
-            # One-state fit
+                # One-state fit
 
             else:
 
                 # Perform one-state fit
                 
                 fitParams, chiSq = oneStateFit_twop( twop, \
-                                                     twop_rangeStart, \
+                                                     twop_t_low, \
                                                      rangeEnd, T )
                 
                 E_avg = np.average( fitParams[ :, 1 ], axis=0 )
@@ -189,18 +254,22 @@ def mEffTwopFit( mEff, twop, rangeEnd, pSq, L, tsf ):
             mass = np.sqrt( E_avg ** 2 \
                             - ( 2.0 * np.pi / L ) ** 2 * pSq )
 
-            # Check if the fits are good
+            if checkFit:
 
-            relDiff = np.abs( mEff_fit_avg - mass ) \
-                      / ( 0.5 * ( mEff_fit_avg + mass ) )
+                # Check if the fits are good
+            
+                relDiff = np.abs( mEff_fit_avg - mass ) \
+                          / ( 0.5 * ( mEff_fit_avg + mass ) )
         
-            if 0.5 * E_err > relDiff \
-               and 0.5 * mEff_fit_err > relDiff:
-                
-                results = ( fitParams, chiSq, mEff_fit, \
-                            twop_rangeStart, mEff_rangeStart )
+                if 0.5 * mEff_fit_err > relDiff:
 
-                return results
+                    return ( fitParams, chiSq, mEff_fit, \
+                             twop_t_low, mEff_t_low )
+
+            else:
+
+                return ( fitParams, chiSq, mEff_fit, \
+                         twop_t_low, mEff_t_low )
 
             # End if relDiff < dm/2
         # End loop over twop fit start
@@ -682,22 +751,18 @@ def fitGenFormFactor( vals, vals_err, fitStart, fitEnd ):
     # vals_err[ Q, ratio, t ]
 
     fit = np.empty( vals.shape[ :-1 ] )
+    chiSq = np.empty( vals.shape[ :-1 ] )
 
-    # Loop over bins
-    for b in range( vals.shape[ 0 ] ):
-        # Loop over Q
-        for iq in range( vals.shape[ 1 ] ):
-            # Loop over ratio
-            for ir in range( vals.shape[ 2 ] ):
+    # Loop over Q
+    for iq in range( vals.shape[ 1 ] ):
+        # Loop over ratio
+        for ir in range( vals.shape[ 2 ] ):
 
-                fit[ b, iq, ir ] = np.polyfit(range( fitStart, \
-                                                      fitEnd + 1 ), \
-                                               vals[ b, iq, ir, \
-                                                     fitStart \
-                                                     : fitEnd + 1 ], \
-                                               0, w=vals_err[ iq, ir, \
-                                                              fitStart \
-                                                              : fitEnd + 1 ])
+            fit[ :, iq, ir ], chiSq[ :, iq, ir ] \
+                = fitPlateau( vals[ :, iq, ir ], \
+                              vals_err[ iq, ir ], \
+                              fitStart, \
+                              fitEnd )
 
     return fit
 
@@ -829,7 +894,7 @@ def calcThreepTwoStateCurve( a00, a01, a11, E0, E1, T, tsink, \
 
 
 def calcAvgXTwoStateCurve_const_ts( a00, a01, a11, c0, c1, \
-                                    E0, E1, momSq, L, T, \
+                                    E0, E1, mEff, momSq, L, T, \
                                     ZvD1, tsink, ti_to_fit, \
                                     neglect ):
 
@@ -840,6 +905,7 @@ def calcAvgXTwoStateCurve_const_ts( a00, a01, a11, c0, c1, \
     # c11[ b ] 
     # E0[ b ] 
     # E1[ b ] 
+    # mEff[ b ] 
     # momSq
     # ZvD1
     # L
@@ -874,7 +940,7 @@ def calcAvgXTwoStateCurve_const_ts( a00, a01, a11, c0, c1, \
             for t in range( len( ti[ ts ] ) ):
                 
                 curve[ b, ts, t ] = ZvD1 \
-                                    * pq.avgXKineFactor( E0[ b ], \
+                                    * pq.avgXKineFactor( mEff[ b ], \
                                                          momSq, \
                                                          L ) \
                                     * twoStateThreep( ti[ ts, t ], \
@@ -903,7 +969,7 @@ def calcAvgXTwoStateCurve_const_ts( a00, a01, a11, c0, c1, \
 
 
 def calcAvgXTwoStateCurve_const_ti( a00, a01, a11, c0, c1, \
-                                    E0, E1, momSq, L, T, \
+                                    E0, E1, mEff, momSq, L, T, \
                                     ZvD1, firstTs, lastTs ):
 
     # a00[ b ] 
@@ -913,6 +979,7 @@ def calcAvgXTwoStateCurve_const_ti( a00, a01, a11, c0, c1, \
     # c11[ b ] 
     # E0[ b ] 
     # E1[ b ] 
+    # mEff[ b ] 
     # momSq
     # L
     # T
@@ -929,7 +996,7 @@ def calcAvgXTwoStateCurve_const_ti( a00, a01, a11, c0, c1, \
         for ts in range( len( tsink ) ):
                 
             curve[ b, ts ] = ZvD1 \
-                             * pq.avgXKineFactor( E0[ b ], \
+                             * pq.avgXKineFactor( mEff[ b ], \
                                                   momSq, \
                                                   L ) \
                              * twoStateThreep( tsink[ ts ] / 2, \

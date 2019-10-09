@@ -398,18 +398,11 @@ if rank == 0:
 
     mEff_fit = np.zeros( binNum_glob )
 
-    # Loop over bins
-    for b in range( binNum_glob ):
+    # Perform the plateau fit
 
-        # Perform the plateau fit
-
-        mEff_fit[ b ] = np.polyfit( range( rangeStart_mEff, \
-                                           rangeEnd + 1 ), \
-                                    mEff[ b, \
-                                          rangeStart_mEff \
-                                          : rangeEnd + 1 ], 0, \
-                                    w=mEff_err[ rangeStart_mEff \
-                                                : rangeEnd + 1 ] )
+    mEff_fit, chiSq = fit.fitPlateau( mEff, mEff_err, \
+                                      rangeStart_mEff, \
+                                      rangeEnd )
 
     # End loop over bins
     """

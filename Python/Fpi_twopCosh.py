@@ -93,13 +93,9 @@ mEff_err = np.std( mEff, axis=0 ) * float( binNum - 1 ) / math.sqrt( float( binN
 
 # Fit
 
-mEff_fit = np.zeros( binNum )
-
-for b in range( binNum ):
-
-    mEff_fit[ b ] = np.polyfit( range( mEff_fitStart, mEff_fitEnd + 1 ), \
-                                mEff[ b, mEff_fitStart : mEff_fitEnd + 1 ], \
-                                0, w=mEff_err[ mEff_fitStart : mEff_fitEnd + 1 ] )
+mEff_fit, chiSq = fit.fitPlateau( mEff, mEff_err, \
+                                  mEff_fitStart, \
+                                  mEff_fitEnd )
 
 print "Fit effective mass"
 

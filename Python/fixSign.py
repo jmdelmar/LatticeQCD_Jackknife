@@ -16,15 +16,19 @@ parser = argp.ArgumentParser( description="Fix sign of three-point functions nea
 
 parser.add_argument( "threep_dir", action='store', type=str )
 
-parser.add_argument( "threep_template", action='store', type=str )
-
 parser.add_argument( "source_list_filename", action='store', type=str )
 
 parser.add_argument( 't_sink', action='store', \
                      help="Comma seperated list of t sink's", \
                      type=lambda s: [int(item) for item in s.split(',')] )
 
-parser.add_argument( "-o", "--out_dir", action='store', type=str, default="./" )
+parser.add_argument( "pSq", action='store', type=int )
+
+parser.add_argument( "-s", "--source_number", action='store', type=int, default=16 )
+
+parser.add_argument( "-T", "--lattice_dim", action='store', type=int, default=64 )
+
+parser.add_argument( "-o", "--parent_out_dir", action='store', type=str, default="./" )
 
 parser.add_argument( "-c", "--config_list", action='store', type=str, default="" )
 
@@ -32,23 +36,21 @@ args = parser.parse_args()
 
 threepDir = args.threep_dir
 
-threep_template = args.threep_template
-
-srcListFilename = args.src_list_filename
+srcListFilename = args.source_list_filename
 
 tsink = args.t_sink
 
-outDir = args.out_dir
+parentOutDir = args.parent_out_dir
 
 configList = fncs.getConfigList( args.config_list, threepDir )
 
 configNum = len( configList )
 
-if pSq == 0:
+if args.pSq == 0:
 
     pList = [ [ 0, 0, 0 ] ]
 
-elif pSq == 3:
+elif args.pSq == 3:
 
     pList = [ [ +1, +1, +1 ], \
               [ -1, +1, +1 ], \
@@ -65,7 +67,7 @@ else:
 
     exit()
 
-filenameTemplate = "{}/ft_thrp_{}_sx{:0>2}sy{:0>2}sz{:0>2}st{:0>2}_{}_aN50a0p5_dt{}_mom_{:+d}_+{:+d}_+{:+d}.{}.h5"
+filenameTemplate = "{}/ft_thrp_{}_sx{:0>2}sy{:0>2}sz{:0>2}st{:0>2}_{}_aN50a0p5_dt{}_mom_{:+d}_{:+d}_{:+d}.{}.h5"
 
 partList = [ "pion", "kaon", "kaon" ]
 flavList = [ "up", "up", "strange" ]
@@ -74,6 +76,7 @@ smrStrList = [ "gN50a0p2", "gN40a0p2", "gN40a0p2" ]
 for conf in configList:
 
     inDir = "{}/{}".format( threepDir, conf )
+    outDir = "{}/{}".format( parentOutDir, conf )
 
     repl = conf.split("-")[ 0 ]
     traj = conf.split("-")[ 1 ]
@@ -82,7 +85,7 @@ for conf in configList:
 
     for ts in tsink:
 
-        with file( srcListFilename, "r" ) as srcListFile:
+        with open( srcListFilename, "r" ) as srcListFile:
 
             for line in srcListFile:
 
@@ -90,67 +93,67 @@ for conf in configList:
 
                     srcList = np.array( line.split() )[ 1: ]
 
-        for src in srcList[ :16 ]:
+        for src in srcList[ :args.source_number ]:
 
             srcPos = rw.getSourcePositions( src )
 
-            sx = srcPos[ 0 ]
-            sy = srcPos[ 1 ]
-            sz = srcPos[ 2 ]
-            st = srcPos[ 3 ]
+            sx = int( srcPos[ 0 ] )
+            sy = int( srcPos[ 1 ] )
+            sz = int( srcPos[ 2 ] )
+            st = int( srcPos[ 3 ] )
 
-            if st > 64 - ts:
+            for part, flav, smrStr in zip( partList, flavList, smrStrList ):
 
-                for part, flav, smrStr in zip( partList, flavList, smrStrList ):
-
-                    for p in pList:
+                for p in pList:
         
-                        px = p[ 0 ]
-                        py = p[ 1 ]
-                        pz = p[ 3 ]
+                    px = p[ 0 ]
+                    py = p[ 1 ]
+                    pz = p[ 2 ]
 
-                        inFilename = filenameTemplate.format( inDir, part, \
-                                                              sx, sy, sz, st, \
-                                                              smrStr, ts, \
-                                                              px, py, pz, flav )
+                    inFilename = filenameTemplate.format( inDir, part, \
+                                                          sx, sy, sz, st, \
+                                                          smrStr, ts, \
+                                                          px, py, pz, flav )
                         
-                        dsetnameList = []
-                        dset = {}
+                    dsetnameList = []
+                    dset = {}
 
-                        with h5py.File( inFilename, "r" ) as dataFile:
+                    with h5py.File( inFilename, "r" ) as dataFile:
                 
-                            # Put all datasets into list
+                        # Put all datasets into list
 
-                            dataFile.visititems( lambda name,obj: \
-                                                 dsetnameList.append(name) \
-                                                 if type( obj ) is h5py.Dataset \
-                                                 else None )
+                        dataFile.visititems( lambda name,obj: \
+                                             dsetnameList.append(name) \
+                                             if type( obj ) is h5py.Dataset \
+                                             else None )
                             
-                            for dsetname in dsetnameList:
+                        for dsetname in dsetnameList:
+                            
+                            dset[ dsetname ] = np.array( dataFile[ dsetname ] )
 
-                                dset[ dsetname ] = np.array( dataFile[ dsetname ] )
+                    # Close file
 
-                        # Close file
-
-                        outFilename = filenameTemplate.format( outDir, part, \
-                                                               sx, sy, sz, st, \
-                                                               smrStr, ts, \
-                                                               px, py, pz, flav )
+                    outFilename = filenameTemplate.format( outDir, part, \
+                                                           sx, sy, sz, st, \
+                                                           smrStr, ts, \
+                                                           px, py, pz, flav )
                         
-                        with h5py.File( outFilename, "a" ) as outFile:
+                    with h5py.File( outFilename, "w" ) as outFile:
 
-                            for dsetname in dsetnameList:
+                        for dsetname in dsetnameList:
 
-                                if st > 64 - ts and "mvec" in dsetname:
+                            if st >= args.lattice_dim - ts and "arr" in dsetname:
 
-                                    dset[ dsetname ][ :ts, : ] \
-                                        = -1.0 * dset[ dsetname ][ :ts, : ]
-                           
-                                outFile[ outFilename ] = dset[ dsetname ]
+                                dset[ dsetname ][ :ts+1, : ] \
+                                    = -1.0 * dset[ dsetname ][ :ts+1, : ]
+                                
+                            outFile.create_dataset( dsetname, \
+                                                    data=dset[ dsetname ] )
 
-                    # End loop over p
-                # End loop over part
-            # End if near bc
+                    print( "Wrote " + outFilename )
+
+                # End loop over p
+            # End loop over part
         # End loop over source
     # End loop over tsink
 # End loop over configs

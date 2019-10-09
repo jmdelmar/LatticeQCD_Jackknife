@@ -682,6 +682,49 @@ def readAvgXFile( threepDir, configList, threep_tokens,
                 exit()                
 
 
+def readEMFile( threepDir, configList, threep_tokens,
+                ts, momList, particle, dataFormat, **kwargs ):
+
+    # Set filename template
+
+    threep_template = threep_tokens[0]
+
+    if dataFormat == "gpu":
+
+        threep = getDatasets( threepDir, \
+                              configList, \
+                              threep_template, \
+                              "tsink_" + str( ts ), \
+                              "local", \
+                              "up", \
+                              "threep" )[ :, 0, 0, ..., \
+                                          0, 4, 0 ]
+
+        if particle == "kaon":
+            
+            threep_s = getDatasets( threepDir, \
+                                    configList, \
+                                    threep_template, \
+                                    "tsink_" + str( ts ), \
+                                    "local", \
+                                    "strange", \
+                                    "threep" )[ :, 0, 0, ..., \
+                                                0, 4, 0 ]
+                
+            return [ threep, threep_s ]
+
+        elif particle == "pion": 
+            
+            return [ threep ]
+
+        else: 
+
+            print( "Error (readAvgXFile): Particle " \
+                   + particle + " not supported." )
+
+            exit()                
+
+
 def readEMFF_cpu( threepDir, configList, threep_template, Qsq, ts, proj, \
                   particle, **kwargs ):
 
