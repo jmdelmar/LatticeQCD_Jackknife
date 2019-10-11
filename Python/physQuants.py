@@ -201,6 +201,22 @@ def calcAvgX( threep, twop_tsink, mEff ):
     return avgX
 
 
+def calcAvgX2( threep, twop_tsink, mEff ):
+
+    # threep[ b, t ]
+    # twop_tsink[ b ]
+    # mEff[ b ]
+
+    avgX2 = np.zeros( threep.shape )
+
+    for t in range( threep.shape[ 1 ] ):
+           
+        avgX2[ :, t ] = 1.0 / 2.0  / mEff \
+                        * threep[ :, t ] / twop_tsink
+
+    return avgX2
+
+
 # Calculate the quark momentum fraction <x> for three-point functions with
 # finite final momentum.
 
@@ -218,13 +234,11 @@ def calcAvgX_momBoost( threep, twop_tsink, mEff, momSq, L ):
     # momSq
     # L
 
-    # prefactor = E/(m(1/2*m^2-2*E))
-
     preFactor = avgXKineFactor( mEff, momSq, L )
 
     avgX = np.zeros( threep.shape )
 
-    for t in range( threep.shape[ 1 ] ):
+    for t in range( threep.shape[ -1 ] ):
 
         avgX[ :, t ] = preFactor * threep[ :, t ] / twop_tsink
 
