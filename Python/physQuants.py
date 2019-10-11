@@ -179,6 +179,11 @@ def avgXKineFactor( mEff, momSq, L ):
                      - 2.0 * energy( mEff, momSq, L ) ** 2 ) )
 
 
+def avgX2KineFactor( mEff, momSq, L ):
+
+    return -mEff / energy( mEff, momSq, L )
+
+
 # Calculate the quark momentum fraction <x> for three-point functions with
 # zero final momentum.
 
@@ -261,17 +266,56 @@ def calcAvgX_twopFit( threep, tsink, mEff, momSq, L, \
 
     preFactor = np.repeat( avgXKineFactor( mEff, momSq, L ), \
                            T ).reshape( binNum, T )
-    #preFactor=1.0
 
     c0_cp = np.repeat( c0, T ).reshape( binNum, T )
     E0_cp = np.repeat( E0, T ).reshape( binNum, T )
 
     avgX = preFactor * threep \
            / twopFit( c0_cp, E0_cp, tsink )
-    #avgX = preFactor * threep \
-    #       / c0_cp / np.exp( -E0_cp * tsink )
 
     return avgX
+
+
+def calcAvgX2_twopFit( threep, tsink, mEff, momSq, L, \
+                       c0, E0 ):
+
+    # threep[ b, t ]
+    # tsink
+    # mEff[ b ]
+    # momSq
+    # L
+    # c0[ b ]
+    # E0[ b ]
+    
+    binNum = threep.shape[ 0 ]
+    T = threep.shape[ -1 ]
+
+    preFactor = np.repeat( avgX2KineFactor( mEff, momSq, L ), \
+                           T ).reshape( binNum, T )
+
+    c0_cp = np.repeat( c0, T ).reshape( binNum, T )
+    E0_cp = np.repeat( E0, T ).reshape( binNum, T )
+
+    avgX2 = preFactor * threep \
+           / twopFit( c0_cp, E0_cp, tsink )
+
+    return avgX2
+
+
+def calcAvgX2( threep, twop_tsink, mEff ):
+
+    # threep[ b, t ]
+    # twop_tsink[ b ]
+    # mEff[ b ]
+
+    avgX2 = np.zeros( threep.shape )
+
+    for t in range( threep.shape[ 1 ] ):
+           
+        avgX2[ :, t ] = 1.0 / 2.0  / mEff \
+                        * threep[ :, t ] / twop_tsink
+
+    return avgX2
 
 
 def calcAvgX_twopTwoStateFit( threep, tsink, mEff, momSq, L, T, \
@@ -347,6 +391,18 @@ def calcAvgX_twoStateFit( a00, c0, mEff, momSq, L, ZvD1 ):
     # ZvD1
 
     return ZvD1 * avgXKineFactor( mEff, momSq, L ) \
+        * a00 / c0
+
+def calcAvgX2_twoStateFit( a00, c0, mEff, momSq, L, ZvD2 ):
+
+    # a00[ b ]
+    # c0 [ b ]
+    # mEff[ b ]
+    # momSq
+    # L
+    # ZvD1
+
+    return ZvD2 * avgX2KineFactor( mEff, momSq, L ) \
         * a00 / c0
 
 # Calculate the axial charge gA.
