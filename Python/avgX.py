@@ -54,9 +54,14 @@ parser.add_argument( "binSize", action='store', type=int )
 parser.add_argument( "-o", "--output_template", action='store', \
                      type=str, default="./*.dat" )
 
-parser.add_argument( "--twop_fit_start", action='store', type=int, \
-                     help="If given, will perform two-point function " \
-                     + "fits starting at given t value, otherwise, will " \
+parser.add_argument( "--tsf_fit_start", action='store', type=int, \
+                     help="If given, will perform two-state fit on effective " \
+                     + "mass starting at given t value, otherwise, will " \
+                     + "use lowest t value which satisfies condition." )
+
+parser.add_argument( "--plat_fit_start", action='store', type=int, \
+                     help="If given, will perform plateau fit on effective " \
+                     + "mass starting at given t value, otherwise, will " \
                      + "use lowest t value which satisfies condition." )
 
 parser.add_argument( "-tsf", "--two_state_fit", action='store_true', \
@@ -109,7 +114,16 @@ binSize = args.binSize
 
 output_template = args.output_template
 
-twop_fitStart = args.twop_fit_start
+tsf_fitStart = args.tsf_fit_start
+plat_fitStart = args.plat_fit_start
+
+if tsf_fitStart and plat_fitStart:
+
+    checkFit = False
+
+else:
+
+    checkFit = True
 
 tsf = args.two_state_fit
 
@@ -355,7 +369,9 @@ if rank == 0:
     
         fitResults = fit.mEffTwopFit( mEff, twop_fold, \
                                       rangeEnd, 0, L, tsf, \
-                                      two_t_low_range=[twop_fitStart] )
+                                      tsf_t_low_range=[tsf_fitStart], \
+                                      plat_t_low_range=[plat_fitStart], \
+                                      checkFit=checkFit )
     
     except fit.lqcdjk_BadFitError as error:
         

@@ -68,9 +68,10 @@ def testmEffTwopFit( mEff, twop, rangeEnd, pSq, L, tsf ):
 
         mEff_fit, mEff_chiSq, \
             = fitPlateau( mEff, mEff_err, \
-                          mEff_rangeStart, mEff_rangeEnd)
+                          mEff_rangeStart, rangeEnd)
             
-        mEff_chiSq_pdf = mEff_chiSq / ( len( t_to_fit ) - 1 )
+        mEff_chiSq_pdf = mEff_chiSq / ( rangeEnd - mEff_rangeStart \
+                                        + 1 - 1 )
 
         mEff_results.append( ( mEff_fit, mEff_chiSq_pdf, \
                                mEff_rangeStart ) )
@@ -166,19 +167,20 @@ def mEffTwopFit( mEff, twop, rangeEnd, pSq, L, tsf, **kwargs ):
 
     mEff_err = fncs.calcError( mEff, binNum )
 
-    if "mEff_t_low_range" in kwargs \
-       and kwargs[ "mEff_t_low_range" ]:
+    if "plat_t_low_range" in kwargs \
+       and None not in kwargs[ "plat_t_low_range" ]:
 
-        mEff_t_low_range = kwargs[ "mEff_t_low_range" ]
+        print(kwargs["plat_t_low_range"])
+        mEff_t_low_range = kwargs[ "plat_t_low_range" ]
 
     else:
 
         mEff_t_low_range = range( 10, rangeEnd - 10 )
 
-    if "twop_t_low_range" in kwargs \
-       and kwargs[ "twop_t_low_range" ]:
+    if "tsf_t_low_range" in kwargs \
+       and None not in kwargs[ "tsf_t_low_range" ]:
 
-        twop_t_low_range = kwargs[ "twop_t_low_range" ]
+        twop_t_low_range = kwargs[ "tsf_t_low_range" ]
 
     else:
 
