@@ -59,14 +59,13 @@ Fpi_fit = np.zeros( ( QsqNum, binNum ) )
 
 for q in range( QsqNum ):
 
-    for b in range( binNum ):
+    if True not in np.isnan( Fpi[ q, :, fitStart : fitEnd + 1 ] ) \
+       and True not in np.isnan( Fpi_err[ q, fitStart : fitEnd + 1 ] ):
 
-        if True not in np.isnan( Fpi[ q, b, fitStart : fitEnd + 1 ] ) \
-           and True not in np.isnan( Fpi_err[ q, fitStart : fitEnd + 1 ] ):
-
-            Fpi_fit[ q, b ] = np.polyfit( range( fitStart, fitEnd + 1 ), \
-                                          Fpi[ q, b, fitStart : fitEnd + 1 ], \
-                                          0, w=Fpi_err[ q, fitStart : fitEnd + 1 ] )
+        Fpi_fit[ q ], chiSq = fit.fitPlateau( Fpi[ q ], \
+                                              Fpi_err[ q ], \
+                                              fitStart, \
+                                              fitEnd )
 
         else:
 

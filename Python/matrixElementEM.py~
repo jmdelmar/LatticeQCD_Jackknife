@@ -9,7 +9,7 @@ import physQuants as pq
 import lqcdjk_fitting as fit
 from mpi4py import MPI
 
-ZvD1 = 1.123
+ZvD1 = 1.0
 
 L = 32.0
 
@@ -54,14 +54,9 @@ parser.add_argument( "binSize", action='store', type=int )
 parser.add_argument( "-o", "--output_template", action='store', \
                      type=str, default="./*.dat" )
 
-parser.add_argument( "--tsf_fit_start", action='store', type=int, \
-                     help="If given, will perform two-state fit on effective " \
-                     + "mass starting at given t value, otherwise, will " \
-                     + "use lowest t value which satisfies condition." )
-
-parser.add_argument( "--plat_fit_start", action='store', type=int, \
-                     help="If given, will perform plateau fit on effective " \
-                     + "mass starting at given t value, otherwise, will " \
+parser.add_argument( "--twop_fit_start", action='store', type=int, \
+                     help="If given, will perform two-point function " \
+                     + "fits starting at given t value, otherwise, will " \
                      + "use lowest t value which satisfies condition." )
 
 parser.add_argument( "-tsf", "--two_state_fit", action='store_true', \
@@ -114,16 +109,7 @@ binSize = args.binSize
 
 output_template = args.output_template
 
-tsf_fitStart = args.tsf_fit_start
-plat_fitStart = args.plat_fit_start
-
-if tsf_fitStart and plat_fitStart:
-
-    checkFit = False
-
-else:
-
-    checkFit = True
+twop_fitStart = args.twop_fit_start
 
 tsf = args.two_state_fit
 
@@ -294,29 +280,6 @@ if momSq > 0:
                        + "in {:.3} seconds".format( time.time() - t0 ), \
                        rank )
 
-    # Remove (+1,-1,+1) from momList and twop_boost_loc
-
-    if momSq == 3:
-
-        momList_cp = []
-        twop_boost_cp = []
-
-        for imom in range( momBoostNum ):
-
-            if momList[imom][0]==1 and momList[imom][1]==-1 and momList[imom][2]==1 :
-
-                momList_cp = np.delete( momList, imom, axis=0 )
-                twop_boost_cp = np.delete( twop_boost_loc, imom, axis=0 )
-
-                break
-            
-        momList = momList_cp
-        twop_boost_loc = twop_boost_cp
-
-        momBoostNum = len( momList )
-
-    # End if p^2=3
-
 else:
 
     twop_boost_loc = np.array( [] )
@@ -392,9 +355,9 @@ if rank == 0:
     
         fitResults = fit.mEffTwopFit( mEff, twop_fold, \
                                       rangeEnd, 0, L, tsf, \
-                                      tsf_t_low_range=[tsf_fitStart], \
-                                      plat_t_low_range=[plat_fitStart], \
-                                      checkFit=checkFit )
+                                      mEff_t_low_range=[12], \
+                                      twop_t_low_range=[3], \
+                                      checkFit=False)
     
     except fit.lqcdjk_BadFitError as error:
         
@@ -515,6 +478,8 @@ if rank == 0:
 
 # End if first process
 
+comm.Barrier()
+
 if momSq > 0:
 
     twop_boost = np.zeros( ( momBoostNum, configNum, T ) )
@@ -530,18 +495,18 @@ if rank == 0:
     twop_boost_fold = np.zeros( ( momBoostNum, binNum_glob, T_fold ) )
     threep_jk = np.zeros( ( momBoostNum, flavNum, \
                             tsinkNum, binNum_glob, T ) )
-    avgX_avgRatio = np.zeros( ( momBoostNum, flavNum, \
+    avgX = np.zeros( ( momBoostNum, flavNum, \
                        tsinkNum, binNum_glob, T ) )
 
 else:
 
     twop_boost_fold = np.array( [ None for imom in range( momBoostNum ) ] )
     threep_jk = np.array( [ [ [ None for ts in tsink ] \
-                              for f in range( flavNum ) ] \
+                              for f in flav_str ] \
                             for imom in range( momBoostNum ) ] )
-    avgX_avgRatio = np.array( [ [ [ None for ts in tsink ] \
-                         for f in flav_str ] \
-                       for imom in range( momBoostNum ) ] )
+    #avgX = np.array( [ [ [ None for ts in tsink ] \
+    #                     for f in flav_str ] \
+    #                   for imom in range( momBoostNum ) ] )
 
 # Loop over momenta
 for imom in range( momBoostNum ):
@@ -586,34 +551,33 @@ for imom in range( momBoostNum ):
         # three-point functions at zero-momentum
         # threep[ c, t ]
 
-        threeps = rw.readAvgXFile( threepDir, configList_loc, \
-                                   threep_tokens, ts, momList[ imom ], \
-                                   particle, dataFormat )
+        threeps = rw.readEMFile( threepDir, configList_loc, \
+                                 threep_tokens, ts, momList[ imom ], \
+                                 particle, dataFormat )
 
-        threep_gxDx = threeps[0]
-        threep_gyDy = threeps[1]
-        threep_gzDz = threeps[2]
-        threep_gtDt = threeps[3]
+        threep_loc = threeps[ 0 ]
+
+        threep_loc = np.asarray( threep_loc, order='c', dtype=float )
     
-        threep_s_gxDx = []
-        threep_s_gyDy = []
-        threep_s_gzDz = []
-        threep_s_gtDt = []
+        t_threep = threep_loc.shape[ -1 ]
+
+        threep = np.zeros( ( flavNum, configNum, t_threep ) )
+
+        comm.Allgather( threep_loc, threep[ 0 ] )
 
         if particle == "kaon":
 
-            threep_s_gxDx = threeps[4]
-            threep_s_gyDy = threeps[5]
-            threep_s_gzDz = threeps[6]
-            threep_s_gtDt = threeps[7]
+            threep_loc = threeps[ 1 ]
+
+            threep_loc = np.asarray( threep_loc, order='c', dtype=float )
+    
+            comm.Allgather( threep_loc, threep[ 1 ] )
 
         mpi_fncs.mpiPrint( "Read three-point functions from HDF5 files " \
                            + "for tsink {} in {:.4}".format( ts, \
                                                              time.time() \
                                                              - t0_ts ) \
                            + " seconds.", rank )
-
-        t_threep = threep_gxDx.shape[ -1 ]
 
         #threep_gxDx[ :, ts+1: ] = 0
         #threep_gyDy[ :, ts+1: ] = 0
@@ -629,33 +593,9 @@ for imom in range( momBoostNum ):
 
         # Subtract average over directions from gtDt
 
-        threep_loc = threep_gtDt - \
-                     0.25 * ( threep_gtDt \
-                              + threep_gxDx \
-                              + threep_gyDy \
-                              + threep_gzDz )
-
         #if rank == 0:
 
             #print(np.average(threep_loc[:,:ts+1],axis=0))
-
-        threep_loc = np.asarray( threep_loc, order='c', dtype=float )
-    
-        threep = np.zeros( ( flavNum, configNum, t_threep ) )
-
-        comm.Allgather( threep_loc, threep[ 0 ] )
-
-        if particle == "kaon":
-
-            threep_loc = threep_s_gtDt - \
-                              0.25 * ( threep_s_gtDt \
-                                       + threep_s_gxDx \
-                                       + threep_s_gyDy \
-                                       + threep_s_gzDz )
-
-            threep_loc = np.asarray( threep_loc, order='c', dtype=float )
-    
-            comm.Allgather( threep_loc, threep[ 1 ] )
 
         #print(threep.shape)
 
@@ -675,17 +615,6 @@ for imom in range( momBoostNum ):
                             recvOffset * T, \
                             MPI.DOUBLE ], root=0 )
 
-            if rank == 0:
-
-                avgX_avgRatio[imom,iflav,its]=ZvD1*pq.calcAvgX_momBoost(threep_jk[imom, \
-                                                                                  iflav, \
-                                                                                  its], \
-                                                                        twop_boost_jk[imom, \
-                                                                                      :, \
-                                                                                      ts], \
-                                                                        mEff_fit, \
-                                                                        momSq, L )
-
         # End loop over flavor
     # End loop over tsink
 # End loop over momenta
@@ -697,9 +626,8 @@ if rank == 0:
 
 else:
 
-    avgX_avgTwopThreep = np.array( [ [ [ None for ts in tsink ] \
-                                       for f in flav_str ] \
-                                     for m in momList ] )
+    avgX = np.array( [ [ None for ts in tsink ] \
+                         for f in flav_str ] )
 
 #################
 # Calculate <x> #
@@ -707,8 +635,7 @@ else:
 
 if rank == 0:
 
-    threep_avg = np.average( threep_jk, axis=-2 )
-    threep_err = fncs.calcError( threep_jk, binNum_glob, axis=-2 )
+    # Average over momenta
 
     threep_jk = np.average( threep_jk, axis=0 )
 
@@ -764,7 +691,7 @@ if rank == 0:
                                                                   its ], \
                                                         ts, E, momSq, \
                                                         L, G_boost, E_boost )
-
+                    
             else:
 
                 if tsf:
@@ -809,19 +736,13 @@ if rank == 0:
                                  threep_avg[ iflav, its ], \
                                  threep_err[ iflav, its ] )
 
-            avgX_outFilename = output_template.replace( "*", "avgX_" \
+            avgX_outFilename = output_template.replace( "*", "matrixElemEM_" \
                                                         + flav_str[ iflav ] \
                                                         + "_tsink" \
                                                         + str( ts ) )
-            rw.writeAvgDataFile( avgX_avgRatio_outFilename, avgX_avgRatio_avg[ iflav, its ], \
-                                 avgX_avgRatio_err[ iflav, its ] )
 
-            avgX_avgTwopThreep_outFilename = output_template.replace( "*", "avgX_avgTwopThreep_" \
-                                                        + flav_str[ iflav ] \
-                                                        + "_tsink" \
-                                                        + str( ts ) )
-            rw.writeAvgDataFile( avgX_avgTwopThreep_outFilename, avgX_avgTwopThreep_avg[ iflav, its ], \
-                                 avgX_avgTwopThreep_err[ iflav, its ] )
+            rw.writeAvgDataFile( avgX_outFilename, avgX_avg[ iflav, its ], \
+                                 avgX_err[ iflav, its ] )
 
             ###############
             # Fit plateau #
@@ -836,43 +757,28 @@ if rank == 0:
             # Loop over fit ranges
             for irange in range( len( fitStart ) ):
 
-                # Fit plateau
-
                 #for x in avgX[ iflav, its ]:
 
-                avgX_fit, chiSq = fit.fitPlateau( avgX[ iflav, its ], \
-                                                  avgX_err[iflav, its ], \
-                                                  fitStart[ irange ], \
-                                                  fitEnd[ irange ] )
+                avgX_fit, chiSq = fit.fitPlateau( avgX[ iflav, \
+                                                        its ], \
+                                                  avgX_err[iflav, \
+                                                           its ], \
+                                                  fitStart[irange], \
+                                                  fitEnd[irange] )
+                                                                
 
                 # Average over bins
 
-                avgX_avgRatio_fit_avg = np.average( avgX_avgRatio_fit )
-                avgX_avgRatio_fit_err = fncs.calcError( avgX_avgRatio_fit, binNum_glob )
+                avgX_fit_avg = np.average( avgX_fit )
                 
-                avgX_avgTwopThreep_fit_avg = np.average( avgX_avgTwopThreep_fit )
-                avgX_avgTwopThreep_fit_err = fncs.calcError( avgX_avgTwopThreep_fit, binNum_glob )
+                avgX_fit_err = fncs.calcError( avgX_fit, binNum_glob )
                 
                 # Write output files
 
-                avgX_avgRatio_fit_outFilename=output_template.replace("*", \
-                                                             "avgX_avgRatio_" \
-                                                             + flav_str[iflav]\
-                                                             + "_fit_" \
-                                                             "tsink" \
-                                                             + str( ts ) \
-                                                             + "_" \
-                                                             + str(fitStart[irange]) \
-                                                             + "_" \
-                                                             + str(fitEnd[irange]))
-                rw.writeFitDataFile( avgX_avgRatio_fit_outFilename, \
-                                     avgX_avgRatio_fit_avg, \
-                                     avgX_avgRatio_fit_err, \
-                                     fitStart[ irange ], \
-                                     fitEnd[ irange ] )
+                avgX_fit_outFilename = ""
 
-                avgX_avgTwopThreep_fit_outFilename=output_template.replace("*", \
-                                                             "avgX_avgTwopThreep_" \
+                avgX_fit_outFilename=output_template.replace("*", \
+                                                             "matrixElemEM_" \
                                                              + flav_str[iflav]\
                                                              + "_fit_" \
                                                              "tsink" \
@@ -881,213 +787,10 @@ if rank == 0:
                                                              + str(fitStart[irange]) \
                                                              + "_" \
                                                              + str(fitEnd[irange]))
-                rw.writeFitDataFile( avgX_avgTwopThreep_fit_outFilename, \
-                                     avgX_avgTwopThreep_fit_avg, \
-                                     avgX_avgTwopThreep_fit_err, \
-                                     fitStart[ irange ], \
-                                     fitEnd[ irange ] )
+
+                rw.writeFitDataFile( avgX_fit_outFilename, avgX_fit_avg, avgX_fit_err, fitStart[ irange ], fitEnd[ irange ] )
             
             # End loop over fit ranges
         # End loop over tsink
     # End loop over flavor
 # End if first process
-
-##################
-# Two-state Fit  #
-##################
-
-if tsf and rank == 0:
-
-    mpi_fncs.mpiPrint( "Will perform the two-state fit", rank )
-
-    #twop_rangeEnd = 20
-
-    for iflav in range( flavNum ):
-
-        for neglect in 2,3:
-
-            ti_to_fit = fncs.initEmptyList( tsinkNum, 1 )
-
-            for ts in range( tsinkNum ):
-
-                ti_to_fit[ ts ] = range( neglect, \
-                                         tsink[ ts ] - neglect + 1 )
-                """
-                ti_to_fit[ ts ] = np.concatenate( ( range( neglect, \
-                                                           tsink[ ts ] \
-                                                           - neglect \
-                                                           + 1 ), \
-                                                    range( tsink[ ts ] \
-                                                           + neglect \
-                                                           + 5, \
-                                                           T - \
-                                                           neglect \
-                                                           - 5 + 1 ) ) )
-                ti_to_fit[ ts ] = range( tsink[ ts ] + neglect + 5, \
-                                         T - neglect - 5 + 1 )
-                """
-
-            fitParams, chiSq = fit.twoStateFit_threep( threep_jk[iflav], \
-                                                       ti_to_fit, \
-                                                       tsink, E0, E1, T )
-
-            a00 = fitParams[ :, 0 ]
-            a01 = fitParams[ :, 1 ]
-            a11 = fitParams[ :, 2 ]
-          
-            fitParams = np.stack( ( a00, a01, a11, c0, c1, E0, E1 ), axis=1 )
-
-            # Calculate curve with constant tsink
-
-            # curve[ b, ts, t ]
-            # ti[ ts, t ]
-
-            threep_curve, ti_threep = fit.calcThreepTwoStateCurve( a00, a01, \
-                                                                   a11, E0, \
-                                                                   E1, T, \
-                                                                   tsink, \
-                                                                   ti_to_fit,\
-                                                                   neglect )
-
-            avgX_curve_const_ts, \
-                ti_avgX = fit.calcAvgXTwoStateCurve_const_ts( a00, \
-                                                              a01, \
-                                                              a11, \
-                                                              c0, \
-                                                              c1, \
-                                                              E0, \
-                                                              E1, \
-                                                              E0_mEff, \
-                                                              momSq, \
-                                                              L, T, \
-                                                              ZvD1, \
-                                                              tsink, \
-                                                              ti_to_fit, \
-                                                              neglect )
-
-            avgX_curve_const_ti, \
-                ts_avgX = fit.calcAvgXTwoStateCurve_const_ti( a00, \
-                                                              a01, \
-                                                              a11, \
-                                                              c0, \
-                                                              c1, \
-                                                              E0, \
-                                                              E1, \
-                                                              E0_mEff, \
-                                                              momSq, \
-                                                              L, T, \
-                                                              ZvD1, \
-                                                              tsink[0]-2, \
-                                                              tsink[-1]+5 )
-
-
-
-            # avgX[ b ]
-            
-            avgX = pq.calcAvgX_twoStateFit( a00, c0, E0, momSq, L, ZvD1 )
-        
-            # Average over bins
-                    
-            threep_curve_avg = np.average( threep_curve, axis=0 )
-            threep_curve_err = fncs.calcError( threep_curve, binNum_glob )
-            
-            avgX_curve_const_ts_avg = np.average( avgX_curve_const_ts, \
-                                                  axis=0 )
-            avgX_curve_const_ts_err = fncs.calcError( avgX_curve_const_ts, \
-                                                      binNum_glob )
-                
-            avgX_curve_const_ti_avg = np.average( avgX_curve_const_ti, \
-                                                  axis=0 )
-            avgX_curve_const_ti_err = fncs.calcError( avgX_curve_const_ti, \
-                                                      binNum_glob )
-                
-            fitParams_avg = np.average( fitParams, axis=0 )
-            fitParams_err = fncs.calcError( fitParams, binNum_glob )
-
-            chiSq_avg = np.average( chiSq, axis=0 )
-            chiSq_err = fncs.calcError( chiSq, binNum_glob )
-                
-            avgX_avg = np.average( avgX )
-            avgX_err = fncs.calcError( avgX, binNum_glob )
-    
-            # Write output file
-
-            tsf_threep_range_str = twopFit_str + ".3n" + str( neglect )
-
-            avgXOutputFilename \
-                = output_template.replace( "*", \
-                                           "avgX_" \
-                                           + flav_str[ iflav ] \
-                                           + "_twoStateFit_" \
-                                           + tsf_threep_range_str + "_" \
-                                           + ts_range_str )
-                
-            rw.writeFitDataFile( avgXOutputFilename, \
-                                 avgX_avg, avgX_err, 0, 0 )
-            
-            chiSqOutputFilename \
-                = output_template.replace( "*", \
-                                           "avgX_" \
-                                           + flav_str[ iflav ] \
-                                           + "_twoStateFit_threep_chiSq_" \
-                                           + tsf_threep_range_str + "_" \
-                                           + ts_range_str )
-        
-            rw.writeFitDataFile( chiSqOutputFilename, \
-                                 chiSq_avg, chiSq_err, 0, 0 )
-            
-            avgXParamsOutputFilename \
-                = output_template.replace( "*", \
-                                           "avgX_" \
-                                           + flav_str[ iflav ] \
-                                           + "_twoStateFitParams_" \
-                                           + tsf_threep_range_str + "_" \
-                                           + ts_range_str )
-
-            rw.writeTSFParamsFile( avgXParamsOutputFilename, \
-                                   fitParams_avg, fitParams_err )
-            
-            curveOutputFilename \
-                = output_template.replace( "*", \
-                                           "avgX_" \
-                                           + flav_str[ iflav ] \
-                                           + "_twoStateFit_curve_" \
-                                           + tsf_threep_range_str + "_" \
-                                           + ts_range_str )
-            rw.writeAvgDataFile_wX( curveOutputFilename, \
-                                    ts_avgX, \
-                                    avgX_curve_const_ti_avg, \
-                                    avgX_curve_const_ti_err )
-
-            for ts in range( tsinkNum ):
-            
-                threep_curveOutputFilename \
-                    = output_template.replace( "*", \
-                                               "threep_" \
-                                               + flav_str[ iflav ] \
-                                               + "_twoStateFit_curve_tsink" \
-                                               + str( tsink[ ts ] ) + "_" \
-                                               + tsf_threep_range_str + "_" \
-                                               + ts_range_str )
-                rw.writeAvgDataFile_wX( threep_curveOutputFilename, \
-                                        ti_threep[ ts ], \
-                                        threep_curve_avg[ ts ], \
-                                        threep_curve_err[ ts ] )
-
-                curveOutputFilename \
-                    = output_template.replace( "*", \
-                                               "avgX_" \
-                                               + flav_str[ iflav ] \
-                                               + "_twoStateFit_curve_tsink" \
-                                               + str( tsink[ ts ] ) + "_" \
-                                               + tsf_threep_range_str + "_" \
-                                               + ts_range_str )
-                rw.writeAvgDataFile_wX( curveOutputFilename, \
-                                        ti_avgX[ ts ], \
-                                        avgX_curve_const_ts_avg[ ts ], \
-                                        avgX_curve_const_ts_err[ ts ] )
-            
-            # End loop over tsink
-        # End loop over number of neglected three-point functions
-    # End loop over flavors
-# End if two-state fit

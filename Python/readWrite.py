@@ -383,14 +383,7 @@ def readAvgXFile( threepDir, configList, threep_tokens,
 
     else:
 
-        threep_template = threep_tokens[0] + \
-                          fncs.signToString( momList[0] ) \
-                          + str(momList[0]) + "_" \
-                          + fncs.signToString( momList[1] ) \
-                          + str(momList[1]) + "_" \
-                          + fncs.signToString( momList[2] ) \
-                          + str(momList[2]) \
-                          + threep_tokens[1]
+        threep_template = threep_tokens[0]
 
     if particle == "nucleon":
 
@@ -399,74 +392,74 @@ def readAvgXFile( threepDir, configList, threep_tokens,
             filename_u_gxDx = threep_template + str( ts ) + ".up.h5"
 
             threep_u_gxDx = getDatasets( threepDir, \
-                                            configList, \
-                                            filename_u_gxDx, \
-                                            "=der:gxDx:sym=", \
-                                            "msq0000", \
-                                            "arr" )[ :, 0, 0, :, 0 ].real
+                                         configList, \
+                                         filename_u_gxDx, \
+                                         "=der:gxDx:sym=", \
+                                         "msq0000", \
+                                         "arr" )[ :, 0, 0, :, 0 ].real
 
             filename_u_gyDy = threep_template + str( ts ) + ".up.h5"
 
             threep_u_gyDy = getDatasets( threepDir, \
-                                            configList, \
-                                            filename_u_gyDy, \
-                                            "=der:gyDy:sym=", \
-                                            "msq0000", \
-                                            "arr" )[ :, 0, 0, :, 0 ].real
+                                         configList, \
+                                         filename_u_gyDy, \
+                                         "=der:gyDy:sym=", \
+                                         "msq0000", \
+                                         "arr" )[ :, 0, 0, :, 0 ].real
 
             filename_u_gzDz = threep_template + str( ts ) + ".up.h5"
 
             threep_u_gzDz = getDatasets( threepDir, \
-                                            configList, \
-                                            filename_u_gzDz, \
-                                            "=der:gzDz:sym=", \
-                                            "msq0000", \
-                                            "arr" )[ :, 0, 0, :, 0 ].real
+                                         configList, \
+                                         filename_u_gzDz, \
+                                         "=der:gzDz:sym=", \
+                                         "msq0000", \
+                                         "arr" )[ :, 0, 0, :, 0 ].real
 
             filename_u_gtDt = threep_template + str( ts ) + ".up.h5"
 
             threep_u_gtDt = getDatasets( threepDir, \
-                                            configList, \
-                                            filename_u_gtDt, \
-                                            "=der:g0D0:sym=", \
-                                            "msq0000", \
-                                            "arr" )[ :, 0, 0, :, 0 ].real
+                                         configList, \
+                                         filename_u_gtDt, \
+                                         "=der:g0D0:sym=", \
+                                         "msq0000", \
+                                         "arr" )[ :, 0, 0, :, 0 ].real
 
             filename_d_gxDx = threep_template + str( ts ) + ".dn.h5"
 
             threep_d_gxDx = getDatasets( threepDir, \
-                                            configList, \
-                                            filename_d_gxDx, \
-                                            "=der:gxDx:sym=", \
-                                            "msq0000", \
-                                            "arr" )[ :, 0, 0, :, 0 ].real
+                                         configList, \
+                                         filename_d_gxDx, \
+                                         "=der:gxDx:sym=", \
+                                         "msq0000", \
+                                         "arr" )[ :, 0, 0, :, 0 ].real
 
             filename_d_gyDy = threep_template + str( ts ) + ".dn.h5"
 
             threep_d_gyDy = getDatasets( threepDir, \
-                                            configList, \
-                                            filename_d_gyDy, \
-                                            "=der:gyDy:sym=", \
-                                            "msq0000", \
-                                            "arr" )[ :, 0, 0, :, 0 ].real
+                                         configList, \
+                                         filename_d_gyDy, \
+                                         "=der:gyDy:sym=", \
+                                         "msq0000", \
+                                         "arr" )[ :, 0, 0, :, 0 ].real
 
             filename_d_gzDz = threep_template + str( ts ) + ".dn.h5"
 
             threep_d_gzDz = getDatasets( threepDir, \
-                                            configList, \
-                                            filename_d_gzDz, \
-                                            "=der:gzDz:sym=", \
-                                            "msq0000", \
-                                            "arr" )[ :, 0, 0, :, 0 ].real
+                                         configList, \
+                                         filename_d_gzDz, \
+                                         "=der:gzDz:sym=", \
+                                         "msq0000", \
+                                         "arr" )[ :, 0, 0, :, 0 ].real
 
             filename_d_gtDt = threep_template + str( ts ) + ".dn.h5"
 
             threep_d_gtDt = getDatasets( threepDir, \
-                                            configList, \
-                                            filename_d_gtDt, \
-                                            "=der:g0D0:sym=", \
-                                            "msq0000", \
-                                            "arr" )[ :, 0, 0, :, 0 ].real
+                                         configList, \
+                                         filename_d_gtDt, \
+                                         "=der:g0D0:sym=", \
+                                         "msq0000", \
+                                         "arr" )[ :, 0, 0, :, 0 ].real
             
             threep_gxDx = threep_u_gxDx - threep_d_gxDx
 
@@ -489,31 +482,31 @@ def readAvgXFile( threepDir, configList, threep_tokens,
         if dataFormat == "gpu":
 
             threep_gxDx = getDatasets( threepDir, \
-                                          configList, \
-                                          threep_template, \
-                                          "tsink_" + str( ts ), \
-                                          "oneD", \
-                                          "dir_00", \
-                                          "up", \
-                                          "threep" )[ :, 0, 0, ..., 0, 1, 0 ]
+                                       configList, \
+                                       threep_template, \
+                                       "tsink_" + str( ts ), \
+                                       "oneD", \
+                                       "dir_00", \
+                                       "up", \
+                                       "threep" )[ :, 0, 0, ..., 0, 1, 0 ]
 
             threep_gyDy = getDatasets( threepDir, \
-                                          configList, \
-                                          threep_template, \
-                                          "tsink_" + str( ts ), \
-                                          "oneD", \
-                                          "dir_01", \
-                                          "up", \
-                                          "threep" )[ :, 0, 0, ..., 0, 2, 0 ]
+                                       configList, \
+                                       threep_template, \
+                                       "tsink_" + str( ts ), \
+                                       "oneD", \
+                                       "dir_01", \
+                                       "up", \
+                                       "threep" )[ :, 0, 0, ..., 0, 2, 0 ]
     
             threep_gzDz = getDatasets( threepDir, \
-                                          configList, \
-                                          threep_template, \
-                                          "tsink_" + str( ts ), \
-                                          "oneD", \
-                                          "dir_02", \
-                                          "up", \
-                                          "threep" )[ :, 0, 0, ..., 0, 3, 0 ]
+                                       configList, \
+                                       threep_template, \
+                                       "tsink_" + str( ts ), \
+                                       "oneD", \
+                                       "dir_02", \
+                                       "up", \
+                                       "threep" )[ :, 0, 0, ..., 0, 3, 0 ]
 
             threep_gtDt = getDatasets( threepDir, \
                                        configList, \
@@ -535,44 +528,44 @@ def readAvgXFile( threepDir, configList, threep_tokens,
             if particle == "kaon":
             
                 threep_s_gxDx = getDatasets( threepDir, \
-                                                configList, \
-                                                threep_template, \
-                                                "tsink_" + str( ts ), \
-                                                "oneD", \
-                                                "dir_00", \
-                                                "strange", \
-                                                "threep" )[ :, 0, 0, ..., \
-                                                            0, 1, 0 ]
-
+                                             configList, \
+                                             threep_template, \
+                                             "tsink_" + str( ts ), \
+                                             "oneD", \
+                                             "dir_00", \
+                                             "strange", \
+                                             "threep" )[ :, 0, 0, ..., \
+                                                         0, 1, 0 ]
+                
                 threep_s_gyDy = getDatasets( threepDir, \
-                                                configList, \
-                                                threep_template, \
-                                                "tsink_" + str( ts ), \
-                                                "oneD", \
-                                                "dir_01", \
-                                                "strange", \
-                                                "threep" )[ :, 0, 0, ..., \
-                                                            0, 2, 0 ]
+                                             configList, \
+                                             threep_template, \
+                                             "tsink_" + str( ts ), \
+                                             "oneD", \
+                                             "dir_01", \
+                                             "strange", \
+                                             "threep" )[ :, 0, 0, ..., \
+                                                         0, 2, 0 ]
     
                 threep_s_gzDz = getDatasets( threepDir, \
-                                                configList, \
-                                                threep_template, \
-                                                "tsink_" + str( ts ), \
-                                                "oneD", \
-                                                "dir_02", \
-                                                "strange", \
-                                                "threep" )[ :, 0, 0, ..., \
-                                                            0, 3, 0 ]
+                                             configList, \
+                                             threep_template, \
+                                             "tsink_" + str( ts ), \
+                                             "oneD", \
+                                             "dir_02", \
+                                             "strange", \
+                                             "threep" )[ :, 0, 0, ..., \
+                                                         0, 3, 0 ]
 
                 threep_s_gtDt = getDatasets( threepDir, \
-                                                configList, \
-                                                threep_template, \
-                                                "tsink_" + str( ts ), \
-                                                "oneD", \
-                                                "dir_03", \
-                                                "strange", \
-                                                "threep" )[ :, 0, 0, ..., \
-                                                            0, 4, 0 ]
+                                             configList, \
+                                             threep_template, \
+                                             "tsink_" + str( ts ), \
+                                             "oneD", \
+                                             "dir_03", \
+                                             "strange", \
+                                             "threep" )[ :, 0, 0, ..., \
+                                                         0, 4, 0 ]
             
                 return [ threep_gxDx, threep_gyDy, \
                          threep_gzDz, threep_gtDt, \
@@ -1319,9 +1312,263 @@ def readAvgX3File( threepDir, configList, threep_tokens,
                     + particle + " not supported.", comm )
 
 
+def readEMFile( threepDir, configList, threep_tokens,
+                ts, momList, particle, dataFormat, **kwargs ):
+
+    # Set filename template
+
+    threep_template = threep_tokens[0]
+
+    if dataFormat == "gpu":
+
+        threep = getDatasets( threepDir, \
+                              configList, \
+                              threep_template, \
+                              "tsink_" + str( ts ), \
+                              "local", \
+                              "up", \
+                              "threep" )[ :, 0, 0, ..., \
+                                          0, 4, 0 ]
+
+        if particle == "kaon":
+            
+            threep_s = getDatasets( threepDir, \
+                                    configList, \
+                                    threep_template, \
+                                    "tsink_" + str( ts ), \
+                                    "local", \
+                                    "strange", \
+                                    "threep" )[ :, 0, 0, ..., \
+                                                0, 4, 0 ]
+                
+            return [ threep, threep_s ]
+
+        elif particle == "pion": 
+            
+            return [ threep ]
+
+        else: 
+
+            print( "Error (readAvgXFile): Particle " \
+                   + particle + " not supported." )
+
+            exit()                
+
+
+def readEMFF_cpu( threepDir, configList, threep_template, Qsq, ts, proj, \
+                  particle, **kwargs ):
+
+    QsqNum = len( Qsq )
+
+    insertionCurrent = [ "=noe:g0=" , \
+                         "=noe:gx=" , \
+                         "=noe:gy=" , \
+                         "=noe:gz=" ]
+                         
+    insertionNum = len( insertionCurrent )
+
+    # Set data set names
+
+    dsetname = [ "" for qc in range( QsqNum * insertionNum ) ]
+                
+    # Loop over Qsq
+    for qsq, iqsq in zip( Qsq, range( QsqNum ) ):
+        # Loop over insertion current
+        for c, ic in zip( insertionCurrent, range( insertionNum ) ):
+            
+            if particle == "nucleon":
+
+                template = "/thrp/ave16/P{}/dt{}/{}/{}/msq{:.4}/arr"
+                    
+                dsetname[ iqsq * QsqNum + ic ] = template.format( proj, \
+                                                                  ts, \
+                                                                  flav, \
+                                                                  c, Qsq )
+
+            else:
+
+                template = "/thrp/ave16/dt{}/{}/{}/msq{:.4}/arr"
+                    
+                dsetname[ iqsq * QsqNum + ic ] = template.format( ts, \
+                                                                  flav, \
+                                                                  c, Qsq )
+
+        # End loop over insertion current
+    # End loop over Qsq
+
+    # Read three-point files
+    # threep[ conf, Qsq*curr, t ]
+
+    threep = getDatasets( threepDir, \
+                          configList, \
+                          threep_template, \
+                          dsetname=dsetname )[:,0,:,:,0]
+
+    # Reshape threep[ conf, Qsq*curr, t ] 
+    # -> threep[ conf, Qsq, curr, t ]
+    
+    threep = threep.reshape( threep.shape[ 0 ], QsqNum, \
+                             insertionNum, threep.shape[ -1 ] )
+                        
+    return threep
+
+    
+def readEMFF_gpu( threepDir, configList, threep_tokens, \
+                  QsqList, ts, proj, momBoost, particle, \
+                  dataFormat, **kwargs ):
+
+    return
+
+def readEMFF_ASCII( threepDir, configList, threep_template, \
+                    QNum, insertionNum, **kwargs ):
+
+    # threep[ conf, QNum*t*curr ]
+    
+    threep = getTxtData( threepDir, configList, \
+                            threep_template, dtype=float )[ ..., 4:6 ]
+
+    if "comm" in kwargs:
+
+            mpi_fncs.mpiPrint( threep, kwargs["comm"].Get_rank() )
+
+    threep = threep[ ..., 0 ] + threep[ ..., 1 ] * 1j
+
+    T = threep.shape[ -1 ] // QNum // insertionNum
+
+    if "comm" in kwargs:
+
+            mpi_fncs.mpiPrint( threep, kwargs["comm"].Get_rank() )
+
+    # Reshape threep[ conf, Q*t*curr ] 
+    # -> threep[ conf, Q, t, curr ]
+    
+    threep = threep.reshape( threep.shape[ :-1 ] + \
+                             ( QNum, T, insertionNum ) )
+
+    # threep[ conf, Q, t, curr ] 
+    # -> threep[ conf, Q, curr, t ]
+
+    threep = np.moveaxis( threep, -1, -2 )
+
+    return threep
+
+
+def readEMFormFactorFile( threepDir, configList, threep_tokens, Qsq, QNum, \
+                          ts, proj, momBoost, particle, dataFormat, \
+                          **kwargs ):
+
+    flavor, flavorNum = fncs.setFlavorStrings( particle, dataFormat )
+
+    projNum = len( proj )
+
+    threep = fncs.initEmptyList( np.zeros( ( flavorNum, projNum ) ), 2 )
+
+    # Loop over flavor
+    for flav, iflav in zip( flavor, range( flavorNum ) ):
+        # Loop over projection
+        for p, ip in zip( proj, range( projNum ) ):
+
+            # Set filename template
+    
+            if dataFormat == "cpu":
+                
+                template = "{0}{1}{2}{3:+}_{4:+}_{5:+}.{6}.h5"
+    
+                threep_template = template.format( threep_tokens[0], \
+                                                   ts, \
+                                                   threep_tokens[1], \
+                                                   momBoost[0], \
+                                                   momBoost[1], \
+                                                   momBoost[2], \
+                                                   flav )
+
+                threep[ iflav ][ ip ] = readEMFF_cpu( threepDir, \
+                                                      configList, \
+                                                      threep_template, \
+                                                      Qsq, ts, p, particle, \
+                                                      **kwargs )
+
+
+            elif dataFormat == "gpu":
+
+                    template = "{0}{1:+}{2:+}{3:+}{4}"
+
+                    threep_template = template.format( threep_tokens[0], \
+                                                       momBoost[0], \
+                                                       momBoost[1], \
+                                                       momBoost[2], \
+                                                       threep_tokens[1], **kwargs )
+
+            elif dataFormat == "ASCII":
+
+                template = "{0}{1}{2}{3}{4}{5}"
+
+                threep_template = template.format( threep_tokens[0], p, \
+                                                   threep_tokens[1], ts, \
+                                                   threep_tokens[2], \
+                                                   flav )
+
+                #print(threep_template)
+
+                threep[ iflav ][ ip ] = readEMFF_ASCII( threepDir, \
+                                                        configList, \
+                                                        threep_template, \
+                                                        QNum, 4, **kwargs )
+                """
+                if "comm" in kwargs:
+
+                    print( "FLAG {} {}".format( flav, p), kwargs["comm"].Get_rank() )
+                """
+        # End loop over projection
+    # End loop over flavor
+
+    return np.array( threep )
+
+
 ########################
 # ASCII read functions #
 ########################
+
+
+def getTxtData( configDir, configList, fn_template, **kwargs ):
+
+    configNum = len( configList )
+
+    data = fncs.initEmptyList( configNum, 1 )
+
+    # Loop over config indices
+    for c in range( configNum ):
+        
+        filename = configDir + fn_template.replace( "*", configList[ c ] )
+
+        # Get data
+
+        data[ c ] = readTxtFile( filename, **kwargs )
+
+    # End loop over configs
+
+    return np.array( data )
+
+
+def readTxtFile( filename, **kwargs ):
+
+    with open( filename, "r" ) as txtFile:
+
+        lines = txtFile.readlines()
+
+        lineNum = len( lines )
+
+        columnNum = len( lines[0].split() )
+
+        # Go back to beginning of file
+        
+        txtFile.seek( 0 )
+
+        data = np.array( txtFile.read().split(), \
+                         **kwargs ).reshape( lineNum, \
+                                             columnNum )
+
+    return data
 
 
 # Reads an ASCII file with two columns where the data of 
@@ -1359,7 +1606,9 @@ def readNthDataCol( filename, N ):
 
         for line in file:
 
-            data.append( line.split() )
+            if line.split():
+
+                data.append( line.split() )
 
     data = np.array( data, dtype=float )
 
@@ -1674,11 +1923,21 @@ def writeAvgDataFile_wX( filename, x, y, error ):
 
     with open( filename, "w" ) as output:
 
-        for ix, iy, ierr in zip( x, y, error ):
+        if x.dtype == int:
 
-            output.write( "{:<20.15f}{:<20.15f}{:.15f}\n".format( ix, \
-                                                                  iy, \
-                                                                  ierr) )
+            for ix, iy, ierr in zip( x, y, error ):
+
+                output.write( "{:<20d}{:<20.10f}{:.10f}\n".format( ix, \
+                                                                      iy, \
+                                                                      ierr) )
+
+        else:
+
+            for ix, iy, ierr in zip( x, y, error ):
+
+                output.write( "{:<20.10f}{:<20.10f}{:.10f}\n".format( ix, \
+                                                                      iy, \
+                                                                      ierr) )
 
     print( "Wrote " + filename )
 
@@ -1708,6 +1967,31 @@ def writeFormFactorFile( filename, Qsq, data ):
                     output.write( str( t ).ljust(20) \
                                   + str( Qsq[ q ] ).ljust(20) \
                                   + str( data[ q, b, t ] ) + "\n" )
+
+    print( "Wrote " + filename )
+
+
+# Write an ASCII file with four columns and three repeating dimensions. 
+# The first column is the first repeating dimension which increases by one,
+# the second column is the second repeating dimension which is given,
+# and the third and fourth columns are a set of data pairs.
+
+# filename: Name of file to be written
+# data: 3-D array of data pairs to be written in the third and fourth columns
+# Qsq: 1-D array of data to be written repeatedly in the second column
+
+def writeSVDOutputFile( filename, data, Qsq ):
+
+    with open( filename, "w" ) as output:
+
+        for q in range( len( data ) ):
+
+            for r in range( data[ q ].shape[ 0 ] ):
+
+                output.write("{:<10}{:<10}{:<20.10}{:<.10}\n".format(r, \
+                                                                     Qsq[q], \
+                                                                     data[q][r,0], \
+                                                                     data[q][r,1]))
 
     print( "Wrote " + filename )
 

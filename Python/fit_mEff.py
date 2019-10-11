@@ -53,11 +53,8 @@ mEff_err = np.std( mEff, axis=0 ) * float( binNum - 1 ) / math.sqrt( float( binN
 
 mEff_fit = np.zeros( binNum )
 
-for b in range( binNum ):
-
-    mEff_fit[ b ] = np.polyfit( range( fitStart, fitEnd + 1 ), \
-                                mEff[ b, fitStart : fitEnd + 1 ], \
-                                0, w=mEff_err[ fitStart : fitEnd + 1 ] )
+mEff_fit, chiSq = fit.fitPlateau( mEff, mEff_err, \
+                                  fitStart, fitEnd )
 
 #####################
 # Average over bins #
