@@ -9,8 +9,6 @@ import physQuants as pq
 import lqcdjk_fitting as fit
 from mpi4py import MPI
 
-ZvD1 = 1.0
-
 L = 32.0
 
 particle_list = [ "pion", "kaon", "nucleon" ]
@@ -65,6 +63,10 @@ parser.add_argument( "-tsf", "--two_state_fit", action='store_true', \
 parser.add_argument( "-f", "--data_format", action='store', \
                      help="Data format. Should be 'gpu' or 'cpu'.", \
                      type=str, default="gpu" )
+
+parser.add_argument( "-i", "--insertion_type", action='store', \
+                     help="Type of insertion current. Should be 'local' or 'noether'.", \
+                     type=str, default="noether" )
 
 parser.add_argument( "-c", "--config_list", action='store', \
                      type=str, default="" )
@@ -124,6 +126,12 @@ configList = np.array( fncs.getConfigList( args.config_list, threepDir ) )
 configNum = len( configList )
 
 # Check inputs
+
+insType = args.insertion_type
+
+assert insType in [ "local", "noether" ], \
+    "Error: insertion type not supported. " \
+    "Should be 'local' or 'noether'."
 
 assert particle in particle_list, \
     "Error: Particle not supported. " \
@@ -553,7 +561,7 @@ for imom in range( momBoostNum ):
 
         threeps = rw.readEMFile( threepDir, configList_loc, \
                                  threep_tokens, ts, momList[ imom ], \
-                                 particle, dataFormat )
+                                 particle, dataFormat, insType )
 
         threep_loc = threeps[ 0 ]
 
@@ -678,16 +686,22 @@ if rank == 0:
                 if tsf:
 
                     avgX[iflav, \
-                         its]=ZvD1*pq.calcAvgX_twopFit( threep_jk[iflav, \
-                                                                  its ], \
-                                                        ts, E0_mEff, momSq, \
-                                                        L, c0_boost, \
-                                                        E0_boost )
+                         its]=pq.calcMatrixElemEM_momBoost( threep_jk[iflav, \
+                                                                      its ], \
+                                                            twop_boost_fold[:,ts], \
+                                                            E0_mEff, momSq, \
+                                                            L )
+                    #avgX[iflav, \
+                    #     its]=ZvD1*pq.calcAvgX_twopFit( threep_jk[iflav, \
+                    #                                              its ], \
+                    #                                    ts, E0_mEff, momSq, \
+                    #                                    L, c0_boost, \
+                    #                                    E0_boost )
 
                 else:
 
                     avgX[iflav, \
-                         its]=ZvD1*pq.calcAvgX_twopFit( threep_jk[iflav, \
+                         its]=pq.calcAvgX_twopFit( threep_jk[iflav, \
                                                                   its ], \
                                                         ts, E, momSq, \
                                                         L, G_boost, E_boost )
@@ -697,7 +711,7 @@ if rank == 0:
                 if tsf:
 
                     avgX[iflav, \
-                         its]=ZvD1*pq.calcAvgX_twopFit( threep_jk[iflav, \
+                         its]=pq.calcAvgX_twopFit( threep_jk[iflav, \
                                                                   its ], \
                                                         ts, E0_mEff, momSq, \
                                                         L, c0, E0 )
@@ -705,7 +719,7 @@ if rank == 0:
                 else:
 
                     avgX[iflav, \
-                         its]=ZvD1*pq.calcAvgX_twopFit( threep_jk[iflav, \
+                         its]=pq.calcAvgX_twopFit( threep_jk[iflav, \
                                                                   its ], \
                                                         ts, E, momSq, \
                                                         L, G, E )

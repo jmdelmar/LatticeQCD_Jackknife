@@ -202,10 +202,13 @@ def getDatasets( configDir, configList, fn_template, *keyword, **kwargs ):
     for c in range( len( dsetname ) ):
         # Loop over filename indices
         for fn in range( len( dsetname[c] ) ): 
+            #print(filename[c][fn])
             # Open file
             with h5py.File( filename[c][fn], "r" ) as dataFile:
                 # Loop over datasets
                 for ds in range( len( dsetname[c][fn] ) ):
+
+                    #print(dsetname[c][fn])
 
                     # Get dataset
 
@@ -931,7 +934,7 @@ def readAvgX2File( threepDir, configList, threep_tokens,
 
             filename = threep_template + ".up.h5"
 
-            dsetname_pre = "/thrp/ave16/P0/dt{}/up/".format( ts )
+            dsetname_pre = "/thrp/ave16/dt{}/up/".format( ts )
 
             dsetname_insertion = [ "der2:g0DxDy", \
                                    "der2:g0DxDz", \
@@ -987,7 +990,7 @@ def readAvgX2File( threepDir, configList, threep_tokens,
             
                 filename_s = threep_template + ".strange.h5"
 
-                dsetname_s_pre = "/thrp/ave16/P0/dt{}/strange/".format( ts )
+                dsetname_s_pre = "/thrp/ave16/dt{}/strange/".format( ts )
 
                 threep_s_g0DxDy = getDatasets( threepDir, \
                                                configList, \
@@ -1272,7 +1275,7 @@ def readAvgX3File( threepDir, configList, threep_tokens,
 
             filename = threep_template + ".up.h5"
 
-            dsetname = "/thrp/ave16/P0/dt{}".format( ts ) \
+            dsetname = "/thrp/ave16/dt{}".format( ts ) \
                        + "/up/der3:g0DxDyDz/msq0000/arr"
 
             threep = getDatasets( threepDir, \
@@ -1288,7 +1291,7 @@ def readAvgX3File( threepDir, configList, threep_tokens,
             
                 filename_s = threep_template + ".strange.h5"
 
-                dsetname_s = "/thrp/ave16/P0/dt{}".format( ts ) \
+                dsetname_s = "/thrp/ave16/dt{}".format( ts ) \
                              + "/strange/der3:g0DxDyDz/msq0000/arr"
 
                 threep_s = getDatasets( threepDir, \
@@ -1313,19 +1316,20 @@ def readAvgX3File( threepDir, configList, threep_tokens,
 
 
 def readEMFile( threepDir, configList, threep_tokens,
-                ts, momList, particle, dataFormat, **kwargs ):
+                ts, momList, particle, dataFormat, 
+                insType, **kwargs ):
 
     # Set filename template
 
     threep_template = threep_tokens[0]
 
-    if dataFormat == "gpu":
+    if dataFormat == "gpu":            
 
         threep = getDatasets( threepDir, \
                               configList, \
                               threep_template, \
                               "tsink_" + str( ts ), \
-                              "local", \
+                              insType, \
                               "up", \
                               "threep" )[ :, 0, 0, ..., \
                                           0, 4, 0 ]
@@ -1353,6 +1357,47 @@ def readEMFile( threepDir, configList, threep_tokens,
                    + particle + " not supported." )
 
             exit()                
+
+    elif dataFormat == "cpu":
+
+        threep_template = threep_tokens[0] + str(ts) \
+                          + threep_tokens[1] \
+                          + fncs.signToString( momList[0] ) \
+                          + str(momList[0]) + "_" \
+                          + fncs.signToString( momList[1] ) \
+                          + str(momList[1]) + "_" \
+                          + fncs.signToString( momList[2] ) \
+                          + str(momList[2])
+
+        filename = threep_template + ".up.h5"
+
+        dsetname_pre = "/thrp/ave16/dt{}/up/".format( ts )
+
+        if insType == "local":
+
+            dsetname_insertion = "=loc:g0="
+
+        elif insType == "noether":
+
+            dsetname_insertion = "=noe:g0="
+
+        else:
+
+            dsetname_insertion = "=noe:g0="
+
+            print( "WARNING: insertion type not supported. " \
+                   + "Will use conserved current." )
+
+        dsetname_post = "/msq0000/arr"
+            
+        threep = getDatasets( threepDir, \
+                              configList, \
+                              filename, \
+                              dsetname=[ dsetname_pre \
+                                         + dsetname_insertion \
+                                         + dsetname_post ] )[ :, 0, 0, \
+                                                              :, 0 ].real
+        return threep
 
 
 def readEMFF_cpu( threepDir, configList, threep_template, Qsq, ts, proj, \

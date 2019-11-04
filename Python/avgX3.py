@@ -235,7 +235,7 @@ else:
 # opposite their sign (sign of phase negative because adjoint taken of
 # sequential propagator)
 
-momList = -1 * momList
+#momList = -1 * momList
 
 momBoostNum = len( momList )
 
@@ -566,7 +566,7 @@ for imom in range( momBoostNum ):
                                                              - t0_ts ) \
                            + " seconds.", rank )
 
-        t_threep = threep_gxDx.shape[ -1 ]
+        t_threep = threep_g0DxDyDz.shape[ -1 ]
 
         # Calculate * threep_g0DiDjDk / ( pi* pj * pk )
 
@@ -635,7 +635,7 @@ if rank == 0:
 
     threep_jk = np.average( threep_jk, axis=0 )
 
-    twop_boost_jk = np.average( twop_boost_jk, axis=0 )
+    twop_boost_fold = np.average( twop_boost_fold, axis=0 )
     
     # Fit the boosted two-point functions
 
@@ -670,11 +670,17 @@ if rank == 0:
                 # Negative sign because kinematic factor has an i
 
                 avgX3[iflav, \
-                     its]=-ZvD3*pq.calcAvgX2_twopFit( threep_jk[iflav, \
-                                                                its ], \
-                                                      ts, E0_mEff, momSq, \
-                                                      L, c0_boost, \
-                                                      E0_boost )
+                     its]=ZvD3*pq.calcAvgX2( threep_jk[iflav, \
+                                                       its ], \
+                                             twop_boost_fold[:,ts], \
+                                             E0_mEff, momSq, \
+                                             L )
+                #avgX3[iflav, \
+                #     its]=-ZvD3*pq.calcAvgX2_twopFit( threep_jk[iflav, \
+                #                                                its ], \
+                #                                      ts, E0_mEff, momSq, \
+                #                                      L, c0_boost, \
+                #                                      E0_boost )
 
             else:
 
@@ -831,7 +837,7 @@ if tsf and rank == 0:
                                                                E0_mEff, \
                                                                momSq, \
                                                                L, T, \
-                                                               ZvD2, \
+                                                               ZvD3, \
                                                                tsink, \
                                                                ti_to_fit, \
                                                                neglect )
@@ -847,7 +853,7 @@ if tsf and rank == 0:
                                                                E0_mEff, \
                                                                momSq, \
                                                                L, T, \
-                                                               ZvD2, \
+                                                               ZvD3, \
                                                                tsink[0]-2, \
                                                                tsink[-1]+5 )
 
@@ -855,7 +861,7 @@ if tsf and rank == 0:
 
             # avgX3[ b ]
             
-            avgX3 = pq.calcAvgX2_twoStateFit( a00, c0, E0_mEff, momSq, L, ZvD2 )
+            avgX3 = pq.calcAvgX2_twoStateFit( a00, c0, E0_mEff, momSq, L, ZvD3 )
         
             # Average over bins
                     
@@ -883,7 +889,7 @@ if tsf and rank == 0:
     
             # Write output file
 
-            tsf_threep_range_str = tsf_range_str + ".3n" + str( neglect )
+            tsf_threep_range_str = mEff_range_str + ".3n" + str( neglect )
 
             avgX3OutputFilename \
                 = output_template.replace( "*", \
@@ -926,9 +932,9 @@ if tsf and rank == 0:
                                            + tsf_threep_range_str + "_" \
                                            + ts_range_str )
             rw.writeAvgDataFile_wX( curveOutputFilename, \
-                                    ts_avgX2, \
-                                    avgX2_curve_const_ti_avg, \
-                                    avgX2_curve_const_ti_err )
+                                    ts_avgX3, \
+                                    avgX3_curve_const_ti_avg, \
+                                    avgX3_curve_const_ti_err )
 
             for ts in range( tsinkNum ):
             
@@ -941,7 +947,7 @@ if tsf and rank == 0:
                                                + tsf_threep_range_str + "_" \
                                                + ts_range_str )
                 rw.writeAvgDataFile_wX( threep_curveOutputFilename, \
-                                        ti_curve[ ts ], \
+                                        ti_threep[ ts ], \
                                         threep_curve_avg[ ts ], \
                                         threep_curve_err[ ts ] )
 

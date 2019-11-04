@@ -235,7 +235,7 @@ else:
 # opposite their sign (sign of phase negative because adjoint taken of
 # sequential propagator)
 
-momList = -1 * momList
+#momList = -1 * momList
 
 momBoostNum = len( momList )
 
@@ -572,7 +572,7 @@ for imom in range( momBoostNum ):
                                                              - t0_ts ) \
                            + " seconds.", rank )
 
-        t_threep = threep_gxDx.shape[ -1 ]
+        t_threep = threep_g0DxDy.shape[ -1 ]
 
         threep_loc = np.zeros( ( flavNum, binNum_loc, T ) )
             
@@ -589,7 +589,7 @@ for imom in range( momBoostNum ):
 
                 nonzeroTerms += 1.0
 
-        mpi_fncs.mpiPrint( ( momList[imom], nonzeroTerms ), rank )
+        #mpi_fncs.mpiPrint( ( momList[imom], nonzeroTerms ), rank )
 
         #threep_loc = -1.0 / nonzeroTerms * ( L / 2.0 / np.pi ) ** 2 \
         threep_loc = 1.0 / nonzeroTerms * ( L / 2.0 / np.pi ) ** 2 \
@@ -701,11 +701,17 @@ if rank == 0:
             if tsf:
 
                 avgX2[iflav, \
-                     its]=ZvD2*pq.calcAvgX2_twopFit( threep_jk[iflav, \
-                                                               its ], \
-                                                     ts, E0_mEff, momSq, \
-                                                     L, c0_boost, \
-                                                     E0_boost )
+                      its]=ZvD2*pq.calcAvgX2( threep_jk[iflav, \
+                                                        its ], \
+                                              twop_boost_fold[:,ts], \
+                                              E0_mEff, momSq, \
+                                              L )
+                #avgX2[iflav, \
+                #     its]=ZvD2*pq.calcAvgX2_twopFit( threep_jk[iflav, \
+                #                                               its ], \
+                #                                     ts, E0_mEff, momSq, \
+                #                                     L, c0_boost, \
+                #                                     E0_boost )
 
             else:
 
@@ -914,7 +920,7 @@ if tsf and rank == 0:
     
             # Write output file
 
-            tsf_threep_range_str = tsf_range_str + ".3n" + str( neglect )
+            tsf_threep_range_str = mEff_range_str + ".3n" + str( neglect )
 
             avgX2OutputFilename \
                 = output_template.replace( "*", \
@@ -972,7 +978,7 @@ if tsf and rank == 0:
                                                + tsf_threep_range_str + "_" \
                                                + ts_range_str )
                 rw.writeAvgDataFile_wX( threep_curveOutputFilename, \
-                                        ti_curve[ ts ], \
+                                        ti_threep[ ts ], \
                                         threep_curve_avg[ ts ], \
                                         threep_curve_err[ ts ] )
 

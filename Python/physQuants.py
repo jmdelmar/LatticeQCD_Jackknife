@@ -170,18 +170,24 @@ def mEff( twop ):
     return mEff
 
 
-# avgXKineFactor = 2E^2/(m(1/2*m^2-2*E^2))
+# avgXKineFactor = 2E/(1/2*m^2-2*E^2)
 
 def avgXKineFactor( mEff, momSq, L ):
 
-    return 2.0 * energy( mEff, momSq, L ) ** 2 \
-        / ( mEff * ( 0.5 * mEff ** 2 \
+    return 2.0 * mEff \
+        / ( ( 0.5 * mEff ** 2 \
                      - 2.0 * energy( mEff, momSq, L ) ** 2 ) )
+    #return 2.0 * energy( mEff, momSq, L ) \
+    #    / ( ( 0.5 * mEff ** 2 \
+    #                 - 2.0 * energy( mEff, momSq, L ) ** 2 ) )
+    #return 2.0 * energy( mEff, momSq, L ) ** 2 \
+    #    / ( mEff * ( 0.5 * mEff ** 2 \
+    #                 - 2.0 * energy( mEff, momSq, L ) ** 2 ) )
 
 
 def avgX2KineFactor( mEff, momSq, L ):
 
-    return -mEff / energy( mEff, momSq, L )
+    return -energy( mEff, momSq, L ) / mEff
 
 
 # Calculate the quark momentum fraction <x> for three-point functions with
@@ -206,7 +212,7 @@ def calcAvgX( threep, twop_tsink, mEff ):
     return avgX
 
 
-def calcAvgX2( threep, twop_tsink, mEff ):
+def calcAvgX2( threep, twop_tsink, mEff, momSq, L ):
 
     # threep[ b, t ]
     # twop_tsink[ b ]
@@ -214,10 +220,11 @@ def calcAvgX2( threep, twop_tsink, mEff ):
 
     avgX2 = np.zeros( threep.shape )
 
+    preFactor = avgX2KineFactor( mEff, momSq, L )
+
     for t in range( threep.shape[ 1 ] ):
            
-        avgX2[ :, t ] = 1.0 / 2.0  / mEff \
-                        * threep[ :, t ] / twop_tsink
+        avgX2[ :, t ] = preFactor * threep[ :, t ] / twop_tsink
 
     return avgX2
 
@@ -240,6 +247,25 @@ def calcAvgX_momBoost( threep, twop_tsink, mEff, momSq, L ):
     # L
 
     preFactor = avgXKineFactor( mEff, momSq, L )
+
+    avgX = np.zeros( threep.shape )
+
+    for t in range( threep.shape[ -1 ] ):
+
+        avgX[ :, t ] = preFactor * threep[ :, t ] / twop_tsink
+
+    return avgX
+
+
+def calcMatrixElemEM_momBoost( threep, twop_tsink, mEff, momSq, L ):
+
+    # threep[ b, t ]
+    # twop_tsink[ b ]
+    # mEff[ b ]
+    # momSq
+    # L
+
+    preFactor = 1.0
 
     avgX = np.zeros( threep.shape )
 
@@ -290,30 +316,16 @@ def calcAvgX2_twopFit( threep, tsink, mEff, momSq, L, \
     binNum = threep.shape[ 0 ]
     T = threep.shape[ -1 ]
 
-    preFactor = np.repeat( avgX2KineFactor( mEff, momSq, L ), \
-                           T ).reshape( binNum, T )
+    #preFactor = np.repeat( avgX2KineFactor( mEff, momSq, L ), \
+    #                       T ).reshape( binNum, T )
+
+    preFactor = -1.0
 
     c0_cp = np.repeat( c0, T ).reshape( binNum, T )
     E0_cp = np.repeat( E0, T ).reshape( binNum, T )
 
     avgX2 = preFactor * threep \
            / twopFit( c0_cp, E0_cp, tsink )
-
-    return avgX2
-
-
-def calcAvgX2( threep, twop_tsink, mEff ):
-
-    # threep[ b, t ]
-    # twop_tsink[ b ]
-    # mEff[ b ]
-
-    avgX2 = np.zeros( threep.shape )
-
-    for t in range( threep.shape[ 1 ] ):
-           
-        avgX2[ :, t ] = 1.0 / 2.0  / mEff \
-                        * threep[ :, t ] / twop_tsink
 
     return avgX2
 

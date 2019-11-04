@@ -235,7 +235,7 @@ else:
 # opposite their sign (sign of phase negative because adjoint taken of
 # sequential propagator)
 
-momList = -1 * momList
+#momList = -1 * momList
 
 momBoostNum = len( momList )
 
@@ -692,11 +692,17 @@ if rank == 0:
                 if tsf:
 
                     avgX[iflav, \
-                         its]=ZvD1*pq.calcAvgX_twopFit( threep_jk[iflav, \
-                                                                  its ], \
-                                                        ts, E0_mEff, momSq, \
-                                                        L, c0_boost, \
-                                                        E0_boost )
+                         its]=ZvD1*pq.calcAvgX_momBoost( threep_jk[iflav, \
+                                                                   its ], \
+                                                         twop_boost_fold[:,ts], \
+                                                         E0_mEff, momSq, \
+                                                         L )
+                    #avgX[iflav, \
+                    #     its]=ZvD1*pq.calcAvgX_twopFit( threep_jk[iflav, \
+                    #                                              its ], \
+                    #                                    ts, E0_mEff, momSq, \
+                    #                                    L, c0_boost, \
+                    #                                    E0_boost )
 
                 else:
 
