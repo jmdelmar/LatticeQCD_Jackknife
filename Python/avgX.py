@@ -246,53 +246,17 @@ momBoostNum = len( momList )
 # Zero momentum two-point functions
 # twop[ c, t ]
 
-t0 = time.time()
-
-if dataFormat == "cpu":
-
-    twop_loc = rw.getDatasets( twopDir, configList_loc, twop_template, \
-                               "msq0000", "arr" )[ :, 0, 0, :, 0 ].real
-
-else:
-        
-    twop_loc = rw.getDatasets( twopDir, configList_loc, \
-                               twop_template, \
-                               "twop" )[ :, 0, 0, :, 0, 0 ]
-
-twop_loc = np.asarray( twop_loc, order='c', dtype=float )
-
-mpi_fncs.mpiPrint( "Read two-point functions from HDF5 files " \
-                   + "in {:.3} seconds".format( time.time() - t0 ), rank )
+twop_loc = rw.readTwopFile_zeroQ( twopDir, configList_loc, twop_template, \
+                                  0, particle, dataFormat )
 
 # Boosted two-point functions
 # twop_boost[ mom, c, t ]
 
 if momSq > 0:
 
-    t0 = time.time()
-
-    if dataFormat == "cpu":
-
-        twop_boost_loc = rw.getDatasets( twopDir, configList_loc, \
-                                         twop_template, \
-                                         "msq{:0>4}".format( momSq ), \
-                                         "arr" )[ :, 0, 0, ... ].real
-
-    else:
-        
-        twop_boost_loc = rw.getDatasets( twopDir, configList_loc, \
-                                         twop_template, \
-                                         "twop" )[ :, 0, 0, ..., 0, 0 ]
-
-    # twop_boost_loc[ c, t, mom ] -> twop_boost_loc [mom, c, t ]
-    
-    twop_boost_loc = np.moveaxis( twop_boost_loc, -1, 0 )
-
-    twop_boost_loc = np.asarray( twop_boost_loc, order='c', dtype=float )
-
-    mpi_fncs.mpiPrint( "Read boosted two-point functions from HDF5 files " \
-                       + "in {:.3} seconds".format( time.time() - t0 ), \
-                       rank )
+    twop_boost_loc = rw.readTwopFile_zeroQ( twopDir, configList_loc, \
+                                            twop_template, momSq, \
+                                            particle, dataFormat )
 
 else:
 
@@ -467,9 +431,6 @@ if rank == 0:
             
     # Write output files
 
-    #rw.writeAvgDataFile_wX( curveOutputFilename, t_s, \
-    #                        curve_avg, curve_err )
-        
     rw.writeAvgDataFile_wX( mEff_curveOutputFilename, t_s, \
                             mEff_curve_avg, mEff_curve_err )
         
@@ -628,6 +589,22 @@ for imom in range( momBoostNum ):
                             recvCount * t_threep, \
                             recvOffset * T, \
                             MPI.DOUBLE ], root=0 )
+
+            if rank == 0:
+
+                threep_avg = np.average( threep_jk[ imom, iflav, its ], axis=-2 )
+                threep_err = fncs.calcError( threep_jk[ imom, iflav, its ], \
+                                             binNum_glob, \
+                                             axis=-2 )
+
+                threep_output_template = "threep_{0}_tsink{1}_{2:+}_{3:+}_{4:+}".format( flav_str[iflav], ts, momList[imom][0], momList[imom][1], momList[imom][2] )
+
+                threep_outFilename = output_template.replace( "*", \
+                                                              threep_output_template )
+
+                rw.writeAvgDataFile( threep_outFilename, \
+                                     threep_avg, \
+                                     threep_err )
 
         # End loop over flavor
     # End loop over tsink

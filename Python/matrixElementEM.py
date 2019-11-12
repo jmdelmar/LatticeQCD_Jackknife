@@ -623,6 +623,22 @@ for imom in range( momBoostNum ):
                             recvOffset * T, \
                             MPI.DOUBLE ], root=0 )
 
+            if rank == 0:
+
+                threep_avg = np.average( threep_jk[ imom, iflav, its ], axis=-2 )
+                threep_err = fncs.calcError( threep_jk[ imom, iflav, its ], \
+                                             binNum_glob, \
+                                             axis=-2 )
+
+                threep_output_template = "threep_{0}_tsink{1}_{2:+}_{3:+}_{4:+}".format( flav_str[iflav], ts, momList[imom][0], momList[imom][1], momList[imom][2] )
+
+                threep_outFilename = output_template.replace( "*", \
+                                                              threep_output_template )
+
+                rw.writeAvgDataFile( threep_outFilename, \
+                                     threep_avg, \
+                                     threep_err )
+
         # End loop over flavor
     # End loop over tsink
 # End loop over momenta

@@ -356,6 +356,112 @@ def getHDF5File_wNames( configDir, configList, fn_template, \
     return dataset, datasetName
 
 
+def readTwopFile_zeroQ( twopDir, configList, twop_template, \
+                        momSq, particle, dataFormat ):
+
+    t0 = time.time()
+
+    if dataFormat == "cpu":
+
+        twop_boost_loc = rw.getDatasets( twopDir, configList_loc, \
+                                         twop_template, \
+                                         "msq{:0>4}".format( momSq ), \
+                                         "arr" )[ :, 0, 0, ... ].real
+
+        if momSq > 0:
+
+            # twop_boost_loc[ c, t, mom ] -> twop_boost_loc [mom, c, t ]
+    
+            twop_boost_loc = np.moveaxis( twop_boost_loc, -1, 0 )
+
+    else:
+        
+        if momSq == 0:
+
+            twop = rw.getDatasets( twopDir, configList, \
+                                   twop_template, \
+                                   "twop" )[ :, 0, 0, :, 0, 0 ]
+
+        else:
+
+            mpi_fncs.mpiError( "Non-zero momentum boost not supported for " \
+                               + "gpu data format." )
+        
+    mpi_fncs.mpiPrint( "Read two-point functions from HDF5 files " \
+                       + "in {:.3} seconds".format( time.time() - t0 ), rank )
+
+    return np.asarray( twop, order='c', dtype=float )
+
+
+def readTwopFile( twopDir, configList, twop_template, \
+                  Q, Qsq, Qsq_start, Qsq_end, \
+                  particle, dataFormat ):
+
+    QNum = len( Q )
+    QsqNum = len( Qsq )
+
+    if dataFormat == "cpu":
+
+        template = "/twop_{0}/ave16/msq{1:0>4}/arr"
+
+        dataset = [ template.format( particle, 0 ) ]
+
+        twop0 = getDatasets( twopDir, configList, twop_template, \
+                             dsetname=dataset )[:, 0, 0, ... ]
+
+        twop0 = np.moveaxis( twop0, -1, -2 )
+
+        twop = np.zeros( ( len( configList ), QNum, \
+                           twop0.shape[ -1 ] ) )
+
+        twop[ :, 0, : ] = twop0[ :, 0, : ]
+
+        for iqsq in range( 1, QsqNum ):
+
+            dataset = [ template.format( particle, Qsq[ iqsq ] ) ]
+
+            twop_tmp = getDatasets( twopDir, \
+                                    configList, \
+                                    twop_template, \
+                                    dsetname=dataset )[:, 0, 0, ... ]
+
+            twop[ :, Qsq_start[ iqsq ]: \
+                  Qsq_end[ iqsq ] + 1, : ] = np.moveaxis( twop_tmp, \
+                                                          -1, -2 )
+
+    elif dataFormat == "ASCII":
+
+        # Determine length of time dimension.
+        # 2nd output is not really configuration number because
+        # files are not formatted like that.
+
+        T, dummy = detTimestepAndConfigNum( twopDir + \
+                                            twop_template.replace( "*", \
+                                                                   configList[0] ) )
+
+        # Get 5th column of two-point files for each configuration
+
+        twop = getTxtData( twopDir, \
+                           configList, \
+                           twop_template, \
+                           dtype=float).reshape( len( configList ), \
+                                                 QNum, T, 6 )[ ..., \
+                                                               4 ]
+
+    else:
+        
+        twop = getDatasets( twopDir, configList, \
+                            twop_template, \
+                            "twop" )[ :, 0, 0, :, :, 0 ]
+
+        # twop[ c, t, Q ] 
+        # -> twop[ c, Q, t ]
+
+        twop = np.moveaxis( twop, -1, -2 )
+        
+    return np.asarray( twop, order='c', dtype=float )
+
+
 # Get the real part of gxDx, gyDy, gzDz, and gtDt
 # three-point functions at zero-momentum
 
