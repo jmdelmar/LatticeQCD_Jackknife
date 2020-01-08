@@ -247,7 +247,7 @@ momBoostNum = len( momList )
 # twop[ c, t ]
 
 twop_loc = rw.readTwopFile_zeroQ( twopDir, configList_loc, twop_template, \
-                                  0, particle, dataFormat )
+                                  0, particle, dataFormat, comm )
 
 # Boosted two-point functions
 # twop_boost[ mom, c, t ]
@@ -256,7 +256,7 @@ if momSq > 0:
 
     twop_boost_loc = rw.readTwopFile_zeroQ( twopDir, configList_loc, \
                                             twop_template, momSq, \
-                                            particle, dataFormat )
+                                            particle, dataFormat, comm )
 
 else:
 
@@ -521,7 +521,7 @@ for imom in range( momBoostNum ):
 
         threeps = rw.readAvgXFile( threepDir, configList_loc, \
                                    threep_tokens, ts, momList[ imom ], \
-                                   particle, dataFormat )
+                                   particle, dataFormat, T )
 
         threep_gxDx = threeps[0]
         threep_gyDy = threeps[1]
@@ -546,8 +546,6 @@ for imom in range( momBoostNum ):
                                                              - t0_ts ) \
                            + " seconds.", rank )
 
-        t_threep = threep_gxDx.shape[ -1 ]
-
         # Subtract average over directions from gtDt
 
         threep_loc = threep_gtDt - \
@@ -556,9 +554,7 @@ for imom in range( momBoostNum ):
                               + threep_gyDy \
                               + threep_gzDz )
 
-        threep_loc = np.asarray( threep_loc, order='c', dtype=float )
-    
-        threep = np.zeros( ( flavNum, configNum, t_threep ) )
+        threep = np.zeros( ( flavNum, configNum, T ) )
 
         comm.Allgather( threep_loc, threep[ 0 ] )
 
@@ -570,8 +566,6 @@ for imom in range( momBoostNum ):
                                        + threep_s_gyDy \
                                        + threep_s_gzDz )
 
-            threep_loc = np.asarray( threep_loc, order='c', dtype=float )
-    
             comm.Allgather( threep_loc, threep[ 1 ] )
 
         # Loop over flavor
@@ -586,10 +580,10 @@ for imom in range( momBoostNum ):
 
             comm.Gatherv( threep_jk_loc, \
                           [ threep_jk[ imom, iflav, its ], \
-                            recvCount * t_threep, \
+                            recvCount * T, \
                             recvOffset * T, \
                             MPI.DOUBLE ], root=0 )
-
+            """
             if rank == 0:
 
                 threep_avg = np.average( threep_jk[ imom, iflav, its ], axis=-2 )
@@ -605,7 +599,7 @@ for imom in range( momBoostNum ):
                 rw.writeAvgDataFile( threep_outFilename, \
                                      threep_avg, \
                                      threep_err )
-
+            """
         # End loop over flavor
     # End loop over tsink
 # End loop over momenta

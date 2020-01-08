@@ -435,12 +435,12 @@ if rank == 0:
 
     else: # One-state fit
 
-        G = fitParams[ :, 0 ]
-        E = fitParams[ :, 1 ]
+        c0 = fitParams[ :, 0 ]
+        E0 = fitParams[ :, 1 ]
 
         # Calculate fitted curve
 
-        curve, t_s = fit.calcTwopOneStateCurve( G, E, T, \
+        curve, t_s = fit.calcTwopOneStateCurve( c0, E0, T, \
                                                 rangeStart, rangeEnd )
 
         curveOutputFilename \
@@ -503,8 +503,6 @@ if rank == 0:
     twop_boost_fold = np.zeros( ( momBoostNum, binNum_glob, T_fold ) )
     threep_jk = np.zeros( ( momBoostNum, flavNum, \
                             tsinkNum, binNum_glob, T ) )
-    avgX = np.zeros( ( momBoostNum, flavNum, \
-                       tsinkNum, binNum_glob, T ) )
 
 else:
 
@@ -512,9 +510,6 @@ else:
     threep_jk = np.array( [ [ [ None for ts in tsink ] \
                               for f in flav_str ] \
                             for imom in range( momBoostNum ) ] )
-    #avgX = np.array( [ [ [ None for ts in tsink ] \
-    #                     for f in flav_str ] \
-    #                   for imom in range( momBoostNum ) ] )
 
 # Loop over momenta
 for imom in range( momBoostNum ):
@@ -548,8 +543,6 @@ for imom in range( momBoostNum ):
     # Read three-point functions #
     ##############################
 
-    t0 = time.time()
-
     # Loop over tsink
     for ts, its in zip( tsink, range( tsinkNum ) ) :
     
@@ -561,15 +554,11 @@ for imom in range( momBoostNum ):
 
         threeps = rw.readEMFile( threepDir, configList_loc, \
                                  threep_tokens, ts, momList[ imom ], \
-                                 particle, dataFormat, insType )
+                                 particle, dataFormat, insType, T, comm )
 
         threep_loc = threeps[ 0 ]
 
-        threep_loc = np.asarray( threep_loc, order='c', dtype=float )
-    
-        t_threep = threep_loc.shape[ -1 ]
-
-        threep = np.zeros( ( flavNum, configNum, t_threep ) )
+        threep = np.zeros( ( flavNum, configNum, T ) )
 
         comm.Allgather( threep_loc, threep[ 0 ] )
 
@@ -577,15 +566,7 @@ for imom in range( momBoostNum ):
 
             threep_loc = threeps[ 1 ]
 
-            threep_loc = np.asarray( threep_loc, order='c', dtype=float )
-    
             comm.Allgather( threep_loc, threep[ 1 ] )
-
-        mpi_fncs.mpiPrint( "Read three-point functions from HDF5 files " \
-                           + "for tsink {} in {:.4}".format( ts, \
-                                                             time.time() \
-                                                             - t0_ts ) \
-                           + " seconds.", rank )
 
         #threep_gxDx[ :, ts+1: ] = 0
         #threep_gyDy[ :, ts+1: ] = 0
@@ -619,10 +600,10 @@ for imom in range( momBoostNum ):
 
             comm.Gatherv( threep_jk_loc, \
                           [ threep_jk[ imom, iflav, its ], \
-                            recvCount * t_threep, \
+                            recvCount * T, \
                             recvOffset * T, \
                             MPI.DOUBLE ], root=0 )
-
+            """
             if rank == 0:
 
                 threep_avg = np.average( threep_jk[ imom, iflav, its ], axis=-2 )
@@ -638,19 +619,19 @@ for imom in range( momBoostNum ):
                 rw.writeAvgDataFile( threep_outFilename, \
                                      threep_avg, \
                                      threep_err )
-
+            """
         # End loop over flavor
     # End loop over tsink
 # End loop over momenta
 
 if rank == 0:
         
-    avgX = np.zeros( ( flavNum, tsinkNum, \
+    ratio = np.zeros( ( flavNum, tsinkNum, \
                        binNum_glob, T ) )
 
 else:
 
-    avgX = np.array( [ [ None for ts in tsink ] \
+    ratio = np.array( [ [ None for ts in tsink ] \
                          for f in flav_str ] )
 
 #################
@@ -676,79 +657,45 @@ if rank == 0:
                                                            rangeEnd, \
                                                            T )
 
-            c0_boost = fit_boost[ :, 0 ]
-            E0_boost = fit_boost[ :, 2 ]
-
         else:
 
             fit_boost, chiSq_boost = fit.oneStateFit_twop( twop_boost_fold, \
                                                            rangeStart, \
                                                            rangeEnd, T )
 
-            G = fit_boost[ :, 0 ]
-            E = fit_boost[ :, 1 ]
+        c0 = fit_boost[ :, 0 ]
+        E0 = fit_boost[ :, 1 ]
             
+        twop_fold = twop_boost_fold
+
     # End if non-zero momentum boost
 
-    # avgX[ flav, ts, b, t ]
+    # ratio[ flav, ts, b, t ]
 
     # Loop over flavor
     for iflav in range( flavNum ):
         # Loop over tsink
         for ts, its in zip( tsink, range( tsinkNum ) ) :
-    
-            if momSq > 0:
 
-                if tsf:
-
-                    avgX[iflav, \
-                         its]=pq.calcMatrixElemEM_momBoost( threep_jk[iflav, \
-                                                                      its ], \
-                                                            twop_boost_fold[:,ts], \
-                                                            E0_mEff, momSq, \
-                                                            L )
-                    #avgX[iflav, \
-                    #     its]=ZvD1*pq.calcAvgX_twopFit( threep_jk[iflav, \
-                    #                                              its ], \
-                    #                                    ts, E0_mEff, momSq, \
-                    #                                    L, c0_boost, \
-                    #                                    E0_boost )
-
-                else:
-
-                    avgX[iflav, \
-                         its]=pq.calcAvgX_twopFit( threep_jk[iflav, \
+            ratio[ iflav, \
+                  its ] = pq.calcMatrixElemEM_ratio( threep_jk[ iflav, \
+                                                                its ], \
+                                                     twop_fold[ :, ts ] )
+            """
+            ratio[ iflav, \
+                  its ] = pq.calcMatrixElemEM_twopFit( threep_jk[ iflav, \
                                                                   its ], \
-                                                        ts, E, momSq, \
-                                                        L, G_boost, E_boost )
-                    
-            else:
-
-                if tsf:
-
-                    avgX[iflav, \
-                         its]=pq.calcAvgX_twopFit( threep_jk[iflav, \
-                                                                  its ], \
-                                                        ts, E0_mEff, momSq, \
-                                                        L, c0, E0 )
-
-                else:
-
-                    avgX[iflav, \
-                         its]=pq.calcAvgX_twopFit( threep_jk[iflav, \
-                                                                  its ], \
-                                                        ts, E, momSq, \
-                                                        L, G, E )
-                    
+                                                       ts, c0, E0 )
+            """
     # Average over bins
 
-    # avgX_avg[ flav, ts, t ]
+    # ratio_avg[ flav, ts, t ]
 
     threep_avg = np.average( threep_jk, axis=-2 )
     threep_err = fncs.calcError( threep_jk, binNum_glob, axis=-2 )
 
-    avgX_avg = np.average( avgX, axis=-2 )
-    avgX_err = fncs.calcError( avgX, binNum_glob, axis=-2 )
+    ratio_avg = np.average( ratio, axis=-2 )
+    ratio_err = fncs.calcError( ratio, binNum_glob, axis=-2 )
 
     # Loop over flavor
     for iflav in range( flavNum ):
@@ -766,13 +713,13 @@ if rank == 0:
                                  threep_avg[ iflav, its ], \
                                  threep_err[ iflav, its ] )
 
-            avgX_outFilename = output_template.replace( "*", "matrixElemEM_" \
+            ratio_outFilename = output_template.replace( "*", "matrixElemEM_" \
                                                         + flav_str[ iflav ] \
                                                         + "_tsink" \
                                                         + str( ts ) )
 
-            rw.writeAvgDataFile( avgX_outFilename, avgX_avg[ iflav, its ], \
-                                 avgX_err[ iflav, its ] )
+            rw.writeAvgDataFile( ratio_outFilename, ratio_avg[ iflav, its ], \
+                                 ratio_err[ iflav, its ] )
 
             ###############
             # Fit plateau #
@@ -787,11 +734,11 @@ if rank == 0:
             # Loop over fit ranges
             for irange in range( len( fitStart ) ):
 
-                #for x in avgX[ iflav, its ]:
+                #for x in ratio[ iflav, its ]:
 
-                avgX_fit, chiSq = fit.fitPlateau( avgX[ iflav, \
+                ratio_fit, chiSq = fit.fitPlateau( ratio[ iflav, \
                                                         its ], \
-                                                  avgX_err[iflav, \
+                                                  ratio_err[iflav, \
                                                            its ], \
                                                   fitStart[irange], \
                                                   fitEnd[irange] )
@@ -799,15 +746,15 @@ if rank == 0:
 
                 # Average over bins
 
-                avgX_fit_avg = np.average( avgX_fit )
+                ratio_fit_avg = np.average( ratio_fit )
                 
-                avgX_fit_err = fncs.calcError( avgX_fit, binNum_glob )
+                ratio_fit_err = fncs.calcError( ratio_fit, binNum_glob )
                 
                 # Write output files
 
-                avgX_fit_outFilename = ""
+                ratio_fit_outFilename = ""
 
-                avgX_fit_outFilename=output_template.replace("*", \
+                ratio_fit_outFilename=output_template.replace("*", \
                                                              "matrixElemEM_" \
                                                              + flav_str[iflav]\
                                                              + "_fit_" \
@@ -818,7 +765,9 @@ if rank == 0:
                                                              + "_" \
                                                              + str(fitEnd[irange]))
 
-                rw.writeFitDataFile( avgX_fit_outFilename, avgX_fit_avg, avgX_fit_err, fitStart[ irange ], fitEnd[ irange ] )
+                rw.writeFitDataFile( ratio_fit_outFilename, \
+                                     ratio_fit_avg, ratio_fit_err, \
+                                     fitStart[ irange ], fitEnd[ irange ] )
             
             # End loop over fit ranges
         # End loop over tsink

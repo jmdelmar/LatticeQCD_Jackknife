@@ -257,7 +257,7 @@ def calcAvgX_momBoost( threep, twop_tsink, mEff, momSq, L ):
     return avgX
 
 
-def calcMatrixElemEM_momBoost( threep, twop_tsink, mEff, momSq, L ):
+def calcMatrixElemEM_ratio( threep, twop_tsink ):
 
     # threep[ b, t ]
     # twop_tsink[ b ]
@@ -267,13 +267,35 @@ def calcMatrixElemEM_momBoost( threep, twop_tsink, mEff, momSq, L ):
 
     preFactor = 1.0
 
-    avgX = np.zeros( threep.shape )
+    ratio = np.zeros( threep.shape )
 
     for t in range( threep.shape[ -1 ] ):
 
-        avgX[ :, t ] = preFactor * threep[ :, t ] / twop_tsink
+        ratio[ :, t ] = preFactor * threep[ :, t ] / twop_tsink
 
-    return avgX
+    return ratio
+
+
+def calcMatrixElemEM_twopFit( threep, tsink, c0, E0 ):
+
+    # threep[ b, t ]
+    # twop_tsink[ b ]
+    # mEff[ b ]
+    # momSq
+    # L
+
+    binNum = threep.shape[ 0 ]
+    T = threep.shape[ -1 ]
+
+    c0_cp = np.repeat( c0, T ).reshape( binNum, T )
+    E0_cp = np.repeat( E0, T ).reshape( binNum, T )
+
+    preFactor = 1.0
+
+    ratio = preFactor * threep \
+           / twopFit( c0_cp, E0_cp, tsink )
+
+    return ratio
 
 
 def calcAvgX_twopFit( threep, tsink, mEff, momSq, L, \

@@ -357,28 +357,32 @@ def getHDF5File_wNames( configDir, configList, fn_template, \
 
 
 def readTwopFile_zeroQ( twopDir, configList, twop_template, \
-                        momSq, particle, dataFormat ):
+                        momSq, particle, dataFormat, comm ):
 
-    t0 = time.time()
+    t0 = time()
 
     if dataFormat == "cpu":
 
-        twop_boost_loc = rw.getDatasets( twopDir, configList_loc, \
-                                         twop_template, \
-                                         "msq{:0>4}".format( momSq ), \
-                                         "arr" )[ :, 0, 0, ... ].real
+        twop = getDatasets( twopDir, configList, \
+                            twop_template, \
+                            "msq{:0>4}".format( momSq ), \
+                            "arr" )[ :, 0, 0, ... ].real
 
         if momSq > 0:
 
-            # twop_boost_loc[ c, t, mom ] -> twop_boost_loc [mom, c, t ]
+            # twop[ c, t, mom ] -> twop [mom, c, t ]
     
-            twop_boost_loc = np.moveaxis( twop_boost_loc, -1, 0 )
+            twop = np.moveaxis( twop, -1, 0 )
+
+        else:
+
+            twop = twop[ ..., 0 ]
 
     else:
         
         if momSq == 0:
 
-            twop = rw.getDatasets( twopDir, configList, \
+            twop = getDatasets( twopDir, configList, \
                                    twop_template, \
                                    "twop" )[ :, 0, 0, :, 0, 0 ]
 
@@ -388,7 +392,8 @@ def readTwopFile_zeroQ( twopDir, configList, twop_template, \
                                + "gpu data format." )
         
     mpi_fncs.mpiPrint( "Read two-point functions from HDF5 files " \
-                       + "in {:.3} seconds".format( time.time() - t0 ), rank )
+                       + "in {:.3} seconds".format( time() - t0 ), \
+                       comm.Get_rank() )
 
     return np.asarray( twop, order='c', dtype=float )
 
@@ -475,7 +480,7 @@ def readTwopFile( twopDir, configList, twop_template, \
 #                             keyword
 
 def readAvgXFile( threepDir, configList, threep_tokens,
-                  ts, momList, particle, dataFormat, **kwargs ):
+                  ts, momList, particle, dataFormat, T, comm, **kwargs ):
 
     # Set filename template
 
@@ -578,7 +583,8 @@ def readAvgXFile( threepDir, configList, threep_tokens,
 
             threep_gtDt = threep_u_gtDt - threep_d_gtDt
 
-            return [ threep_gxDx, threep_gyDy, threep_gzDz, threep_gtDt ]
+            threeps = np.array( [ threep_gxDx, threep_gyDy, \
+                                  threep_gzDz, threep_gtDt ] )
 
         else:
 
@@ -676,15 +682,15 @@ def readAvgXFile( threepDir, configList, threep_tokens,
                                              "threep" )[ :, 0, 0, ..., \
                                                          0, 4, 0 ]
             
-                return [ threep_gxDx, threep_gyDy, \
-                         threep_gzDz, threep_gtDt, \
-                         threep_s_gxDx, threep_s_gyDy, \
-                         threep_s_gzDz, threep_s_gtDt ]
+                threeps = np.array( [ threep_gxDx, threep_gyDy, \
+                                      threep_gzDz, threep_gtDt, \
+                                      threep_s_gxDx, threep_s_gyDy, \
+                                      threep_s_gzDz, threep_s_gtDt ] )
 
             elif particle == "pion": 
 
-                return [ threep_gxDx, threep_gyDy, \
-                         threep_gzDz, threep_gtDt ]
+                threeps = np.array( [ threep_gxDx, threep_gyDy, \
+                                      threep_gzDz, threep_gtDt ] )
 
             else: 
 
@@ -774,23 +780,33 @@ def readAvgXFile( threepDir, configList, threep_tokens,
                                                         + dsetname_insertion[ 3 ] \
                                                         + dsetname_post ] )[ :, 0, 0, :, 0 ].real
 
-                return [ threep_gxDx, threep_gyDy, \
-                         threep_gzDz, threep_gtDt, \
-                         threep_s_gxDx, threep_s_gyDy, \
-                         threep_s_gzDz, threep_s_gtDt ]
+                threeps = np.array( [ threep_gxDx, threep_gyDy, \
+                                      threep_gzDz, threep_gtDt, \
+                                      threep_s_gxDx, threep_s_gyDy, \
+                                      threep_s_gzDz, threep_s_gtDt ] )
 
             elif particle == "pion": 
 
-                return [ threep_gxDx, threep_gyDy, \
-                         threep_gzDz, threep_gtDt ]
+                threeps = np.array( [ threep_gxDx, threep_gyDy, \
+                                      threep_gzDz, threep_gtDt ] )
 
             else: 
 
                 print( "Error (readAvgXFile): Particle " \
-                    + particle + " not supported." )
+                       + particle + " not supported." )
 
                 exit()                
 
+    mpi_fncs.mpiPrint( "Read three-point functions from HDF5 files " \
+                       + "in {:.3} seconds".format( time() - t0 ), \
+                       comm.Get_rank() )
+
+    threeps = np.pad( threeps, ( ( 0, 0 ), ( 0, 0 ), \
+                                 ( 0, T - threeps.shape[ -1 ] ) ), \
+                      'constant', \
+                      constant_values=( 0.0, 0.0 ) )
+
+    return np.asarray( threeps, order='c', dtype=float )
 
 # Get the real part of gxDx, gyDy, gzDz, and gtDt
 # three-point functions at zero-momentum
@@ -1423,13 +1439,23 @@ def readAvgX3File( threepDir, configList, threep_tokens,
 
 def readEMFile( threepDir, configList, threep_tokens,
                 ts, momList, particle, dataFormat, 
-                insType, **kwargs ):
+                insType, T, comm, **kwargs ):
+
+    t0 = time()
 
     # Set filename template
 
     threep_template = threep_tokens[0]
 
     if dataFormat == "gpu":            
+
+        if insType == "local":
+
+            iins = 4
+
+        elif insType == "noether":
+
+            iins = 3
 
         threep = getDatasets( threepDir, \
                               configList, \
@@ -1438,7 +1464,7 @@ def readEMFile( threepDir, configList, threep_tokens,
                               insType, \
                               "up", \
                               "threep" )[ :, 0, 0, ..., \
-                                          0, 4, 0 ]
+                                          0, iins, 0 ]
 
         if particle == "kaon":
             
@@ -1449,13 +1475,13 @@ def readEMFile( threepDir, configList, threep_tokens,
                                     "local", \
                                     "strange", \
                                     "threep" )[ :, 0, 0, ..., \
-                                                0, 4, 0 ]
+                                                0, iins, 0 ]
                 
-            return [ threep, threep_s ]
+            threeps = np.array( [ threep, threep_s ] )
 
         elif particle == "pion": 
             
-            return [ threep ]
+            threeps = np.array( [ threep ] )
 
         else: 
 
@@ -1503,8 +1529,37 @@ def readEMFile( threepDir, configList, threep_tokens,
                                          + dsetname_insertion \
                                          + dsetname_post ] )[ :, 0, 0, \
                                                               :, 0 ].real
-        return threep
 
+        if particle == "kaon":
+
+            filename = threep_template + ".strange.h5"
+
+            dsetname_pre = "/thrp/ave16/dt{}/strange/".format( ts )
+
+            threep_s = getDatasets( threepDir, \
+                                    configList, \
+                                    filename, \
+                                    dsetname=[ dsetname_pre \
+                                               + dsetname_insertion \
+                                               + dsetname_post ] )[ :, 0, 0, \
+                                                                    :, 0 ].real
+            
+            threeps = np.array( [ threep, threep_s ] )
+
+        else:
+
+            threeps = np.array( [ threep ] )
+
+    mpi_fncs.mpiPrint( "Read three-point functions from HDF5 files " \
+                       + "in {:.3} seconds".format( time() - t0 ), \
+                       comm.Get_rank() )
+
+    threeps = np.pad( threeps, ( ( 0, 0 ), ( 0, 0 ), \
+                                 ( 0, T - threeps.shape[ -1 ] ) ), \
+                      'constant', \
+                      constant_values=( 0.0, 0.0 ) )    
+
+    return np.asarray( threeps, order='c', dtype=float )
 
 def readEMFF_cpu( threepDir, configList, threep_template, Qsq, ts, proj, \
                   particle, **kwargs ):
@@ -2082,13 +2137,23 @@ def writeAvgDataFile_wX( filename, x, y, error ):
                                                                       iy, \
                                                                       ierr) )
 
-        else:
+        elif x.dtype == '<U6':
+
+            for ix, iy, ierr in zip( x, y, error ):
+
+                output.write( "{:<20}{:<20.10f}{:.10f}\n".format( ix, \
+                                                                  iy, \
+                                                                  ierr) )            
+
+        else: # Default: treat x as float
 
             for ix, iy, ierr in zip( x, y, error ):
 
                 output.write( "{:<20.10f}{:<20.10f}{:.10f}\n".format( ix, \
                                                                       iy, \
                                                                       ierr) )
+
+        
 
     print( "Wrote " + filename )
 
