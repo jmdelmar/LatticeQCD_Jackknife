@@ -521,7 +521,7 @@ for imom in range( momBoostNum ):
 
         threeps = rw.readAvgXFile( threepDir, configList_loc, \
                                    threep_tokens, ts, momList[ imom ], \
-                                   particle, dataFormat, T )
+                                   particle, dataFormat, T, comm )
 
         threep_gxDx = threeps[0]
         threep_gyDy = threeps[1]
