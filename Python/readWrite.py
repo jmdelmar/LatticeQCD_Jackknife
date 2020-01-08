@@ -482,6 +482,8 @@ def readTwopFile( twopDir, configList, twop_template, \
 def readAvgXFile( threepDir, configList, threep_tokens,
                   ts, momList, particle, dataFormat, T, comm, **kwargs ):
 
+    t0 = time()
+
     # Set filename template
 
     if dataFormat == "cpu":
