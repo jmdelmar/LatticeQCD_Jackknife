@@ -246,33 +246,16 @@ momBoostNum = len( momList )
 # Zero momentum two-point functions
 # twop[ c, t ]
 
-twop_loc = rw.readTwopFile_zeroQ( twopDir, configList_loc, twop_template, \
-                                  0, particle, dataFormat, comm )
+twop = rw.readTwopFile_zeroQ( twopDir, configList_loc, configNum, \
+                              twop_template, 0, particle, dataFormat, comm )
 
-# Boosted two-point functions
-# twop_boost[ mom, c, t ]
+# Time dimension length
 
-if momSq > 0:
-
-    twop_boost_loc = rw.readTwopFile_zeroQ( twopDir, configList_loc, \
-                                            twop_template, momSq, \
-                                            particle, dataFormat, comm )
-
-else:
-
-    twop_boost_loc = np.array( [] )
-
-T = twop_loc.shape[ -1 ]
+T = twop.shape[ -1 ]
 
 # Time dimension length after fold
 
 T_fold = T // 2 + 1
-
-# Gather two-point functions
-
-twop = np.zeros( ( configNum, T ) )
-
-comm.Allgather( twop_loc, twop )
 
 ##########################################
 # Jackknife and fold two-point functions #
@@ -451,14 +434,17 @@ if rank == 0:
 
 comm.Barrier()
 
+# Boosted two-point functions
+# twop_boost[ mom, c, t ]
+
 if momSq > 0:
 
-    twop_boost = np.zeros( ( momBoostNum, configNum, T ) )
-
-    comm.Allgather( twop_boost_loc, twop_boost )
+    twop_boost = rw.readTwopFile_zeroQ( twopDir, configList_loc, configNum, \
+                                        twop_template, momSq, particle, \
+                                        dataFormat, comm )
 
 else:
-    
+
     twop_boost = np.array( [] )
 
 if rank == 0:
@@ -610,24 +596,21 @@ for imom in range( momBoostNum ):
 
 if rank == 0:
         
-    avgX = np.zeros( ( flavNum, tsinkNum, \
+    avgX = np.zeros( ( momBoostNum, flavNum, tsinkNum, \
                        binNum_glob, T ) )
 
 else:
 
-    avgX = np.array( [ [ None for ts in tsink ] \
-                         for f in flav_str ] )
+    avgX = np.array( [ [ [ None for ts in tsink ] \
+                         for f in flav_str ] \
+                       for p in momList ] )
 
 if rank == 0:
-
-    # Average over momenta
-
-    threep_jk = np.average( threep_jk, axis=0 )
-
+    """
     if momSq > 0:
 
-        twop_boost_fold = np.average( twop_boost_fold, axis=0 )
-    
+        #twop_boost_fold = np.average( twop_boost_fold, axis=0 )
+        
         # Fit the boosted two-point functions
 
         if tsf:
@@ -648,59 +631,118 @@ if rank == 0:
 
             G = fit_boost[ :, 0 ]
             E = fit_boost[ :, 1 ]
-            
     # End if non-zero momentum boost
+    """
 
-    # avgX[ flav, ts, b, t ]
+    # avgX[ p, flav, ts, b, t ]
 
-    # Loop over flavor
-    for iflav in range( flavNum ):
-        # Loop over tsink
-        for ts, its in zip( tsink, range( tsinkNum ) ) :
+    # Loop over momenta
+    for imom in range( momBoostNum ):
+        # Loop over flavor
+        for iflav in range( flavNum ):
+            # Loop over tsink
+            for ts, its in zip( tsink, range( tsinkNum ) ) :
+                
+                if momSq > 0:
+
+                    if tsf:
+                        
+                        avgX[imom, \
+                             iflav, \
+                             its ]=ZvD1*pq.calcAvgX_momBoost(threep_jk[imom, \
+                                                                       iflav, \
+                                                                       its ], \
+                                                             twop_boost_fold[imom, \
+                                                                             :, \
+                                                                             ts], \
+                                                             E0_mEff, momSq, \
+                                                             L )
+                        #avgX[imom, \
+                        #     iflav, \
+                        #     its]=ZvD1*pq.calcAvgX_twopFit( threep_jk[imom, \
+                        #                                              iflav, \
+                        #                                              its ], \
+                        #                                    ts,E0_mEff,momSq,\
+                        #                                    L, c0_boost, \
+                        #                                    E0_boost )
+
+                    else:
+
+                        avgX[imom, \
+                             iflav, \
+                             its]=ZvD1*pq.calcAvgX_twopFit( threep_jk[imom, \
+                                                                      iflav, \
+                                                                      its ], \
+                                                            ts, E, momSq, \
+                                                            L, G_boost, E_boost )
+                    
+                else:
+
+                    if tsf:
+
+                        avgX[imom, \
+                             iflav, \
+                             its]=ZvD1*pq.calcAvgX_twopFit( threep_jk[imom, \
+                                                                      iflav, \
+                                                                      its ], \
+                                                            ts, E0_mEff, momSq, \
+                                                            L, c0, E0 )
+
+                    else:
+
+                        avgX[imom, \
+                             iflav, \
+                             its]=ZvD1*pq.calcAvgX_twopFit( threep_jk[imom, \
+                                                                      iflav, \
+                                                                      its ], \
+                                                            ts, E, momSq, \
+                                                            L, G, E )
+
+                threep_avg = np.average( threep_jk[imom,iflav,its], \
+                                         axis=-2 )
+                threep_err = fncs.calcError( threep_jk[imom,iflav,its], \
+                                             binNum_glob, axis=-2 )
+
+                avgX_avg = np.average( avgX[imom,iflav,its], \
+                                       axis=-2 )
+                avgX_err = fncs.calcError( avgX[imom,iflav,its], \
+                                           binNum_glob, axis=-2 )
+
+                # Write <x> output files
     
-            if momSq > 0:
+                threep_output_template = "threep_{0}_tsink{1}_{2:+}_{3:+}_{4:+}".format( flav_str[iflav], \
+                                                                                         ts, \
+                                                                                         momList[imom][0], \
+                                                                                         momList[imom][1], \
+                                                                                         momList[imom][2] )
 
-                if tsf:
+                threep_outFilename = output_template.replace( "*", \
+                                                              threep_output_template )
 
-                    avgX[iflav, \
-                         its]=ZvD1*pq.calcAvgX_momBoost( threep_jk[iflav, \
-                                                                   its ], \
-                                                         twop_boost_fold[:,ts], \
-                                                         E0_mEff, momSq, \
-                                                         L )
-                    #avgX[iflav, \
-                    #     its]=ZvD1*pq.calcAvgX_twopFit( threep_jk[iflav, \
-                    #                                              its ], \
-                    #                                    ts, E0_mEff, momSq, \
-                    #                                    L, c0_boost, \
-                    #                                    E0_boost )
-
-                else:
-
-                    avgX[iflav, \
-                         its]=ZvD1*pq.calcAvgX_twopFit( threep_jk[iflav, \
-                                                                  its ], \
-                                                        ts, E, momSq, \
-                                                        L, G_boost, E_boost )
+                rw.writeAvgDataFile( threep_outFilename, \
+                                     threep_avg, \
+                                     threep_err )
                     
-            else:
+                avgX_output_template = "avgX_{0}_tsink{1}_{2:+}_{3:+}_{4:+}".format( flav_str[iflav], \
+                                                                                     ts, \
+                                                                                     momList[imom][0], \
+                                                                                     momList[imom][1], \
+                                                                                     momList[imom][2] )
+                avgX_outFilename = output_template.replace( "*", \
+                                                            avgX_output_template )
+                rw.writeAvgDataFile( avgX_outFilename, \
+                                     avgX_avg, \
+                                     avgX_err )
 
-                if tsf:
+            # End loop over tsink
+        # End loop over flavor
+    # End loop over momenta
 
-                    avgX[iflav, \
-                         its]=ZvD1*pq.calcAvgX_twopFit( threep_jk[iflav, \
-                                                                  its ], \
-                                                        ts, E0_mEff, momSq, \
-                                                        L, c0, E0 )
+    # Average over momenta
 
-                else:
+    threep_jk = np.average( threep_jk, axis=0 )
+    avgX = np.average( avgX, axis=0 )
 
-                    avgX[iflav, \
-                         its]=ZvD1*pq.calcAvgX_twopFit( threep_jk[iflav, \
-                                                                  its ], \
-                                                        ts, E, momSq, \
-                                                        L, G, E )
-                    
     # Average over bins
 
     # avgX_avg[ flav, ts, t ]

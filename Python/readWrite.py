@@ -356,23 +356,33 @@ def getHDF5File_wNames( configDir, configList, fn_template, \
     return dataset, datasetName
 
 
-def readTwopFile_zeroQ( twopDir, configList, twop_template, \
+def readTwopFile_zeroQ( twopDir, configList, configNum, twop_template, \
                         momSq, particle, dataFormat, comm ):
 
     t0 = time()
 
     if dataFormat == "cpu":
 
-        twop = getDatasets( twopDir, configList, \
+        twop_loc = getDatasets( twopDir, configList, \
                             twop_template, \
                             "msq{:0>4}".format( momSq ), \
                             "arr" )[ :, 0, 0, ... ].real
+
+        twop_loc = np.asarray( twop_loc, order='c', dtype=float )
+
+        twop = np.zeros( ( configNum, ) + twop_loc.shape[ 1: ] )
+
+        comm.Allgather( twop_loc, twop )
 
         if momSq > 0:
 
             # twop[ c, t, mom ] -> twop [mom, c, t ]
     
             twop = np.moveaxis( twop, -1, 0 )
+
+            # twop[ c, t, mom ] -> twop [mom, c, t ]
+    
+            #twop = np.moveaxis( twop, -1, 0 )
 
         else:
 
