@@ -34,7 +34,7 @@ parser.add_argument( "threep_tokens", action='store', \
                      + "* for configuration number." )
 
 parser.add_argument( "twop_dir", action='store', type=str )
-
+o
 parser.add_argument( "twop_template", action='store', type=str )
 
 parser.add_argument( "fit_range_end", action='store', type=int )
@@ -53,6 +53,10 @@ parser.add_argument( "binSize", action='store', type=int )
 
 parser.add_argument( "-o", "--output_template", action='store', \
                      type=str, default="./*.dat" )
+
+parser.add_argument( "-sn", "--source_number", action='store', type=int, \
+                     help="Number of sources correlators were averaged " \
+                     + "over", default=16 )
 
 parser.add_argument( "--tsf_fit_start", action='store', type=int, \
                      help="If given, will perform two-state fit on effective " \
@@ -124,6 +128,8 @@ if tsf_fitStart and plat_fitStart:
 else:
 
     checkFit = True
+
+srcNum = args.source_number
 
 tsf = args.two_state_fit
 
@@ -208,34 +214,9 @@ recvCount, recvOffset = mpi_fncs.recvCountOffset( procNum, binNum )
 
 # Read momentum list
 
-momList = []
-
-if dataFormat == "cpu":
-
-    momList = np.array ( rw.getDatasets( twopDir, [ configList_loc[0] ], \
-                                         twop_template, \
-                                         "twop_".format( particle ), \
-                                         "ave16", \
-                                         "msq{:0>4}".format( momSq ), \
-                                         "mvec" )[ 0, 0, 0, ... ].real, \
-                         dtype = int )
-    
-else:
-
-    if momSq == 0:
-
-        momList = np.array( [ [ 0, 0, 0 ] ] )
-
-    else:
-
-        mpi_fncs.mpiPrintErr( "ERROR: nonzero momenta boost not yet " \
-               + "supported for gpu format", comm )
-        
-# Multiply momList by -1 because three-point functions are named
-# opposite their sign (sign of phase negative because adjoint taken of
-# sequential propagator)
-
-#momList = -1 * momList
+momList = rw.readMomentaList( twopDir, twop_template, \
+                              configList_loc[ 0 ], particle, \
+                              srcNum, momSq, dataFormat, comm )
 
 momBoostNum = len( momList )
 
@@ -247,7 +228,8 @@ momBoostNum = len( momList )
 # twop[ c, t ]
 
 twop = rw.readTwopFile_zeroQ( twopDir, configList_loc, configNum, \
-                              twop_template, 0, particle, dataFormat, comm )
+                              twop_template, srcNum, 0, particle, dataFormat, \
+                              comm )
 
 # Time dimension length
 
@@ -440,7 +422,7 @@ comm.Barrier()
 if momSq > 0:
 
     twop_boost = rw.readTwopFile_zeroQ( twopDir, configList_loc, configNum, \
-                                        twop_template, momSq, particle, \
+                                        twop_template, srcNum, momSq, particle, \
                                         dataFormat, comm )
 
 else:
@@ -506,7 +488,7 @@ for imom in range( momBoostNum ):
         # threep[ c, t ]
 
         threeps = rw.readAvgXFile( threepDir, configList_loc, \
-                                   threep_tokens, ts, momList[ imom ], \
+                                   threep_tokens, srcNum, ts, momList[ imom ], \
                                    particle, dataFormat, T, comm )
 
         threep_gxDx = threeps[0]

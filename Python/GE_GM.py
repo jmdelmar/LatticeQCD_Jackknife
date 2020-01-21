@@ -67,6 +67,10 @@ parser.add_argument( "binSize", action='store', type=int )
 parser.add_argument( "-o", "--output_template", action='store', \
                      type=str, default="./*.dat" )
 
+oparser.add_argument( "-sn", "--source_number", action='store', type=int, \
+                     help="Number of sources correlators were averaged " \
+                     + "over", default=16 )
+
 parser.add_argument( "-f", "--data_format", action='store', \
                      help="Data format. Should be 'gpu', " \
                      + "'cpu', or 'ASCII'.", \
@@ -123,6 +127,8 @@ ts_range_str = "tsink" + str(tsink[0]) + "_" + str(tsink[-1])
 binSize = args.binSize
 
 output_template = args.output_template
+
+srcNum = args.source_number
 
 dataFormat = args.data_format
 
@@ -254,37 +260,11 @@ binNum_loc = binNum[ rank ]
 
 recvCount, recvOffset = mpi_fncs.recvCountOffset( procNum, binNum )
 
-# Read momentum list
+# Read final momentum list
 
-finalMomList = []
-
-if dataFormat == "cpu":
-
-    finalMomList = np.array ( rw.getDatasets( twopDir, \
-                                              [ configList_loc[0] ], \
-                                              twop_template, \
-                                              "twop_".format( particle ), \
-                                              "ave16", \
-                                              "msq{:0>4}".format( momSq ), \
-                                              "mvec" )[ 0, 0, 0, ... ].real, \
-                              dtype = int )
-
-else:
-
-    if momSq == 0:
-
-        finalMomList = np.array( [ [ 0, 0, 0 ] ] )
-
-    else:
-
-        mpi_fncs.mpiPrintErr( "ERROR: nonzero momenta boost not yet " \
-               + "supported for gpu or ASCII format", comm )
-        
-# Multiply finalMomList by -1 because three-point functions are named
-# opposite their sign (sign of phase negative because adjoint taken of
-# sequential propagator)
-
-finalMomList = -1 * finalMomList
+finalMomList = rw.readMomentaList( twopDir, twop_template, \
+                                   configList_loc[ 0 ], particle, \
+                                   srcNum, momSq, dataFormat, comm )
 
 finalMomNum = len( finalMomList )
 
@@ -538,8 +518,14 @@ else:
     #                     for f in flav_str ] \
     #                   for imom in range( finalMomNum ) ] )
 """
+"""
 if momSq > 0:
-        
+
+    
+    twop_boost = rw.readTwopFile_zeroQ( twopDir, configList_loc, configNum, \
+                                        twop_template, srcNum, momSq, particle, \
+                                        dataFormat, comm )
+
     # Loop over final momenta
     for imom in range( finalMomNum ):
 
@@ -556,17 +542,17 @@ if momSq > 0:
         else:
 
             twop_boost_jk = np.array( [] )
-        """
+
         comm.Gatherv( twop_boost_jk, [ twop_boost_jk[ imom ], \
                                            recvCount * T, recvOffset * T, \
                                            MPI.DOUBLE ], root=0 )
-        """
+
     # End loop over final momenta
 
 else:
 
     twop_boost_jk = np.array( [ twop_jk_loc ] )
-
+"""
 ##############################
 # Read three-point functions #
 ##############################
@@ -602,7 +588,7 @@ for ts, its in zip( tsink, range( tsinkNum ) ) :
         # threep_loc[ flav, proj, conf, Q, curr, t ]
 
         threep_loc = rw.readEMFormFactorFile( threepDir, configList_loc, \
-                                              threep_tokens, Qsq, QNum, \
+                                              threep_tokens, srcNum, Qsq, QNum, \
                                               ts, projector, \
                                               finalMomList[ ip ], \
                                               particle, dataFormat )

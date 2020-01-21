@@ -57,6 +57,10 @@ parser.add_argument( "--twop_fit_start", action='store', type=int, \
                      + "fits starting at given t value, otherwise, will " \
                      + "use lowest t value which satisfies condition." )
 
+parser.add_argument( "-sn", "--source_number", action='store', type=int, \
+                     help="Number of sources correlators were averaged " \
+                     + "over", default=16 )
+
 parser.add_argument( "-tsf", "--two_state_fit", action='store_true', \
                      help="Performs the two-state fit if supplied" )
 
@@ -112,6 +116,8 @@ binSize = args.binSize
 output_template = args.output_template
 
 twop_fitStart = args.twop_fit_start
+
+srcNum = args.source_number
 
 tsf = args.two_state_fit
 
@@ -202,29 +208,10 @@ recvCount, recvOffset = mpi_fncs.recvCountOffset( procNum, binNum )
 
 # Read momentum list
 
-momList = []
+momList = rw.readMomentaList( twopDir, twop_template, \
+                              configList_loc[ 0 ], particle, \
+                              srcNum, momSq, dataFormat, comm )
 
-if dataFormat == "cpu":
-
-    momList = np.array ( rw.getDatasets( twopDir, [ configList_loc[0] ], \
-                                         twop_template, \
-                                         "twop_".format( particle ), \
-                                         "ave16", \
-                                         "msq{:0>4}".format( momSq ), \
-                                         "mvec" )[ 0, 0, 0, ... ].real, \
-                         dtype = int )
-    
-else:
-
-    if momSq == 0:
-
-        momList = np.array( [ [ 0, 0, 0 ] ] )
-
-    else:
-
-        mpi_fncs.mpiPrintErr( "ERROR: nonzero momenta boost not yet " \
-               + "supported for gpu format", comm )
-        
 # Multiply momList by -1 because three-point functions are named
 # opposite their sign (sign of phase negative because adjoint taken of
 # sequential propagator)
@@ -241,7 +228,8 @@ momBoostNum = len( momList )
 # twop[ c, t ]
 
 twop = rw.readTwopFile_zeroQ( twopDir, configList_loc, configNum, \
-                              twop_template, 0, particle, dataFormat, comm )
+                              twop_template, srcNum, 0, particle, \
+                              dataFormat, comm )
 
 # Time dimension length
 
@@ -441,7 +429,7 @@ comm.Barrier()
 if momSq > 0:
 
     twop_boost = rw.readTwopFile_zeroQ( twopDir, configList_loc, configNum, \
-                                        twop_template, momSq, particle, \
+                                        twop_template, srcNum, momSq, particle, \
                                         dataFormat, comm )
 
 else:
@@ -505,7 +493,7 @@ for imom in range( momBoostNum ):
         # threep[ c, t ]
 
         threeps = rw.readEMFile( threepDir, configList_loc, \
-                                 threep_tokens, ts, momList[ imom ], \
+                                 threep_tokens, srcNum, ts, momList[ imom ], \
                                  particle, dataFormat, insType, T, comm )
 
         threep_loc = threeps[ 0 ]
@@ -633,7 +621,8 @@ if rank == 0:
                        its ] = pq.calcMatrixElemEM_ratio( threep_jk[ imom, \
                                                                      iflav, \
                                                                      its ], \
-                                                          twop_fold[ imom, :, ts ] )
+                                                          twop_fold[ imom, :, ts ], \
+                                                          E0_mEff, momSq, L )
                 """
                 ratio[ iflav, \
                 its ] = pq.calcMatrixElemEM_twopFit( threep_jk[ iflav, \

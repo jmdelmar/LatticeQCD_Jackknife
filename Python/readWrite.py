@@ -356,18 +356,47 @@ def getHDF5File_wNames( configDir, configList, fn_template, \
     return dataset, datasetName
 
 
+def readMomentaList( twopDir, twop_template, config, particle, \
+                     srcNum, momSq, dataFormat, comm ):
+
+    momList = []
+
+    if dataFormat == "cpu":
+
+        momList = np.array ( getDatasets( twopDir, [ config ], \
+                                          twop_template, \
+                                          "twop_".format( particle ), \
+                                          "ave{}".format( srcNum ), \
+                                          "msq{:0>4}".format( momSq ), \
+                                          "mvec" )[ 0, 0, 0, ... ].real, \
+                             dtype = int )
+    
+    else:
+
+        if momSq == 0:
+
+            momList = np.array( [ [ 0, 0, 0 ] ] )
+
+        else:
+
+            mpi_fncs.mpiPrintErr( "ERROR: nonzero momenta boost not yet " \
+                                  + "supported for gpu format", comm )
+
+    return momList
+
 def readTwopFile_zeroQ( twopDir, configList, configNum, twop_template, \
-                        momSq, particle, dataFormat, comm ):
+                        srcNum, momSq, particle, dataFormat, comm ):
 
     t0 = time()
 
     if dataFormat == "cpu":
 
         twop_loc = getDatasets( twopDir, configList, \
-                            twop_template, \
-                            "msq{:0>4}".format( momSq ), \
-                            "arr" )[ :, 0, 0, ... ].real
-
+                                twop_template, \
+                                "ave{}".format( srcNum ), \
+                                "msq{:0>4}".format( momSq ), \
+                                "arr" )[ :, 0, 0, ... ].real
+        
         twop_loc = np.asarray( twop_loc, order='c', dtype=float )
 
         twop = np.zeros( ( configNum, ) + twop_loc.shape[ 1: ] )
@@ -379,10 +408,6 @@ def readTwopFile_zeroQ( twopDir, configList, configNum, twop_template, \
             # twop[ c, t, mom ] -> twop [mom, c, t ]
     
             twop = np.moveaxis( twop, -1, 0 )
-
-            # twop[ c, t, mom ] -> twop [mom, c, t ]
-    
-            #twop = np.moveaxis( twop, -1, 0 )
 
         else:
 
@@ -410,16 +435,16 @@ def readTwopFile_zeroQ( twopDir, configList, configNum, twop_template, \
 
 def readTwopFile( twopDir, configList, twop_template, \
                   Q, Qsq, Qsq_start, Qsq_end, \
-                  particle, dataFormat ):
+                  particle, srcNum, dataFormat ):
 
     QNum = len( Q )
     QsqNum = len( Qsq )
 
     if dataFormat == "cpu":
 
-        template = "/twop_{0}/ave16/msq{1:0>4}/arr"
+        template = "/twop_{0}/ave{}/msq{1:0>4}/arr"
 
-        dataset = [ template.format( particle, 0 ) ]
+        dataset = [ template.format( particle, srcNum, 0 ) ]
 
         twop0 = getDatasets( twopDir, configList, twop_template, \
                              dsetname=dataset )[:, 0, 0, ... ]
@@ -489,7 +514,7 @@ def readTwopFile( twopDir, configList, twop_template, \
 # dsetname (kwarg, optional): List of datasets to read. Overrides
 #                             keyword
 
-def readAvgXFile( threepDir, configList, threep_tokens,
+def readAvgXFile( threepDir, configList, threep_tokens, srcNum, \
                   ts, momList, particle, dataFormat, T, comm, **kwargs ):
 
     t0 = time()
@@ -715,7 +740,7 @@ def readAvgXFile( threepDir, configList, threep_tokens,
 
             filename = threep_template + ".up.h5"
 
-            dsetname_pre = "/thrp/ave16/dt{}/up/".format( ts )
+            dsetname_pre = "/thrp/ave{}/dt{}/up/".format( srcNum, ts )
 
             dsetname_insertion = [ "=der:g0D0:sym=", \
                                    "=der:gxDx:sym=", \
@@ -765,7 +790,7 @@ def readAvgXFile( threepDir, configList, threep_tokens,
             
                 filename_s = threep_template + ".strange.h5"
 
-                dsetname_s_pre = "/thrp/ave16/dt{}/strange/".format( ts )
+                dsetname_s_pre = "/thrp/ave{}/dt{}/strange/".format( srcNum, ts )
 
                 threep_s_gtDt = getDatasets( threepDir, \
                                              configList, \
@@ -832,7 +857,7 @@ def readAvgXFile( threepDir, configList, threep_tokens,
 # dsetname (kwarg, optional): List of datasets to read. Overrides
 #                             keyword
 
-def readAvgX2File( threepDir, configList, threep_tokens,
+def readAvgX2File( threepDir, configList, threep_tokens, srcNum, \
                    ts, momList, particle, dataFormat, comm, **kwargs ):
 
     # Set filename template
@@ -1068,7 +1093,7 @@ def readAvgX2File( threepDir, configList, threep_tokens,
 
             filename = threep_template + ".up.h5"
 
-            dsetname_pre = "/thrp/ave16/dt{}/up/".format( ts )
+            dsetname_pre = "/thrp/ave{}/dt{}/up/".format( srcNum, ts )
 
             dsetname_insertion = [ "der2:g0DxDy", \
                                    "der2:g0DxDz", \
@@ -1124,7 +1149,7 @@ def readAvgX2File( threepDir, configList, threep_tokens,
             
                 filename_s = threep_template + ".strange.h5"
 
-                dsetname_s_pre = "/thrp/ave16/dt{}/strange/".format( ts )
+                dsetname_s_pre = "/thrp/ave{}/dt{}/strange/".format( srcNum, ts )
 
                 threep_s_g0DxDy = getDatasets( threepDir, \
                                                configList, \
@@ -1173,7 +1198,7 @@ def readAvgX2File( threepDir, configList, threep_tokens,
 # dsetname (kwarg, optional): List of datasets to read. Overrides
 #                             keyword
 
-def readAvgX3File( threepDir, configList, threep_tokens,
+def readAvgX3File( threepDir, configList, threep_tokens, srcNum, 
                    ts, momList, particle, dataFormat, comm, **kwargs ):
 
     # Set filename template
@@ -1409,7 +1434,7 @@ def readAvgX3File( threepDir, configList, threep_tokens,
 
             filename = threep_template + ".up.h5"
 
-            dsetname = "/thrp/ave16/dt{}".format( ts ) \
+            dsetname = "/thrp/ave{}/dt{}".format( srcNum, ts ) \
                        + "/up/der3:g0DxDyDz/msq0000/arr"
 
             threep = getDatasets( threepDir, \
@@ -1425,7 +1450,7 @@ def readAvgX3File( threepDir, configList, threep_tokens,
             
                 filename_s = threep_template + ".strange.h5"
 
-                dsetname_s = "/thrp/ave16/dt{}".format( ts ) \
+                dsetname_s = "/thrp/ave{}/dt{}".format( srcNum, ts ) \
                              + "/strange/der3:g0DxDyDz/msq0000/arr"
 
                 threep_s = getDatasets( threepDir, \
@@ -1449,9 +1474,9 @@ def readAvgX3File( threepDir, configList, threep_tokens,
                     + particle + " not supported.", comm )
 
 
-def readEMFile( threepDir, configList, threep_tokens,
-                ts, momList, particle, dataFormat, 
-                insType, T, comm, **kwargs ):
+def readEMFile( threepDir, configList, threep_tokens, srcNum,
+                ts, momList, particle, dataFormat, insType, 
+                T, comm, **kwargs ):
 
     t0 = time()
 
@@ -1515,7 +1540,7 @@ def readEMFile( threepDir, configList, threep_tokens,
 
         filename = threep_template + ".up.h5"
 
-        dsetname_pre = "/thrp/ave16/dt{}/up/".format( ts )
+        dsetname_pre = "/thrp/ave{}/dt{}/up/".format( srcNum, ts )
 
         if insType == "local":
 
@@ -1546,7 +1571,7 @@ def readEMFile( threepDir, configList, threep_tokens,
 
             filename = threep_template + ".strange.h5"
 
-            dsetname_pre = "/thrp/ave16/dt{}/strange/".format( ts )
+            dsetname_pre = "/thrp/ave{}/dt{}/strange/".format( srcNum, ts )
 
             threep_s = getDatasets( threepDir, \
                                     configList, \
@@ -1573,7 +1598,8 @@ def readEMFile( threepDir, configList, threep_tokens,
 
     return np.asarray( threeps, order='c', dtype=float )
 
-def readEMFF_cpu( threepDir, configList, threep_template, Qsq, ts, proj, \
+def readEMFF_cpu( threepDir, configList, threep_template, srcNum, \
+                  Qsq, ts, proj, \
                   particle, **kwargs ):
 
     QsqNum = len( Qsq )
@@ -1596,18 +1622,20 @@ def readEMFF_cpu( threepDir, configList, threep_template, Qsq, ts, proj, \
             
             if particle == "nucleon":
 
-                template = "/thrp/ave16/P{}/dt{}/{}/{}/msq{:.4}/arr"
+                template = "/thrp/ave{}/P{}/dt{}/{}/{}/msq{:.4}/arr"
                     
-                dsetname[ iqsq * QsqNum + ic ] = template.format( proj, \
+                dsetname[ iqsq * QsqNum + ic ] = template.format( srcNum, \
+                                                                  proj, \
                                                                   ts, \
                                                                   flav, \
                                                                   c, Qsq )
 
             else:
 
-                template = "/thrp/ave16/dt{}/{}/{}/msq{:.4}/arr"
+                template = "/thrp/ave{}/dt{}/{}/{}/msq{:.4}/arr"
                     
-                dsetname[ iqsq * QsqNum + ic ] = template.format( ts, \
+                dsetname[ iqsq * QsqNum + ic ] = template.format( srcNum, \
+                                                                  ts, \
                                                                   flav, \
                                                                   c, Qsq )
 
@@ -1671,8 +1699,8 @@ def readEMFF_ASCII( threepDir, configList, threep_template, \
     return threep
 
 
-def readEMFormFactorFile( threepDir, configList, threep_tokens, Qsq, QNum, \
-                          ts, proj, momBoost, particle, dataFormat, \
+def readEMFormFactorFile( threepDir, configList, threep_tokens, srcNum, \
+                          Qsq, QNum, ts, proj, momBoost, particle, dataFormat, \
                           **kwargs ):
 
     flavor, flavorNum = fncs.setFlavorStrings( particle, dataFormat )
@@ -1702,7 +1730,7 @@ def readEMFormFactorFile( threepDir, configList, threep_tokens, Qsq, QNum, \
 
                 threep[ iflav ][ ip ] = readEMFF_cpu( threepDir, \
                                                       configList, \
-                                                      threep_template, \
+                                                      threep_template, srcNum, \
                                                       Qsq, ts, p, particle, \
                                                       **kwargs )
 

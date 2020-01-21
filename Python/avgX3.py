@@ -54,6 +54,10 @@ parser.add_argument( "binSize", action='store', type=int )
 parser.add_argument( "-o", "--output_template", action='store', \
                      type=str, default="./*.dat" )
 
+parser.add_argument( "-sn", "--source_number", action='store', type=int, \
+                     help="Number of sources correlators were averaged " \
+                     + "over", default=16 )
+
 parser.add_argument( "--tsf_fit_start", action='store', type=int, \
                      help="If given, will perform two-state fit on effective " \
                      + "mass starting at given t value, otherwise, will " \
@@ -124,6 +128,8 @@ if tsf_fitStart and plat_fitStart:
 else:
 
     checkFit = True
+
+srcNum = args.source_number
 
 tsf = args.two_state_fit
 
@@ -208,34 +214,9 @@ recvCount, recvOffset = mpi_fncs.recvCountOffset( procNum, binNum )
 
 # Read momentum list
 
-momList = []
-
-if dataFormat == "cpu":
-
-    momList = np.array ( rw.getDatasets( twopDir, [ configList_loc[0] ], \
-                                         twop_template, \
-                                         "twop_".format( particle ), \
-                                         "ave16", \
-                                         "msq{:0>4}".format( momSq ), \
-                                         "mvec" )[ 0, 0, 0, ... ].real, \
-                         dtype = int )
-
-else:
-
-    if momSq == 0:
-
-        momList = np.array( [ [ 0, 0, 0 ] ] )
-
-    else:
-
-        mpi_fncs.mpiPrintErr( "ERROR: nonzero momenta boost not yet " \
-               + "supported for gpu format", comm )
-        
-# Multiply momList by -1 because three-point functions are named
-# opposite their sign (sign of phase negative because adjoint taken of
-# sequential propagator)
-
-#momList = -1 * momList
+momList = rw.readMomentaList( twopDir, twop_template, \
+                              configList_loc[ 0 ], particle, \
+                              srcNum, momSq, dataFormat, comm )
 
 momBoostNum = len( momList )
 
@@ -246,69 +227,15 @@ momBoostNum = len( momList )
 # Zero momentum two-point functions
 # twop[ c, t ]
 
-t0 = time.time()
-
-if dataFormat == "cpu":
-
-    twop_loc = rw.getDatasets( twopDir, configList_loc, twop_template, \
-                               "msq0000", "arr" )[ :, 0, 0, :, 0 ].real
-
-else:
-        
-    twop_loc = rw.getDatasets( twopDir, configList_loc, \
-                               twop_template, \
-                               "twop" )[ :, 0, 0, ..., 0, 0 ]
-
-twop_loc = np.asarray( twop_loc, order='c', dtype=float )
-
-mpi_fncs.mpiPrint( "Read two-point functions from HDF5 files " \
-                   + "in {:.3} seconds".format( time.time() - t0 ), rank )
-
-# Boosted two-point functions
-# twop_boost[ mom, c, t ]
-
-if momSq > 0:
-
-    t0 = time.time()
-
-    if dataFormat == "cpu":
-
-        twop_boost_loc = rw.getDatasets( twopDir, configList_loc, \
-                                         twop_template, \
-                                         "msq{:0>4}".format( momSq ), \
-                                         "arr" )[ :, 0, 0, ... ].real
-
-    else:
-        
-        twop_boost_loc = rw.getDatasets( twopDir, configList_loc, \
-                                         twop_template, \
-                                         "twop" )[ :, 0, 0, ..., 0, 0 ]
-
-    # twop_boost_loc[ c, t, mom ] -> twop_boost_loc [mom, c, t ]
-    
-    twop_boost_loc = np.moveaxis( twop_boost_loc, -1, 0 )
-
-    twop_boost_loc = np.asarray( twop_boost_loc, order='c', dtype=float )
-
-    mpi_fncs.mpiPrint( "Read boosted two-point functions from HDF5 files " \
-                       + "in {:.3} seconds".format( time.time() - t0 ), \
-                       rank )
-
-else:
-
-    twop_boost_loc = np.array( [] )
+twop = rw.readTwopFile_zeroQ( twopDir, configList_loc, configNum, \
+                              twop_template, srcNum, 0, particle, dataFormat, \
+                              comm )
 
 T = twop_loc.shape[ -1 ]
 
 # Time dimension length after fold
 
 T_fold = T // 2 + 1
-
-# Gather two-point functions
-
-twop = np.zeros( ( configNum, T ) )
-
-comm.Allgather( twop_loc, twop )
 
 ##########################################
 # Jackknife and fold two-point functions #
@@ -467,9 +394,6 @@ if rank == 0:
             
     # Write output files
 
-    #rw.writeAvgDataFile_wX( curveOutputFilename, t_s, \
-    #                        curve_avg, curve_err )
-        
     rw.writeAvgDataFile_wX( mEff_curveOutputFilename, t_s, \
                             mEff_curve_avg, mEff_curve_err )
         
@@ -490,47 +414,62 @@ if rank == 0:
 
 comm.Barrier()
 
-twop_boost = np.zeros( ( momBoostNum, configNum, T ) )
+# Boosted two-point functions
+# twop_boost[ mom, c, t ]
 
-comm.Allgather( twop_boost_loc, twop_boost )
+if momSq > 0:
+
+    twop_boost = rw.readTwopFile_zeroQ( twopDir, configList_loc, configNum, \
+                                        twop_template, srcNum, momSq, particle, \
+                                        dataFormat, comm )
+
+else:
+
+    twop_boost = np.array( [] )
 
 if rank == 0:
         
     twop_boost_fold = np.zeros( ( momBoostNum, binNum_glob, T_fold ) )
     threep_jk = np.zeros( ( momBoostNum, flavNum, \
                             tsinkNum, binNum_glob, T ) )
+    avgX = np.zeros( ( momBoostNum, flavNum, \
+                       tsinkNum, binNum_glob, T ) )
 
 else:
 
     twop_boost_fold = np.array( [ None for imom in range( momBoostNum ) ] )
     threep_jk = np.array( [ [ [ None for ts in tsink ] \
-                              for f in range( flavNum ) ] \
+                              for f in flav_str ] \
                             for imom in range( momBoostNum ) ] )
 
 # Loop over momenta
 for imom in range( momBoostNum ):
 
-    #########################################
-    # Jackknife boosted two-point functions #
-    #########################################
+    if momSq > 0:
 
-    if binNum_loc:
+        #########################################
+        # Jackknife boosted two-point functions #
+        #########################################
 
-        twop_boost_jk_loc = fncs.jackknifeBinSubset( twop_boost[ imom ], \
-                                                     binSize, \
-                                                     bin_glob[ rank ] )
+        if binNum_loc:
 
-        twop_boost_fold_loc = fncs.fold( twop_boost_jk_loc )
+            twop_boost_jk_loc = fncs.jackknifeBinSubset( twop_boost[ imom ], \
+                                                         binSize, \
+                                                         bin_glob[ rank ] )
+
+            twop_boost_fold_loc = fncs.fold( twop_boost_jk_loc )
         
-    else:
+        else:
         
-        twop_boost_fold_loc = np.array( [] )
+            twop_boost_fold_loc = np.array( [] )
 
-    comm.Gatherv( twop_boost_fold_loc, [ twop_boost_fold[ imom ], \
-                                         recvCount * T_fold, \
-                                         recvOffset * T_fold, \
-                                         MPI.DOUBLE ], root=0 )
+            comm.Gatherv( twop_boost_fold_loc, [ twop_boost_fold[ imom ], \
+                                                 recvCount * T_fold, \
+                                                 recvOffset * T_fold, \
+                                                 MPI.DOUBLE ], root=0 )
 
+    # End if non-zero momentum boost
+    
     ##############################
     # Read three-point functions #
     ##############################
@@ -547,7 +486,7 @@ for imom in range( momBoostNum ):
         # threep[ c, t ]
 
         threeps = rw.readAvgX3File( threepDir, configList_loc, \
-                                    threep_tokens, ts, momList[ imom ], \
+                                    threep_tokens, srcNum, ts, momList[ imom ], \
                                     particle, dataFormat, comm )
 
         threep_g0DxDyDz = threeps[0]

@@ -257,15 +257,15 @@ def calcAvgX_momBoost( threep, twop_tsink, mEff, momSq, L ):
     return avgX
 
 
-def calcMatrixElemEM_ratio( threep, twop_tsink ):
+def calcMatrixElemEM_ratio( threep, twop_tsink, mEff, pSq, L ):
 
     # threep[ b, t ]
     # twop_tsink[ b ]
     # mEff[ b ]
-    # momSq
+    # pSq
     # L
 
-    preFactor = 1.0
+    preFactor = energy( mEff, pSq, L ) / mEff
 
     ratio = np.zeros( threep.shape )
 
