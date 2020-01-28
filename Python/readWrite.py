@@ -397,11 +397,26 @@ def readTwopFile_zeroQ( twopDir, configList, configNum, twop_template, \
                                 "msq{:0>4}".format( momSq ), \
                                 "arr" )[ :, 0, 0, ... ].real
         
-        twop_loc = np.asarray( twop_loc, order='c', dtype=float )
+    else:
+        
+        if momSq == 0:
 
-        twop = np.zeros( ( configNum, ) + twop_loc.shape[ 1: ] )
+            twop_loc = getDatasets( twopDir, configList, \
+                                   twop_template, \
+                                   "twop" )[ :, 0, 0, :, 0, 0 ]
 
-        comm.Allgather( twop_loc, twop )
+        else:
+
+            mpi_fncs.mpiError( "Non-zero momentum boost not supported for " \
+                               + "gpu data format." )
+        
+    twop_loc = np.asarray( twop_loc, order='c', dtype=float )
+
+    twop = np.zeros( ( configNum, ) + twop_loc.shape[ 1: ] )
+
+    comm.Allgather( twop_loc, twop )
+
+    if dataFormat == "cpu":
 
         if momSq > 0:
 
@@ -413,19 +428,8 @@ def readTwopFile_zeroQ( twopDir, configList, configNum, twop_template, \
 
             twop = twop[ ..., 0 ]
 
-    else:
-        
-        if momSq == 0:
+    # End if cpu format
 
-            twop = getDatasets( twopDir, configList, \
-                                   twop_template, \
-                                   "twop" )[ :, 0, 0, :, 0, 0 ]
-
-        else:
-
-            mpi_fncs.mpiError( "Non-zero momentum boost not supported for " \
-                               + "gpu data format." )
-        
     mpi_fncs.mpiPrint( "Read two-point functions from HDF5 files " \
                        + "in {:.3} seconds".format( time() - t0 ), \
                        comm.Get_rank() )
@@ -1753,8 +1757,6 @@ def readEMFormFactorFile( threepDir, configList, threep_tokens, srcNum, \
                                                    threep_tokens[1], ts, \
                                                    threep_tokens[2], \
                                                    flav )
-
-                #print(threep_template)
 
                 threep[ iflav ][ ip ] = readEMFF_ASCII( threepDir, \
                                                         configList, \

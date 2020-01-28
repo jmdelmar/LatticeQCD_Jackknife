@@ -34,7 +34,7 @@ parser.add_argument( "threep_tokens", action='store', \
                      + "* for configuration number." )
 
 parser.add_argument( "twop_dir", action='store', type=str )
-o
+
 parser.add_argument( "twop_template", action='store', type=str )
 
 parser.add_argument( "fit_range_end", action='store', type=int )
@@ -572,6 +572,41 @@ for imom in range( momBoostNum ):
     # End loop over tsink
 # End loop over momenta
 
+"""
+if rank == 0 and momSq > 0:
+
+    # Loop over momenta
+    for imom in range( momBoostNum ):
+
+        try:
+    
+            fitResults = fit.mEffTwopFit( mEff, twop_boost_fold[ imom ], \
+                                          rangeEnd, momSq, L, tsf, \
+                                          tsf_t_low_range=[tsf_fitStart], \
+                                          plat_t_low_range=[plat_fitStart], \
+                                          checkFit=checkFit, fitType="twop" )
+    
+        except fit.lqcdjk_BadFitError as error:
+        
+            mpi_fncs.mpiPrintErr( "ERROR (lqcdjk_fitting.mEffTwopFit):" \
+            + str( error ), comm )
+
+        fitParams = fitResults[ 0 ]
+        chiSq = fitResults[ 1 ]
+        mEff_fit = fitResults[ 2 ]
+        rangeStart = fitResults[ 3 ]
+        mEff_rangeStart = fitResults[ 4 ]
+
+        if tsf:
+
+            c0_boost = fitParams[ :, 0 ]
+            E0_boost = fitParams[ :, 2 ]
+
+        else:
+
+            G = fit_boost[ :, 0 ]
+            E = fit_boost[ :, 1 ]
+"""
 #################
 # Calculate <x> #
 #################
@@ -588,38 +623,37 @@ else:
                        for p in momList ] )
 
 if rank == 0:
-    """
-    if momSq > 0:
-
-        #twop_boost_fold = np.average( twop_boost_fold, axis=0 )
-        
-        # Fit the boosted two-point functions
-
-        if tsf:
-
-            fit_boost, chiSq_boost = fit.twoStateFit_twop( twop_boost_fold, \
-                                                           rangeStart, \
-                                                           rangeEnd, \
-                                                           T )
-
-            c0_boost = fit_boost[ :, 0 ]
-            E0_boost = fit_boost[ :, 2 ]
-
-        else:
-
-            fit_boost, chiSq_boost = fit.oneStateFit_twop( twop_boost_fold, \
-                                                           rangeStart, \
-                                                           rangeEnd, T )
-
-            G = fit_boost[ :, 0 ]
-            E = fit_boost[ :, 1 ]
-    # End if non-zero momentum boost
-    """
 
     # avgX[ p, flav, ts, b, t ]
 
     # Loop over momenta
     for imom in range( momBoostNum ):
+
+        if momSq > 0:
+            
+            # Fit the boosted two point functions
+
+            if tsf:
+
+                fitParams,chiSq=fit.twoStateFit_twop(twop_boost_fold[imom], \
+                                                     rangeStart, \
+                                                     rangeEnd, T )
+
+                c0_boost = fitParams[ :, 0 ]
+                E0_boost = fitParams[ :, 2 ]
+
+            else:
+
+                fitParams,chiSq=fit.oneStateFit_twop(twop_boost_fold[imom], \
+                                                     rangeStart, \
+                                                     rangeEnd, T )
+
+                c0_boost = fitParams[ :, 0 ]
+                E0_boost = fitParams[ :, 1 ]
+
+            #print(rangeStart,rangeEnd)
+            #print("{:+} {:+} {:+}: {}".format(momList[imom][0],momList[imom][1],momList[imom][2],fitParams))
+
         # Loop over flavor
         for iflav in range( flavNum ):
             # Loop over tsink
@@ -627,37 +661,27 @@ if rank == 0:
                 
                 if momSq > 0:
 
-                    if tsf:
-                        
-                        avgX[imom, \
-                             iflav, \
-                             its ]=ZvD1*pq.calcAvgX_momBoost(threep_jk[imom, \
-                                                                       iflav, \
-                                                                       its ], \
-                                                             twop_boost_fold[imom, \
-                                                                             :, \
-                                                                             ts], \
-                                                             E0_mEff, momSq, \
-                                                             L )
-                        #avgX[imom, \
-                        #     iflav, \
-                        #     its]=ZvD1*pq.calcAvgX_twopFit( threep_jk[imom, \
-                        #                                              iflav, \
-                        #                                              its ], \
-                        #                                    ts,E0_mEff,momSq,\
-                        #                                    L, c0_boost, \
-                        #                                    E0_boost )
+                    """
+                    avgX[imom, \
+                    iflav, \
+                    its ]=ZvD1*pq.calcAvgX_momBoost(threep_jk[imom, \
+                    iflav, \
+                    its ], \
+                    twop_boost_fold[imom, \
+                    :, \
+                    ts], \
+                    E0_mEff, momSq, \
+                    L )
+                    """
+                    avgX[imom, \
+                         iflav, \
+                         its]=ZvD1*pq.calcAvgX_twopFit( threep_jk[imom, \
+                                                                  iflav, \
+                                                                  its ], \
+                                                        ts,E0_mEff,momSq,\
+                                                        L, c0_boost, \
+                                                        E0_boost )
 
-                    else:
-
-                        avgX[imom, \
-                             iflav, \
-                             its]=ZvD1*pq.calcAvgX_twopFit( threep_jk[imom, \
-                                                                      iflav, \
-                                                                      its ], \
-                                                            ts, E, momSq, \
-                                                            L, G_boost, E_boost )
-                    
                 else:
 
                     if tsf:

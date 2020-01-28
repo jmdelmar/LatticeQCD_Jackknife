@@ -1,3 +1,4 @@
+import sys
 import time
 import numpy as np
 import argparse as argp
@@ -8,6 +9,8 @@ import readWrite as rw
 import physQuants as pq
 import lqcdjk_fitting as fit
 from mpi4py import MPI
+
+#np.set_printoptions(threshold=sys.maxsize)
 
 L = 32.0
 
@@ -138,6 +141,14 @@ insType = args.insertion_type
 assert insType in [ "local", "noether" ], \
     "Error: insertion type not supported. " \
     "Should be 'local' or 'noether'."
+
+if insType == "local":
+
+    Zv = 0.715
+
+else:
+
+    Zv = 1.0
 
 assert particle in particle_list, \
     "Error: Particle not supported. " \
@@ -298,8 +309,8 @@ if rank == 0:
     
         fitResults = fit.mEffTwopFit( mEff, twop_fold, \
                                       rangeEnd, 0, L, tsf, \
-                                      mEff_t_low_range=[12], \
-                                      twop_t_low_range=[3], \
+                                      mEff_t_low_range=[], \
+                                      twop_t_low_range=[], \
                                       checkFit=False )
     
     except fit.lqcdjk_BadFitError as error:
@@ -343,10 +354,6 @@ if rank == 0:
 
         E1_mEff_avg = np.average( E1_mEff, axis=0 )
         E1_mEff_err = fncs.calcError( E1_mEff, binNum_glob )
-
-        #print("c = {}+/-{}".format(c_avg,c_err))
-        #print("E0 = {}+/-{}".format(E0_mEff_avg,E0_mEff_err))
-        #print("E1 = {}+/-{}".format(E1_mEff_avg,E1_mEff_err))
 
         mEff_tsf_outputFilename \
             = output_template.replace( "*", \
@@ -508,26 +515,6 @@ for imom in range( momBoostNum ):
 
             comm.Allgather( threep_loc, threep[ 1 ] )
 
-        #threep_gxDx[ :, ts+1: ] = 0
-        #threep_gyDy[ :, ts+1: ] = 0
-        #threep_gzDz[ :, ts+1: ] = 0
-        #threep_gtDt[ :, ts+1: ] = 0
-
-        #if rank == 0:
-
-        #    print(threep_gxDx[1,:ts+1])
-        #    print(threep_gyDy[1,:ts+1])
-        #    print(threep_gzDz[1,:ts+1])
-        #    print(threep_gtDt[1,:ts+1])
-
-        # Subtract average over directions from gtDt
-
-        #if rank == 0:
-
-            #print(np.average(threep_loc[:,:ts+1],axis=0))
-
-        #print(threep.shape)
-
         # Loop over flavor
         for iflav in range( flavNum ):
 
@@ -564,6 +551,111 @@ for imom in range( momBoostNum ):
     # End loop over tsink
 # End loop over momenta
 
+
+#######################################
+# Fit the boosted two-point functions #
+#######################################
+
+
+if rank == 0:
+        
+    fitParams_twop_boost = np.zeros( ( momBoostNum, binNum_glob, 4 ) )
+    twopChiSq_boost = np.zeros( ( momBoostNum, binNum_glob ) )
+
+else:
+
+    fitParams_twop_boost = np.array( [ None for p in momList ] )
+    twopChiSq_boost = np.array( [ None for p in momList ] )
+
+if rank == 0 and momSq > 0:
+
+    # Loop over momenta
+    for imom in range( momBoostNum ):
+
+        if tsf:
+
+            fitParams_twop_boost[imom], \
+                twopChiSq_boost[imom]=fit.twoStateFit_twop(twop_boost_fold[imom], \
+                                                           rangeStart, \
+                                                           rangeEnd, \
+                                                           T )
+
+        else:
+
+            fitParams_twop_boost[imom], \
+                twopChiSq_boost[imom]=fit.oneStateFit_twop(twop_boost_fold[imom], \
+                                                           rangeStart, \
+                                                           rangeEnd, T )
+
+        
+
+    # End loop over momenta
+
+    # Average over momenta
+
+    fitParams_twop_boost_avg = np.average( fitParams_twop_boost, axis=0 )
+
+    # Calculate curve
+
+    if tsf:
+
+        c0_boost = fitParams_twop_boost_avg[ :, 0 ]
+        c1_boost = fitParams_twop_boost_avg[ :, 1 ]
+        E0_boost = fitParams_twop_boost_avg[ :, 2 ]
+        E1_boost = fitParams_twop_boost_avg[ :, 3 ]
+            
+        curve_boost, ts_fitParams_twop = fit.calcTwopTwoStateCurve( c0_boost, c1_boost, \
+                                                             E0_boost, E1_boost, T, \
+                                                             rangeStart, rangeEnd )
+    else:
+        
+        c0_boost = fitParams_twop_boost_avg[ :, 0 ]
+        E0_boost = fitParams_twop_boost_avg[ :, 1 ]
+
+        curve_boost, ts_fitParams_twop = fit.calcTwopOneStateCurve( c0_boost, E0_boost, T, \
+                                                             rangeStart, rangeEnd )
+
+    # Average over bins
+
+    fitParams_twop_boost_err = fncs.calcError( fitParams_twop_boost_avg, binNum_glob )
+    fitParams_twop_boost_avg = np.average( fitParams_twop_boost_avg, axis=0 )
+
+    curve_boost_avg = np.average( curve_boost, axis=0 )
+    curve_boost_err = fncs.calcError( curve_boost, binNum_glob )
+
+    # Write boosted two-point function fit files
+
+    fitParams_twop_boost_avg = np.concatenate( ( np.zeros( 3 ), \
+                                          fitParams_twop_boost_avg ), \
+                                        axis=0 )
+    fitParams_twop_boost_err = np.concatenate( ( np.zeros( 3 ), \
+                                          fitParams_twop_boost_err ), \
+                                        axis=0 )
+
+    fitParams_twop_boost_filename = output_template.replace( "*", \
+                                                      "twop_boost_tsf_params" )
+
+    rw.writeTSFParamsFile( fitParams_twop_boost_filename, \
+                           fitParams_twop_boost_avg, \
+                           fitParams_twop_boost_err )
+
+    fitParams_twop_curve_boost_filename = output_template.replace( "*", \
+                                                            "twop_tsf_" \
+                                                            + "curve_boost" )
+
+    rw.writeAvgDataFile_wX( fitParams_twop_curve_boost_filename, ts_fitParams_twop, \
+                            curve_boost_avg, curve_boost_err )
+
+    twop_fold = twop_boost_fold
+
+# End if first rank and non-zero momentum boost
+
+
+###################
+# Calculate GE(0) #
+###################
+
+
 if rank == 0:
         
     ratio = np.zeros( ( momBoostNum, flavNum, tsinkNum, \
@@ -575,75 +667,82 @@ else:
                           for f in flav_str ] \
                         for p in momList ] )
 
-#################
-# Calculate <x> #
-#################
-
 if rank == 0:
-    """
-    if momSq > 0:
 
-        twop_boost_fold = np.average( twop_boost_fold, axis=0 )
-    
-        # Fit the boosted two-point functions
-
-        if tsf:
-
-            fit_boost, chiSq_boost = fit.twoStateFit_twop( twop_boost_fold, \
-                                                           rangeStart, \
-                                                           rangeEnd, \
-                                                           T )
-
-        else:
-
-            fit_boost, chiSq_boost = fit.oneStateFit_twop( twop_boost_fold, \
-                                                           rangeStart, \
-                                                           rangeEnd, T )
-
-        c0 = fit_boost[ :, 0 ]
-        E0 = fit_boost[ :, 1 ]
-            
-        twop_fold = twop_boost_fold
-
-    # End if non-zero momentum boost
-    """
-    # ratio[ flav, ts, b, t ]
+    # ratio[ p, flav, ts, b, t ]
 
     # Loop over momenta
     for imom in range( momBoostNum ):
+
+        if momSq > 0:
+            
+            c0 = fitParams_twop_boost[ imom, :, 0 ]
+            
+            if tsf:
+
+                E0 = fitParams_twop_boost[ imom, :, 2 ]
+
+            else:
+
+                E0 = fitParams_twop_boost[ imom, :, 1 ]
+
+        else: # momSq == 0
+
+            c0 = fitParams_twop[ :, 0 ]
+
+            if tsf:
+
+                E0 = fitParams_twop[ :, 2 ]
+
+            else:
+
+                E0 = fitParams_twop[ :, 1 ]
+
         # Loop over flavor
         for iflav in range( flavNum ):
             # Loop over tsink
             for ts, its in zip( tsink, range( tsinkNum ) ) :
-                
+                """
                 ratio[ imom, \
                        iflav, \
-                       its ] = pq.calcMatrixElemEM_ratio( threep_jk[ imom, \
-                                                                     iflav, \
-                                                                     its ], \
-                                                          twop_fold[ imom, :, ts ], \
-                                                          E0_mEff, momSq, L )
-                """
-                ratio[ iflav, \
-                its ] = pq.calcMatrixElemEM_twopFit( threep_jk[ iflav, \
+                       its ] = Zv * pq.calcMatrixElemEM_ratio( threep_jk[ imom, \
+                iflav, \
                 its ], \
-                ts, c0, E0 )
+                twop_fold[imom,:,ts],\
+                E0_mEff, momSq, L )
                 """
+                ratio[ imom, \
+                       iflav, \
+                       its ] = Zv * pq.calcMatrixElemEM_twopFit( threep_jk[ imom, \
+                                                                            iflav, \
+                                                                            its ], \
+                                                                 ts, c0, \
+                                                                 E0 )
+
                 threep_avg = np.average( threep_jk[imom,iflav,its], \
                                          axis=-2 )
                 threep_err = fncs.calcError( threep_jk[imom,iflav,its], \
                                              binNum_glob, axis=-2 )
 
-                twop_avg = np.average( twop_fold[ imom ], \
-                                       axis=-2 )
-                twop_err = fncs.calcError( twop_fold[ imom ], \
-                                           binNum_glob, axis=-2 )
+                if momSq > 0:
 
+                    twop_avg = np.average( twop_fold[ imom ], \
+                                           axis=-2 )
+                    twop_err = fncs.calcError( twop_fold[ imom ], \
+                                               binNum_glob, axis=-2 )
+                    
+                else: # momSq == 0
+
+                    twop_avg = np.average( twop_fold, \
+                                           axis=-2 )
+                    twop_err = fncs.calcError( twop_fold, \
+                                               binNum_glob, axis=-2 )
+                    
                 ratio_avg = np.average( ratio[imom,iflav,its], \
                                         axis=-2 )
                 ratio_err = fncs.calcError( ratio[imom,iflav,its], \
                                             binNum_glob, axis=-2 )
-
+                """
                 # Write <x> output files
     
                 threep_output_template = "threep_{0}_tsink{1}_{2:+}_{3:+}_{4:+}".format( flav_str[iflav], \
@@ -678,8 +777,12 @@ if rank == 0:
                 rw.writeAvgDataFile( ratio_outFilename, \
                                      ratio_avg, \
                                      ratio_err )
-                
+                """
     # Average over momenta
+
+    if momSq > 0:
+
+        twop_fold = np.average( twop_fold, axis=0 )
 
     threep_jk = np.average( threep_jk, axis=0 )
 
@@ -689,18 +792,29 @@ if rank == 0:
 
     # ratio_avg[ flav, ts, t ]
 
+    twop_avg = np.average( twop_fold, axis=-2 )
+    twop_err = fncs.calcError( twop_fold, binNum_glob, axis=-2 )
+
     threep_avg = np.average( threep_jk, axis=-2 )
     threep_err = fncs.calcError( threep_jk, binNum_glob, axis=-2 )
 
     ratio_avg = np.average( ratio, axis=-2 )
     ratio_err = fncs.calcError( ratio, binNum_glob, axis=-2 )
 
+    # Write twop output file
+
+    twop_outFilename = output_template.replace( "*", "twop_boost" )
+
+    rw.writeAvgDataFile( twop_outFilename, \
+                         twop_avg, \
+                         twop_err )
+
     # Loop over flavor
     for iflav in range( flavNum ):
         # Loop over tsink
         for ts, its in zip( tsink, range( tsinkNum ) ) :
             
-            # Write <x> output files
+            # Write threep output files
     
             threep_outFilename = output_template.replace( "*", "threep_" \
                                                         + flav_str[ iflav ] \
@@ -711,6 +825,8 @@ if rank == 0:
                                  threep_avg[ iflav, its ], \
                                  threep_err[ iflav, its ] )
 
+            # Write GE(0) output files
+    
             ratio_outFilename = output_template.replace( "*", "matrixElemEM_" \
                                                         + flav_str[ iflav ] \
                                                         + "_tsink" \

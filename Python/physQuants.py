@@ -174,12 +174,12 @@ def mEff( twop ):
 
 def avgXKineFactor( mEff, momSq, L ):
 
-    return 2.0 * mEff \
-        / ( ( 0.5 * mEff ** 2 \
-                     - 2.0 * energy( mEff, momSq, L ) ** 2 ) )
-    #return 2.0 * energy( mEff, momSq, L ) \
-    #    / ( ( 0.5 * mEff ** 2 \
-    #                 - 2.0 * energy( mEff, momSq, L ) ** 2 ) )
+    #return 2.0 * mEff \
+    #    / ( 0.5 * mEff ** 2 \
+    #        - 2.0 * energy( mEff, momSq, L ) ** 2 )
+    return 2.0 * energy( mEff, momSq, L ) \
+        / ( 0.5 * mEff ** 2 \
+            - 2.0 * energy( mEff, momSq, L ) ** 2 )
     #return 2.0 * energy( mEff, momSq, L ) ** 2 \
     #    / ( mEff * ( 0.5 * mEff ** 2 \
     #                 - 2.0 * energy( mEff, momSq, L ) ** 2 ) )
@@ -257,21 +257,16 @@ def calcAvgX_momBoost( threep, twop_tsink, mEff, momSq, L ):
     return avgX
 
 
-def calcMatrixElemEM_ratio( threep, twop_tsink, mEff, pSq, L ):
+def calcMatrixElemEM_ratio( threep, twop_tsink ):
 
     # threep[ b, t ]
     # twop_tsink[ b ]
-    # mEff[ b ]
-    # pSq
-    # L
-
-    preFactor = energy( mEff, pSq, L ) / mEff
 
     ratio = np.zeros( threep.shape )
 
     for t in range( threep.shape[ -1 ] ):
 
-        ratio[ :, t ] = preFactor * threep[ :, t ] / twop_tsink
+        ratio[ :, t ] = threep[ :, t ] / twop_tsink
 
     return ratio
 
@@ -290,10 +285,7 @@ def calcMatrixElemEM_twopFit( threep, tsink, c0, E0 ):
     c0_cp = np.repeat( c0, T ).reshape( binNum, T )
     E0_cp = np.repeat( E0, T ).reshape( binNum, T )
 
-    preFactor = 1.0
-
-    ratio = preFactor * threep \
-           / twopFit( c0_cp, E0_cp, tsink )
+    ratio = threep / twopFit( c0_cp, E0_cp, tsink )
 
     return ratio
 
