@@ -177,7 +177,7 @@ def mEffTwopFit( mEff, twop, rangeEnd, pSq, L, tsf, **kwargs ):
 
     else:
 
-        twop_t_low_range = range( 1, 8 )
+        twop_t_low_range = range( 1, 5 )
 
     if "fitType" in kwargs \
        and kwargs[ "fitType" ] != None:
@@ -214,9 +214,7 @@ def mEffTwopFit( mEff, twop, rangeEnd, pSq, L, tsf, **kwargs ):
 
         for twop_t_low in twop_t_low_range:
 
-            # Two-state fit
-
-            if tsf:
+            if tsf: # Two-state fit
 
                 # fitParams[ b, param ]
 
@@ -246,11 +244,7 @@ def mEffTwopFit( mEff, twop, rangeEnd, pSq, L, tsf, **kwargs ):
 
                     return 1
 
-                # One-state fit
-
-            else:
-
-                # Perform one-state fit
+            else: # One-state fit
                 
                 fitParams, chiSq = oneStateFit_twop( twop, \
                                                      twop_t_low, \
@@ -685,11 +679,8 @@ def oneStateFit_twop( twop, twop_rangeStart, twop_rangeEnd, T ):
 
     dof = twop_rangeEnd - twop_rangeStart + 1 - 2
 
-    twop_to_fit = np.concatenate( ( twop[ :, twop_rangeStart : \
-                                          twop_rangeEnd + 1 ], \
-                                    twop[ :, T - twop_rangeEnd : \
-                                          T - twop_rangeStart + 1 ] ), \
-                                  axis=1 )
+    twop_to_fit = twop[ :, twop_rangeStart : \
+                        twop_rangeEnd + 1 ]
 
     binNum = twop.shape[ 0 ]
 
@@ -701,8 +692,8 @@ def oneStateFit_twop( twop, twop_rangeStart, twop_rangeEnd, T ):
 
     twop_err = fncs.calcError( twop_to_fit, binNum )
     
-    t = np.concatenate((range( twop_rangeStart, twop_rangeEnd + 1 ), \
-                        range( T - twop_rangeEnd, T-twop_rangeStart + 1 ) ))
+    t = np.array( range( twop_rangeStart, \
+                         twop_rangeEnd + 1 ) )
 
     # Find fit parameters of mean values to use as initial guess
 
@@ -769,8 +760,8 @@ def oneStateErrorFunction_twop( fitParams, tsink, T, twop, twop_err ):
 
 def oneStateTwop( tsink, T, G, E ):
     
-    return G**2 / 2 / E * ( np.exp( -E * tsink ) \
-                            + np.exp( -E * ( T - tsink ) ) )
+    return G * ( np.exp( -E * tsink ) \
+                 + np.exp( -E * ( T - tsink ) ) )
 
 
 def fitGenFormFactor( vals, vals_err, fitStart, fitEnd ):
@@ -833,7 +824,7 @@ def calcmEffTwoStateCurve( c0, c1, E0, E1, T, rangeStart, rangeEnd ):
 
 def calcTwopOneStateCurve( G, E, T, rangeStart, rangeEnd ):
 
-    binNum = c0.shape[ 0 ]
+    binNum = G.shape[ 0 ]
 
     curve = np.zeros( ( binNum, 100 ) )
 
@@ -843,8 +834,8 @@ def calcTwopOneStateCurve( G, E, T, rangeStart, rangeEnd ):
     for b in range( binNum ):
         for t in range( ts.shape[ -1 ] ):
                 
-            curve[ b, t ] = oneStateTwop( t_s[ t ], T, \
-                                              G[ b ], E[ b ] )
+            curve[ b, t ] = oneStateTwop( ts[ t ], T, \
+                                          G[ b ], E[ b ] )
 
     
     return curve, ts
