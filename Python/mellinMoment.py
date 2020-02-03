@@ -547,13 +547,24 @@ if rank == 0:
         
     mellin_p = np.zeros( ( momBoostNum, flavNum, tsinkNum, \
                            binNum_glob, T ) )
+    mellin_avgBeforeRatio = np.zeros( ( flavNum, tsinkNum, \
+                                        binNum_glob, T ) )
 
+    c0_p = np.zeros( ( momBoostNum, binNum_glob ) )
+    E0_p = np.zeros( ( momBoostNum, binNum_glob ) )
+
+    if tsf:
+
+        c1_p = np.zeros( ( momBoostNum, binNum_glob ) )
+        E1_p = np.zeros( ( momBoostNum, binNum_glob ) )
+"""
 else:
 
     mellin_p = np.array( [ [ [ None for ts in tsink ] \
                              for f in flav_str ] \
                            for p in momList ] )
 
+"""
 if rank == 0:
 
     # mellin_p[ p, flav, ts, b, t ]
@@ -577,10 +588,10 @@ if rank == 0:
                                                       rangeStart, \
                                                       rangeEnd, T )
             
-            c0 = fitParams_twop[ :, 0 ]
-            c1 = fitParams_twop[ :, 1 ]
-            E0 = fitParams_twop[ :, 2 ]
-            E1 = fitParams_twop[ :, 3 ]
+            c0_p[ imom ] = fitParams_twop[ :, 0 ]
+            c1_p[ imom ] = fitParams_twop[ :, 1 ]
+            E0_p[ imom ] = fitParams_twop[ :, 2 ]
+            E1_p[ imom ] = fitParams_twop[ :, 3 ]
 
         else:
 
@@ -588,8 +599,8 @@ if rank == 0:
                                                       rangeStart, \
                                                       rangeEnd, T )
 
-            c0 = fitParams_twop[ :, 0 ]
-            E0 = fitParams_twop[ :, 1 ]
+            c0_p[ imom ] = fitParams_twop[ :, 0 ]
+            E0_p[ imom ] = fitParams_twop[ :, 1 ]
 
         # Loop over flavor
         for iflav in range( flavNum ):
@@ -598,11 +609,15 @@ if rank == 0:
                 
                 mellin_p[imom, \
                          iflav, \
-                         its]=Z*pq.calcAvgX_twopFit( threep_p_jk[imom, \
-                                                                 iflav, \
-                                                                 its ], \
-                                                     ts,E0_mEff,momSq,\
-                                                     L, c0, E0 )
+                         its]=Z*pq.calcMellin_twopFit( threep_p_jk[imom, \
+                                                                   iflav, \
+                                                                   its ], \
+                                                       ts,E0_mEff,momSq,L, \
+                                                       c0_p[ imom ], \
+                                                       E0_p[ imom ], moment )
+                
+                """
+                # Average over bins
 
                 threep_p_avg = np.average( threep_p_jk[imom,iflav,its], \
                                            axis=-2 )
@@ -614,7 +629,7 @@ if rank == 0:
                 mellin_p_err = fncs.calcError( mellin_p[imom,iflav,its], \
                                                binNum_glob, axis=-2 )
 
-                # Write threep output file
+                # Write threep output file for each momentum
     
                 template = "threep_{0}_tsink{1}_{2:+}_{3:+}_{4:+}"
                 template = template.format( flav_str[iflav], \
@@ -625,12 +640,12 @@ if rank == 0:
                 threep_outFilename = output_template.replace( "*", \
                                                               template )
                 
-                # Write moment output file
-    
                 rw.writeAvgDataFile( threep_outFilename, \
                                      threep_p_avg, \
                                      threep_p_err )
                     
+                # Write moment output file for each momentum
+    
                 template = "{0}_{1}_tsink{2}_{3:+}_{4:+}_{5:+}"
                 template = template.format( moment_str, \
                                             flav_str[iflav], \
@@ -644,7 +659,7 @@ if rank == 0:
                 rw.writeAvgDataFile( mellin_outFilename, \
                                      mellin_p_avg, \
                                      mellin_p_err )
-
+                """
             # End loop over tsink
         # End loop over flavor
     # End loop over momenta
@@ -655,6 +670,22 @@ if rank == 0:
     threep_jk = np.average( threep_p_jk, axis=0 )
     mellin = np.average( mellin_p, axis=0 )
 
+    c0 = np.average( c0_p, axis=0 )
+    E0 = np.average( E0_p, axis=0 )
+    
+    # Calculate moment from averaged twop and threep
+
+    # Loop over flavor
+    for iflav in range( flavNum ):
+        # Loop over tsink
+        for ts, its in zip( tsink, range( tsinkNum ) ) :
+            
+            mellin_avgBeforeRatio[iflav, \
+                                  its]=Z*pq.calcAvgX_twopFit( threep_jk[ iflav, \
+                                                                         its ], \
+                                                              ts,E0_mEff,momSq,L, \
+                                                              c0, E0 )
+
     # Average over bins
     # mellin_avg[ flav, ts, t ]
 
@@ -663,6 +694,10 @@ if rank == 0:
 
     mellin_avg = np.average( mellin, axis=-2 )
     mellin_err = fncs.calcError( mellin, binNum_glob, axis=-2 )
+
+    mellin_avgBeforeRatio_avg = np.average( mellin_avgBeforeRatio, axis=-2 )
+    mellin_avgBeforeRatio_err = fncs.calcError( mellin_avgBeforeRatio, \
+                                                binNum_glob, axis=-2 )
 
     # Loop over flavor
     for iflav in range( flavNum ):
@@ -689,6 +724,16 @@ if rank == 0:
                                                           + str( ts ) )
             rw.writeAvgDataFile( mellin_outFilename, mellin_avg[ iflav, its ], \
                                  mellin_err[ iflav, its ] )
+
+            mellin_outFilename = output_template.replace( "*", \
+                                                          moment_str + "_" \
+                                                          + flav_str[ iflav ] \
+                                                          + "_tsink" \
+                                                          + str( ts ) \
+                                                          + "_avgBeforeRatio" )
+            rw.writeAvgDataFile( mellin_outFilename, \
+                                 mellin_avgBeforeRatio_avg[ iflav, its ], \
+                                 mellin_avgBeforeRatio_err[ iflav, its ] )
 
             ###############
             # Fit plateau #
@@ -735,7 +780,7 @@ if rank == 0:
         # End loop over tsink
     # End loop over flavor
 # End if first process
-
+exit()
 ##################
 # Two-state Fit  #
 ##################
@@ -794,6 +839,7 @@ if tsf and rank == 0:
                 a01 = fitParams_threep[ :, 1 ]
                 a11 = fitParams_threep[ :, 2 ]
           
+                # CJL: This needs to be fixed for multi momenta
                 fitParams[ imom ] = np.stack( ( a00, a01, a11, \
                                                 c0, c1, E0, E1 ), \
                                               axis=1 )

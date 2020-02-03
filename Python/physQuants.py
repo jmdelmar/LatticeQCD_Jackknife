@@ -290,6 +290,39 @@ def calcMatrixElemEM_twopFit( threep, tsink, c0, E0 ):
     return ratio
 
 
+def calcMellin_twopFit( threep, tsink, mEff, momSq, L, \
+                        c0, E0, moment ):
+
+    # threep[ b, t ]
+    # tsink
+    # mEff[ b ]
+    # momSq
+    # L
+    # c0[ b ]
+    # E0[ b ]
+    
+    T = threep.shape[ -1 ]
+
+    c0_cp = np.repeat( c0, T ).reshape( threep.shape )
+    E0_cp = np.repeat( E0, T ).reshape( threep.shape )
+
+    if moment == 1:
+
+        preFactor = np.repeat( avgXKineFactor( mEff, momSq, L ), \
+                               T ).reshape( threep.shape )
+
+    elif moment == 2:
+
+        preFactor = -1.0
+
+    elif moment == 3:
+
+        preFactor = 1.0        
+
+    return preFactor * threep \
+        / twopFit( c0_cp, E0_cp, tsink )
+
+
 def calcAvgX_twopFit( threep, tsink, mEff, momSq, L, \
                       c0, E0 ):
 
