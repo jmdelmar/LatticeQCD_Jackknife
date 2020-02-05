@@ -447,15 +447,13 @@ else:
 
 if rank == 0:
         
-    twop_boost_fold = np.zeros( ( momBoostNum, binNum_glob, T_fold ) )
+    twop_boost_fold_p = np.zeros( ( momBoostNum, binNum_glob, T_fold ) )
     threep_p_jk = np.zeros( ( momBoostNum, flavNum, \
                                 tsinkNum, binNum_glob, T ) )
-    mellin = np.zeros( ( momBoostNum, flavNum, \
-                       tsinkNum, binNum_glob, T ) )
 
 else:
 
-    twop_boost_fold = np.array( [ None for imom in range( momBoostNum ) ] )
+    twop_boost_fold_p = np.array( [ None for imom in range( momBoostNum ) ] )
     threep_p_jk = np.array( [ [ [ None for ts in tsink ] \
                                   for f in flav_str ] \
                                 for imom in range( momBoostNum ) ] )
@@ -481,7 +479,7 @@ for imom in range( momBoostNum ):
 
             twop_boost_fold_loc = np.array( [] )
 
-        comm.Gatherv( twop_boost_fold_loc, [ twop_boost_fold[ imom ], \
+        comm.Gatherv( twop_boost_fold_loc, [ twop_boost_fold_p[ imom ], \
                                              recvCount * T_fold, \
                                              recvOffset * T_fold, \
                                              MPI.DOUBLE ], root=0 )
@@ -557,15 +555,6 @@ if rank == 0:
 
         c1_p = np.zeros( ( momBoostNum, binNum_glob ) )
         E1_p = np.zeros( ( momBoostNum, binNum_glob ) )
-"""
-else:
-
-    mellin_p = np.array( [ [ [ None for ts in tsink ] \
-                             for f in flav_str ] \
-                           for p in momList ] )
-
-"""
-if rank == 0:
 
     # mellin_p[ p, flav, ts, b, t ]
 
@@ -576,7 +565,7 @@ if rank == 0:
 
         if momSq > 0: # Boosted two-point functions
             
-            twop_to_fit = twop_boost_fold[ imom ]
+            twop_to_fit = twop_boost_fold_p[ imom ]
 
         else: # Zero momentum two-point functions
 
@@ -667,8 +656,12 @@ if rank == 0:
     # Average over momenta
     # mellin[ flav, ts, b, t ]
 
-    threep_jk = np.average( threep_p_jk, axis=0 )
     mellin = np.average( mellin_p, axis=0 )
+    threep_jk = np.average( threep_p_jk, axis=0 )
+    
+    if momSq > 0:
+
+        twop_boost_fold = np.average( twop_boost_fold_p, axis=0 )
 
     c0 = np.average( c0_p, axis=0 )
     E0 = np.average( E0_p, axis=0 )
@@ -689,15 +682,33 @@ if rank == 0:
     # Average over bins
     # mellin_avg[ flav, ts, t ]
 
-    threep_avg = np.average( threep_jk, axis=-2 )
-    threep_err = fncs.calcError( threep_jk, binNum_glob, axis=-2 )
-
     mellin_avg = np.average( mellin, axis=-2 )
     mellin_err = fncs.calcError( mellin, binNum_glob, axis=-2 )
 
     mellin_avgBeforeRatio_avg = np.average( mellin_avgBeforeRatio, axis=-2 )
     mellin_avgBeforeRatio_err = fncs.calcError( mellin_avgBeforeRatio, \
                                                 binNum_glob, axis=-2 )
+
+    threep_avg = np.average( threep_jk, axis=-2 )
+    threep_err = fncs.calcError( threep_jk, binNum_glob, axis=-2 )
+
+    if momSq > 0: # Boosted two-point functions
+            
+        twop_avg = np.average( twop_boost_fold, axis=-2 )
+        twop_err = fncs.calcError( twop_boost_fold, binNum_glob, axis=-2 )
+
+    else: # Zero momentum two-point functions
+
+        twop_avg = np.average( twop_fold, axis=-2 )
+        twop_err = fncs.calcError( twop_fold, binNum_glob, axis=-2 )
+
+    # Write twop output file
+    
+    twop_outFilename = output_template.replace( "*", "twop" )
+
+    rw.writeAvgDataFile( twop_outFilename, \
+                         twop_avg, \
+                         twop_err )
 
     # Loop over flavor
     for iflav in range( flavNum ):
@@ -779,242 +790,243 @@ if rank == 0:
             # End loop over fit ranges
         # End loop over tsink
     # End loop over flavor
-# End if first process
-exit()
-##################
-# Two-state Fit  #
-##################
 
-if tsf and rank == 0:
+    exit()
+    ##################
+    # Two-state Fit  #
+    ##################
 
-    mpi_fncs.mpiPrint( "Will perform the two-state fit", rank )
+    if tsf:
 
-    # Loop over flavors
-    for iflav in range( flavNum ):
-        # Loop over number of neglected three-point functions
-        for neglect in 2,3:
+        mpi_fncs.mpiPrint( "Will perform the two-state fit", rank )
 
-            ti_to_fit = fncs.initEmptyList( tsinkNum, 1 )
+        # Loop over flavors
+        for iflav in range( flavNum ):
+            # Loop over number of neglected three-point functions
+            for neglect in 2,3:
 
-            # Loop over tsinks
-            for ts in range( tsinkNum ):
+                ti_to_fit = fncs.initEmptyList( tsinkNum, 1 )
 
-                ti_to_fit[ ts ] = range( neglect, \
-                                         tsink[ ts ] - neglect + 1 )
-                """
-                ti_to_fit[ ts ] = np.concatenate( ( range( neglect, \
-                tsink[ ts ] \
-                - neglect \
-                + 1 ), \
-                range( tsink[ ts ] \
-                + neglect \
-                + 5, \
-                T - \
-                neglect \
-                - 5 + 1 ) ) )
-                ti_to_fit[ ts ] = range( tsink[ ts ] + neglect + 5, \
-                T - neglect - 5 + 1 )
-                """
+                # Loop over tsinks
+                for ts in range( tsinkNum ):
 
-            # End loop over tsink
+                    ti_to_fit[ ts ] = range( neglect, \
+                                             tsink[ ts ] - neglect + 1 )
+                    """
+                    ti_to_fit[ ts ] = np.concatenate( ( range( neglect, \
+                    tsink[ ts ] \
+                    - neglect \
+                    + 1 ), \
+                    range( tsink[ ts ] \
+                    + neglect \
+                    + 5, \
+                    T - \
+                    neglect \
+                    - 5 + 1 ) ) )
+                    ti_to_fit[ ts ] = range( tsink[ ts ] + neglect + 5, \
+                    T - neglect - 5 + 1 )
+                    """
 
-            fitParams = np.zeros( ( momBoostNum, binNum_glob, 7 ) )
-            mellin = np.zeros( ( momBoostNum, binNum_glob ) )
-            chiSq = np.zeros( ( momBoostNum, binNum_glob ) )
+                # End loop over tsink
 
-            threep_curve = fncs.initEmptyList( momBoostNum, 1 )
-            mellin_curve_const_ts = fncs.initEmptyList( momBoostNum, 1 )
-            mellin_curve_const_ti = fncs.initEmptyList( momBoostNum, 1 )
+                fitParams = np.zeros( ( momBoostNum, binNum_glob, 7 ) )
+                mellin = np.zeros( ( momBoostNum, binNum_glob ) )
+                chiSq = np.zeros( ( momBoostNum, binNum_glob ) )
+
+                threep_curve = fncs.initEmptyList( momBoostNum, 1 )
+                mellin_curve_const_ts = fncs.initEmptyList( momBoostNum, 1 )
+                mellin_curve_const_ti = fncs.initEmptyList( momBoostNum, 1 )
             
-            # Loop over momenta
-            for imom in range( momBoostNum ):
+                # Loop over momenta
+                for imom in range( momBoostNum ):
+                
+                    fitParams_threep, \
+                        chiSq[imom]=fit.twoStateFit_threep(threep_p_jk[imom, \
+                                                                       iflav], \
+                                                           ti_to_fit, \
+                                                           tsink, E0, E1, T )
                     
-                fitParams_threep, \
-                    chiSq[imom]=fit.twoStateFit_threep(threep_p_jk[imom, \
-                                                                   iflav], \
-                                                       ti_to_fit, \
-                                                       tsink, E0, E1, T )
-                    
-                a00 = fitParams_threep[ :, 0 ]
-                a01 = fitParams_threep[ :, 1 ]
-                a11 = fitParams_threep[ :, 2 ]
+                    a00 = fitParams_threep[ :, 0 ]
+                    a01 = fitParams_threep[ :, 1 ]
+                    a11 = fitParams_threep[ :, 2 ]
           
-                # CJL: This needs to be fixed for multi momenta
-                fitParams[ imom ] = np.stack( ( a00, a01, a11, \
-                                                c0, c1, E0, E1 ), \
-                                              axis=1 )
+                    # CJL: This needs to be fixed for multi momenta
+                    fitParams[ imom ] = np.stack( ( a00, a01, a11, \
+                                                    c0, c1, E0, E1 ), \
+                                                  axis=1 )
                 
-                # Calculate curve with constant tsink
+                    # Calculate curve with constant tsink
                     
-                # curve[ p, b, ts, t ]
-                # ti[ ts, t ]
+                    # curve[ p, b, ts, t ]
+                    # ti[ ts, t ]
 
-                threep_curve[ imom ], \
-                    ti_threep = fit.calcThreepTwoStateCurve( a00, a01, \
-                                                             a11, E0, \
-                                                             E1, T, \
-                                                             tsink, \
-                                                             ti_to_fit,\
-                                                             neglect )
+                    threep_curve[ imom ], \
+                        ti_threep = fit.calcThreepTwoStateCurve( a00, a01, \
+                                                                 a11, E0, \
+                                                                 E1, T, \
+                                                                 tsink, \
+                                                                 ti_to_fit,\
+                                                                 neglect )
 
-                mellin_curve_const_ts[ imom ], \
-                    ti_mellin = fit.calcAvgXTwoStateCurve_const_ts( a00, \
-                                                                    a01, \
-                                                                    a11, \
-                                                                    c0, \
-                                                                    c1, \
-                                                                    E0, \
-                                                                    E1, \
-                                                                    E0_mEff, \
-                                                                    momSq, \
-                                                                    L, T, \
-                                                                    Z, \
-                                                                    tsink, \
-                                                                    ti_to_fit, \
-                                                                    neglect )
+                    mellin_curve_const_ts[ imom ], \
+                        ti_mellin = fit.calcAvgXTwoStateCurve_const_ts( a00, \
+                                                                        a01, \
+                                                                        a11, \
+                                                                        c0, \
+                                                                        c1, \
+                                                                        E0, \
+                                                                        E1, \
+                                                                        E0_mEff, \
+                                                                        momSq, \
+                                                                        L, T, \
+                                                                        Z, \
+                                                                        tsink, \
+                                                                        ti_to_fit, \
+                                                                        neglect )
 
-                mellin_curve_const_ti[ imom ], \
-                    ts_mellin = fit.calcAvgXTwoStateCurve_const_ti( a00, \
-                                                                    a01, \
-                                                                    a11, \
-                                                                    c0, \
-                                                                    c1, \
-                                                                    E0, \
-                                                                    E1, \
-                                                                    E0_mEff, \
-                                                                    momSq, \
-                                                                    L, T, \
-                                                                    Z, \
-                                                                    tsink[0]-2, \
-                                                                    tsink[-1]+5 )
-
-                # mellin[ p, b ]
-
-                mellin[ imom ] = pq.calcAvgX_twoStateFit( a00, c0, \
-                                                          E0_mEff, \
-                                                          momSq, \
-                                                          L, Z )
-                
-            # End loop over momenta
-
-            # Average over momenta
+                    mellin_curve_const_ti[ imom ], \
+                        ts_mellin = fit.calcAvgXTwoStateCurve_const_ti( a00, \
+                                                                        a01, \
+                                                                        a11, \
+                                                                        c0, \
+                                                                        c1, \
+                                                                        E0, \
+                                                                        E1, \
+                                                                        E0_mEff, \
+                                                                        momSq, \
+                                                                        L, T, \
+                                                                        Z, \
+                                                                        tsink[0]-2, \
+                                                                        tsink[-1]+5 )
                     
-            threep_curve = np.average( threep_curve, axis=0 )
-            
-            mellin_curve_const_ts = np.average( mellin_curve_const_ts, \
-                                                axis=0 )
+                    # mellin[ p, b ]
+
+                    mellin[ imom ] = pq.calcAvgX_twoStateFit( a00, c0, \
+                                                              E0_mEff, \
+                                                              momSq, \
+                                                              L, Z )
                 
-            mellin_curve_const_ti = np.average( mellin_curve_const_ti, \
-                                                axis=0 )
-                
-            fitParams = np.average( fitParams, axis=0 )
-            
-            chiSq = np.average( chiSq, axis=0 )
-                
-            mellin = np.average( mellin, axis=0 )
-    
-            # Average over bins
+                # End loop over momenta
+
+                # Average over momenta
                     
-            threep_curve_avg = np.average( threep_curve, axis=0 )
-            threep_curve_err = fncs.calcError( threep_curve, binNum_glob )
+                threep_curve = np.average( threep_curve, axis=0 )
             
-            mellin_curve_const_ts_avg = np.average( mellin_curve_const_ts, \
+                mellin_curve_const_ts = np.average( mellin_curve_const_ts, \
                                                     axis=0 )
-            mellin_curve_const_ts_err = fncs.calcError( mellin_curve_const_ts, \
-                                                        binNum_glob )
                 
-            mellin_curve_const_ti_avg = np.average( mellin_curve_const_ti, \
+                mellin_curve_const_ti = np.average( mellin_curve_const_ti, \
                                                     axis=0 )
-            mellin_curve_const_ti_err = fncs.calcError( mellin_curve_const_ti, \
-                                                        binNum_glob )
                 
-            fitParams_avg = np.average( fitParams, axis=0 )
-            fitParams_err = fncs.calcError( fitParams, binNum_glob )
+                fitParams = np.average( fitParams, axis=0 )
+            
+                chiSq = np.average( chiSq, axis=0 )
                 
-            chiSq_avg = np.average( chiSq, axis=0 )
-            chiSq_err = fncs.calcError( chiSq, binNum_glob )
-                
-            mellin_avg = np.average( mellin )
-            mellin_err = fncs.calcError( mellin, binNum_glob )
+                mellin = np.average( mellin, axis=0 )
     
-            # Write output file
-
-            tsf_threep_range_str = twopFit_str + ".3n" + str( neglect )
-
-            mellinOutputFilename \
-                = output_template.replace( "*", \
-                                           moment_str + "_" \
-                                           + flav_str[ iflav ] \
-                                           + "_twoStateFit_" \
-                                           + tsf_threep_range_str + "_" \
-                                           + ts_range_str )
-                
-            rw.writeFitDataFile( mellinOutputFilename, \
-                                 mellin_avg, mellin_err, 0, 0 )
-                
-            chiSqOutputFilename \
-                = output_template.replace( "*", \
-                                           moment_str + "_" \
-                                           + flav_str[ iflav ] \
-                                           + "_twoStateFit_threep_chiSq_" \
-                                           + tsf_threep_range_str + "_" \
-                                           + ts_range_str )
-        
-            rw.writeFitDataFile( chiSqOutputFilename, \
-                                 chiSq_avg, chiSq_err, 0, 0 )
-                
-            mellinParamsOutputFilename \
-                = output_template.replace( "*", \
-                                           moment_str + "_" \
-                                           + flav_str[ iflav ] \
-                                           + "_twoStateFitParams_" \
-                                           + tsf_threep_range_str + "_" \
-                                           + ts_range_str )
-
-            rw.writeTSFParamsFile( mellinParamsOutputFilename, \
-                                   fitParams_avg, fitParams_err )
+                # Average over bins
+                    
+                threep_curve_avg = np.average( threep_curve, axis=0 )
+                threep_curve_err = fncs.calcError( threep_curve, binNum_glob )
             
-            curveOutputFilename \
-                = output_template.replace( "*", \
-                                           moment_str + "_" \
-                                           + flav_str[ iflav ] \
-                                           + "_twoStateFit_curve_" \
-                                           + tsf_threep_range_str + "_" \
-                                           + ts_range_str )
-            rw.writeAvgDataFile_wX( curveOutputFilename, \
-                                    ts_mellin, \
-                                    mellin_curve_const_ti_avg, \
-                                    mellin_curve_const_ti_err )
+                mellin_curve_const_ts_avg = np.average( mellin_curve_const_ts, \
+                                                        axis=0 )
+                mellin_curve_const_ts_err = fncs.calcError( mellin_curve_const_ts, \
+                                                            binNum_glob )
+                
+                mellin_curve_const_ti_avg = np.average( mellin_curve_const_ti, \
+                                                        axis=0 )
+                mellin_curve_const_ti_err = fncs.calcError( mellin_curve_const_ti, \
+                                                            binNum_glob )
+                
+                fitParams_avg = np.average( fitParams, axis=0 )
+                fitParams_err = fncs.calcError( fitParams, binNum_glob )
+                
+                chiSq_avg = np.average( chiSq, axis=0 )
+                chiSq_err = fncs.calcError( chiSq, binNum_glob )
+                
+                mellin_avg = np.average( mellin )
+                mellin_err = fncs.calcError( mellin, binNum_glob )
+    
+                # Write output file
 
-            for ts in range( tsinkNum ):
-            
-                threep_curveOutputFilename \
+                tsf_threep_range_str = twopFit_str + ".3n" + str( neglect )
+
+                mellinOutputFilename \
                     = output_template.replace( "*", \
-                                               "threep_" \
+                                               moment_str + "_" \
                                                + flav_str[ iflav ] \
-                                               + "_twoStateFit_curve_tsink" \
-                                               + str( tsink[ ts ] ) + "_" \
+                                               + "_twoStateFit_" \
                                                + tsf_threep_range_str + "_" \
                                                + ts_range_str )
-                rw.writeAvgDataFile_wX( threep_curveOutputFilename, \
-                                        ti_threep[ ts ], \
-                                        threep_curve_avg[ ts ], \
-                                        threep_curve_err[ ts ] )
-                    
+                
+                rw.writeFitDataFile( mellinOutputFilename, \
+                                     mellin_avg, mellin_err, 0, 0 )
+                
+                chiSqOutputFilename \
+                    = output_template.replace( "*", \
+                                               moment_str + "_" \
+                                               + flav_str[ iflav ] \
+                                               + "_twoStateFit_threep_chiSq_" \
+                                               + tsf_threep_range_str + "_" \
+                                               + ts_range_str )
+        
+                rw.writeFitDataFile( chiSqOutputFilename, \
+                                     chiSq_avg, chiSq_err, 0, 0 )
+                
+                mellinParamsOutputFilename \
+                    = output_template.replace( "*", \
+                                               moment_str + "_" \
+                                               + flav_str[ iflav ] \
+                                               + "_twoStateFitParams_" \
+                                               + tsf_threep_range_str + "_" \
+                                               + ts_range_str )
+
+                rw.writeTSFParamsFile( mellinParamsOutputFilename, \
+                                       fitParams_avg, fitParams_err )
+            
                 curveOutputFilename \
                     = output_template.replace( "*", \
                                                moment_str + "_" \
                                                + flav_str[ iflav ] \
-                                               + "_twoStateFit_curve_tsink" \
-                                               + str( tsink[ ts ] ) + "_" \
+                                               + "_twoStateFit_curve_" \
                                                + tsf_threep_range_str + "_" \
                                                + ts_range_str )
                 rw.writeAvgDataFile_wX( curveOutputFilename, \
-                                        ti_mellin[ ts ], \
-                                        mellin_curve_const_ts_avg[ ts ], \
-                                        mellin_curve_const_ts_err[ ts ] )
+                                        ts_mellin, \
+                                        mellin_curve_const_ti_avg, \
+                                        mellin_curve_const_ti_err )
+                
+                for ts in range( tsinkNum ):
             
-            # End loop over tsink
-        # End loop over number of neglected three-point functions
-    # End loop over flavors
-# End if two-state fit
+                    threep_curveOutputFilename \
+                        = output_template.replace( "*", \
+                                                   "threep_" \
+                                                   + flav_str[ iflav ] \
+                                                   + "_twoStateFit_curve_tsink" \
+                                                   + str( tsink[ ts ] ) + "_" \
+                                                   + tsf_threep_range_str + "_" \
+                                                   + ts_range_str )
+                    rw.writeAvgDataFile_wX( threep_curveOutputFilename, \
+                                            ti_threep[ ts ], \
+                                            threep_curve_avg[ ts ], \
+                                            threep_curve_err[ ts ] )
+                    
+                    curveOutputFilename \
+                        = output_template.replace( "*", \
+                                                   moment_str + "_" \
+                                                   + flav_str[ iflav ] \
+                                                   + "_twoStateFit_curve_tsink" \
+                                                   + str( tsink[ ts ] ) + "_" \
+                                                   + tsf_threep_range_str + "_" \
+                                                   + ts_range_str )
+                    rw.writeAvgDataFile_wX( curveOutputFilename, \
+                                            ti_mellin[ ts ], \
+                                            mellin_curve_const_ts_avg[ ts ], \
+                                            mellin_curve_const_ts_err[ ts ] )
+            
+                # End loop over tsink
+            # End loop over number of neglected three-point functions
+        # End loop over flavors
+    # End if two-state fit
+# End if first process
