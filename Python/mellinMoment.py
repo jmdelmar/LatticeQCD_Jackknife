@@ -21,7 +21,8 @@ moment_list = [ 1, 2, 3 ]
 # Parse input arguments #
 #########################
 
-parser = argp.ArgumentParser( description="Calculate quark momentum fraction <x>" )
+parser = argp.ArgumentParser( description="Calculate a mellin moment up to " \
+                              + " the third order" )
 
 parser.add_argument( "threep_dir", action='store', type=str )
 
@@ -60,6 +61,9 @@ parser.add_argument( "-sn", "--source_number", action='store', type=int, \
                      help="Number of sources correlators were averaged " \
                      + "over", default=16 )
 
+parser.add_argument( "-tsf", "--two_state_fit", action='store_true', \
+                     help="Performs the two-state fit if supplied" )
+
 parser.add_argument( "--tsf_fit_start", action='store', type=int, \
                      help="If given, will perform two-state fit on effective " \
                      + "mass starting at given t value, otherwise, will " \
@@ -69,9 +73,6 @@ parser.add_argument( "--plat_fit_start", action='store', type=int, \
                      help="If given, will perform plateau fit on effective " \
                      + "mass starting at given t value, otherwise, will " \
                      + "use lowest t value which satisfies condition." )
-
-parser.add_argument( "-tsf", "--two_state_fit", action='store_true', \
-                     help="Performs the two-state fit if supplied" )
 
 parser.add_argument( "-f", "--data_format", action='store', \
                      help="Data format. Should be 'gpu' or 'cpu'.", \
@@ -541,6 +542,7 @@ for imom in range( momBoostNum ):
 # Calculate moment #
 ####################
 
+
 if rank == 0:
         
     mellin_p = np.zeros( ( momBoostNum, flavNum, tsinkNum, \
@@ -561,7 +563,7 @@ if rank == 0:
     # Loop over momenta
     for imom in range( momBoostNum ):
 
-        # Fit the boosted functions
+        # Fit the two-point functions
 
         if momSq > 0: # Boosted two-point functions
             
@@ -674,10 +676,11 @@ if rank == 0:
         for ts, its in zip( tsink, range( tsinkNum ) ) :
             
             mellin_avgBeforeRatio[iflav, \
-                                  its]=Z*pq.calcAvgX_twopFit( threep_jk[ iflav, \
-                                                                         its ], \
-                                                              ts,E0_mEff,momSq,L, \
-                                                              c0, E0 )
+                                  its]=Z*pq.calcAvgX_twopFit(threep_jk[iflav, \
+                                                                       its], \
+                                                             ts,E0_mEff,\
+                                                             momSq,L, \
+                                                             c0, E0 )
 
     # Average over bins
     # mellin_avg[ flav, ts, t ]
