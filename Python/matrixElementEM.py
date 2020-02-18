@@ -10,7 +10,7 @@ import physQuants as pq
 import lqcdjk_fitting as fit
 from mpi4py import MPI
 
-#np.set_printoptions(threshold=sys.maxsize)
+np.set_printoptions(threshold=sys.maxsize)
 
 L = 32.0
 
@@ -66,6 +66,12 @@ parser.add_argument( "--tsf_fit_start", action='store', type=int, \
                      help="If given, will perform two-state fit on effective " \
                      + "mass starting at given t value, otherwise, will " \
                      + "use lowest t value which satisfies condition." )
+
+parser.add_argument( "--twop_fit_start", action='store', type=int, \
+                     help="If given, will perform one- or two-state fit on " \
+                     + "two-point functions starting at given t value, " \
+                     + "otherwise, will use lowest t value which satisfies " \
+                     + "condition." )
 
 parser.add_argument( "--plat_fit_start", action='store', type=int, \
                      help="If given, will perform plateau fit on effective " \
@@ -237,12 +243,6 @@ momList = rw.readMomentaList( twopDir, twop_template, \
                               configList_loc[ 0 ], particle, \
                               srcNum, momSq, dataFormat, comm )
 
-# Multiply momList by -1 because three-point functions are named
-# opposite their sign (sign of phase negative because adjoint taken of
-# sequential propagator)
-
-#momList = -1 * momList
-
 momBoostNum = len( momList )
 
 ############################
@@ -253,8 +253,7 @@ momBoostNum = len( momList )
 # twop[ c, t ]
 
 twop = rw.readTwopFile_zeroQ( twopDir, configList_loc, configNum, \
-                              twop_template, srcNum, 0, particle, \
-                              dataFormat, comm )
+                              twop_template, srcNum, 0, dataFormat, comm )
 
 # Time dimension length
 
@@ -314,7 +313,7 @@ if rank == 0:
     mEff_avg = np.average( mEff, axis=0 )
     mEff_err = fncs.calcError( mEff, binNum_glob )
 
-    avgOutputFilename = output_template.replace( "*", "mEff_avg" )
+    avgOutputFilename = rw.makeFilename( output_template, "mEff_avg" )
     rw.writeAvgDataFile( avgOutputFilename, mEff_avg, mEff_err )
 
     # Fit the effective mass and two-point functions 
@@ -355,10 +354,9 @@ if rank == 0:
                                              rangeStart, \
                                              rangeEnd )
                                 
-        mEff_curveOutputFilename \
-            = output_template.replace( "*", \
-                                       "mEff_twoStateFit_curve_" \
-                                       + twopFit_str )
+        mEff_curveOutputFilename = rw.makeFilename( output_template, \
+                                                    "mEff_2sf_curve_{}", \
+                                                    twopFit_str )
 
         c_avg = np.average( c, axis=0 )
         c_err = fncs.calcError( c, binNum_glob )
@@ -369,17 +367,15 @@ if rank == 0:
         E1_mEff_avg = np.average( E1_mEff, axis=0 )
         E1_mEff_err = fncs.calcError( E1_mEff, binNum_glob )
 
-        mEff_tsf_outputFilename \
-            = output_template.replace( "*", \
-                                       "mEff_twoStateFit_" \
-                                       + twopFit_str )
+        mEff_tsf_outputFilename = rw.makeFilename( output_template, \
+                                                   "mEff_twoStateFit_{}", \
+                                                   twopFit_str )
         rw.writeFitDataFile( mEff_tsf_outputFilename, E0_mEff_avg, \
                              E0_mEff_err, rangeStart, rangeEnd )
 
-        chiSqOutputFilename \
-            = output_template.replace( "*", \
-                                       "mEff_twoStateFit_chiSq_" \
-                                       + twopFit_str )
+        chiSqOutputFilename = rw.makeFilename( output_template, \
+                                               "mEff_twoStateFit_chiSq_{}", \
+                                               twopFit_str )
 
     else: # One-state fit
 
@@ -391,16 +387,14 @@ if rank == 0:
         curve, t_s = fit.calcTwopOneStateCurve( c0, E0, T, \
                                                 rangeStart, rangeEnd )
 
-        curveOutputFilename \
-            = output_template.replace( "*", \
-                                       "twop_oneStateFit_curve_" \
-                                       + twopFit_str )
-        chiSqOutputFilename \
-            = output_template.replace( "*", \
-                                       "twop_oneStateFit_chiSq_" \
-                                       + twopFit_str )
+        curveOutputFilename = rw.makeFilename( output_template, \
+                                               "twop_1sf_curve_{}", \
+                                               twopFit_str )
+        chiSqOutputFilename = rw.makeFilename( output_template, \
+                                               "twop_1sf_chiSq_{}", \
+                                               twopFit_str )
 
-    # End if not two-state fit
+    # End if one-state fit
 
     #curve_avg = np.average( curve, axis=0 )
     #curve_err = fncs.calcError( curve, binNum_glob )
@@ -425,7 +419,9 @@ if rank == 0:
     mEff_range_str = "2s" + str( mEff_rangeStart ) \
                      + ".2e" + str( rangeEnd )
 
-    mEff_outputFilename = output_template.replace( "*", "mEff_fit_" + mEff_range_str )
+    mEff_outputFilename = rw.makeFilename( output_template, \
+                                           "mEff_fit_{}", \
+                                           mEff_range_str )
     rw.writeFitDataFile( mEff_outputFilename, mEff_fit_avg, \
                          mEff_fit_err, mEff_rangeStart, rangeEnd )
 
@@ -439,8 +435,7 @@ comm.Barrier()
 if momSq > 0:
 
     twop_boost = rw.readTwopFile_zeroQ( twopDir, configList_loc, configNum, \
-                                        twop_template, srcNum, momSq, particle, \
-                                        dataFormat, comm )
+                                        twop_template, srcNum, momSq, dataFormat, comm )
 
 else:
 
@@ -588,10 +583,18 @@ if rank == 0:
 
             twop_to_fit = twop_fold
 
+        if args.twop_fit_start: # fit starts at given t
+
+            twop_rangeStart = args.twop_fit_start
+
+        else: # fit range starts at same t as was used for mEff
+
+            twop_rangeStart = rangeStart
+
         if tsf:
 
             fitParams_twop,chiSq=fit.twoStateFit_twop(twop_to_fit, \
-                                                      rangeStart, \
+                                                      twop_rangeStart, \
                                                       rangeEnd, T )
             
             c0_p[ imom ] = fitParams_twop[ :, 0 ]
@@ -602,12 +605,14 @@ if rank == 0:
         else:
 
             fitParams_twop,chiSq=fit.oneStateFit_twop(twop_to_fit, \
-                                                      rangeStart, \
+                                                      twop_rangeStart, \
                                                       rangeEnd, T )
 
             c0_p[ imom ] = fitParams_twop[ :, 0 ]
             E0_p[ imom ] = fitParams_twop[ :, 1 ]
 
+        twopFit_str = "2s" + str( twop_rangeStart ) \
+                      + ".2e" + str( rangeEnd )
         # Loop over flavor
         for iflav in range( flavNum ):
             # Loop over tsink
@@ -621,6 +626,9 @@ if rank == 0:
                                                             ts, c0_p[ imom ], \
                                                             E0_p[ imom ] )
 
+                                                            #c1_p[ imom ], \
+                                                            #E1_p[ imom ] )
+                
             # End loop over tsink
         # End loop over flavor
     # End loop over momenta
@@ -636,7 +644,9 @@ if rank == 0:
         twop_boost_fold = np.average( twop_boost_fold_p, axis=0 )
 
     c0 = np.average( c0_p, axis=0 )
+    c1 = np.average( c1_p, axis=0 )
     E0 = np.average( E0_p, axis=0 )
+    E1 = np.average( E1_p, axis=0 )
     
     # Calculate moment from averaged twop and threep
 
@@ -648,8 +658,9 @@ if rank == 0:
             ratio_avgBeforeRatio[iflav, \
                                  its]=Zv*pq.calcMatrixElemEM_twopFit(threep_jk[iflav, \
                                                                                its], \
-                                                                     ts, c0, \
-                                                                     E0 )
+                                                                     ts, c0, E0 ) 
+
+            # c1, \E1 )
 
     # Average over bins
     # ratio_avg[ flav, ts, t ]
@@ -676,7 +687,7 @@ if rank == 0:
 
     # Write twop output file
 
-    twop_outFilename = output_template.replace( "*", "twop" )
+    twop_outFilename = rw.makeFilename( output_template, "twop" )
 
     rw.writeAvgDataFile( twop_outFilename, \
                          twop_avg, \
@@ -689,31 +700,27 @@ if rank == 0:
             
             # Write threep output files
     
-            threep_outFilename = output_template.replace( "*", "threep_" \
-                                                        + flav_str[ iflav ] \
-                                                        + "_tsink" \
-                                                        + str( ts ) )
-
+            threep_outFilename = rw.makeFilename( output_template, \
+                                                  "threep_{}_tsink{}", \
+                                                  flav_str[ iflav ], ts )
             rw.writeAvgDataFile( threep_outFilename, \
                                  threep_avg[ iflav, its ], \
                                  threep_err[ iflav, its ] )
 
             # Write GE(0) output files
     
-            ratio_outFilename = output_template.replace( "*", "matrixElemEM_" \
-                                                        + flav_str[ iflav ] \
-                                                        + "_tsink" \
-                                                        + str( ts ) )
+            ratio_outFilename = rw.makeFilename( output_template, \
+                                                 "matrixElemEM_{}_tsink{}_{}", \
+                                                 flav_str[ iflav ], ts, \
+                                                 twopFit_str )
 
             rw.writeAvgDataFile( ratio_outFilename, ratio_avg[ iflav, its ], \
                                  ratio_err[ iflav, its ] )
 
-            ratio_outFilename = output_template.replace( "*", "matrixElemEM_" \
-                                                         + flav_str[ iflav ] \
-                                                         + "_tsink" \
-                                                         + str( ts ) \
-                                                         + "_avgBeforeRatio" )
-            
+            ratio_outFilename \
+                = rw.makeFilename( output_template, \
+                                   "matrixElemEM_{}_tsink{}_avgBeforeRatio_{}", \
+                                   flav_str[ iflav ], ts, twopFit_str )
             rw.writeAvgDataFile( ratio_outFilename, \
                                  ratio_avgBeforeRatio_avg[ iflav, its ], \
                                  ratio_avgBeforeRatio_err[ iflav, its ] )
@@ -748,18 +755,11 @@ if rank == 0:
                 
                 # Write output files
 
-                ratio_fit_outFilename = ""
-
-                ratio_fit_outFilename=output_template.replace("*", \
-                                                             "matrixElemEM_" \
-                                                             + flav_str[iflav]\
-                                                             + "_fit_" \
-                                                             "tsink" \
-                                                             + str( ts ) \
-                                                             + "_" \
-                                                             + str(fitStart[irange]) \
-                                                             + "_" \
-                                                             + str(fitEnd[irange]))
+                ratio_fit_outFilename \
+                    = rw.makeFilename( output_template, \
+                                       "matrixElemEM_{}_fit_tsink{}_{}_{}", \
+                                       flav_str[iflav], ts, \
+                                       fitStart[irange], fitEnd[irange] )
 
                 rw.writeFitDataFile( ratio_fit_outFilename, \
                                      ratio_fit_avg, ratio_fit_err, \

@@ -366,6 +366,11 @@ def getHDF5File_wNames( configDir, configList, fn_template, \
     return dataset, datasetName
 
 
+def makeFilename( genTemplate, specTemplate, *args ):
+
+    return genTemplate.replace( "*", specTemplate.format( *args ) )
+
+
 def readMomentaList( twopDir, twop_template, config, particle, \
                      srcNum, momSq, dataFormat, comm ):
 
@@ -395,7 +400,7 @@ def readMomentaList( twopDir, twop_template, config, particle, \
     return momList
 
 def readTwopFile_zeroQ( twopDir, configList, configNum, twop_template, \
-                        srcNum, momSq, particle, dataFormat, comm ):
+                        srcNum, momSq, dataFormat, comm ):
 
     t0 = time()
 
@@ -520,26 +525,25 @@ def getMellinMomentThreep( threepDir, configList, configNum, threep_tokens, \
                            srcNum, ts, p, particle, dataFormat, moment, \
                            L, T, comm, **kwargs ):
 
-    # Get the real part of gxDx, gyDy, gzDz, and gtDt
-    # three-point functions at zero-momentum
+    # Get the relevant three-point functions 
+    # to calcualte mellin moment of order 1-3 at zero-momentum
 
     # threepDir: Head directory which contains sub-directories
     # configList: List of sub-directory names
-    # threep_template: Filename template
+    # configNum: Number of total configurations
+    # threep_tokes: Array of filename tokens;
+    #               varies depending on data format and particle
+    # srcNum: Number of sources
     # ts: Tsink
     # p: Which final momentum to get
     # particle: Which particle to get
     # dataFormat: Which format the data files to be read are in
     # moment: Which mellin moment to get
-    # dsetname (kwarg, optional): List of datasets to read. Overrides keyword
-
-    if particle == "pion":
-
-        flavNum = 1
-
-    else:
-
-        flavNum = 2
+    # L: Length of lattice space dimensions
+    # T: Length of lattice time dimension
+    # comm: MPI communicator
+    # dsetname (optional kwarg): List of datasets to read. 
+    #                            Overrides keyword
 
     threeps = readMellinThreepFile( threepDir, configList, \
                                     threep_tokens, srcNum, ts, p, \
@@ -567,7 +571,7 @@ def getMellinMomentThreep( threepDir, configList, configNum, threep_tokens, \
                               + threep_gxDx \
                               + threep_gyDy \
                               + threep_gzDz )
-    
+
         if particle == "kaon":
 
             threep_s_loc = threep_s_gtDt - \
@@ -597,7 +601,22 @@ def getMellinMomentThreep( threepDir, configList, configNum, threep_tokens, \
             if p[ ip ] * p[ ( ip + 1 ) % 3 ] != 0:
 
                 nonzeroTerms += 1.0
+        """
+        if comm.Get_rank() == 0:
 
+            print(nonzeroTerms)
+            print(p[0],p[1])
+            print(threep_g0DxDy)
+            print(p[0]*p[1])
+
+            print(p[0],p[2])
+            print(threep_g0DxDz)
+            print(p[0]*p[2])
+
+            print(p[1],p[2])
+            print(threep_g0DyDz)
+            print(p[1]*p[2])
+        """
         # CJL: I don't do this, but am keeping it in case I need to 
         #      Average over -2 * threep_g0DjDk / ( pj * pk )
         # threep_loc = -2.0 / nonzeroTerms * ( L / 2.0 / np.pi ) ** 2 \
@@ -658,7 +677,8 @@ def getMellinMomentThreep( threepDir, configList, configNum, threep_tokens, \
 
         mpi_fncs.mpiPrintError( error, comm )
 
-    threep = np.zeros( ( flavNum, configNum, T ), order='c', dtype=float )
+    threep = np.zeros( ( 1 if particle == "pion" else 2, configNum, T ), \
+                       order='c', dtype=float )
 
     comm.Allgather( threep_loc, threep[ 0 ] )
 
@@ -689,7 +709,7 @@ def readMellinThreepFile( threepDir, configList, threep_tokens, srcNum, \
                                                       ts, threep_tokens[ 1 ], \
                                                       p[ 0 ], p[ 1 ], p[ 2 ] )
 
-    else:
+    else: # Particle is meson
 
         threep_template = threep_tokens[0]
 
@@ -722,18 +742,24 @@ def readMellinThreepFile( threepDir, configList, threep_tokens, srcNum, \
 
             if moment == 1:
 
-                threeps = readMesonAvgXFile_cpu( threepDir, threep_template, configList, \
-                                       particle, ts, srcNum )
+                threeps = readMesonAvgXFile_cpu( threepDir, \
+                                                 threep_template, \
+                                                 configList, \
+                                                 particle, ts, srcNum )
 
             elif moment == 2:
 
-                threeps = readMesonAvgX2File_cpu( threepDir, threep_template, configList, \
-                                        particle, ts, srcNum )
-
+                threeps = readMesonAvgX2File_cpu( threepDir, \
+                                                  threep_template, \
+                                                  configList, \
+                                                  particle, ts, srcNum )
+                
             elif moment == 3:
 
-                threeps = readMesonAvgX3File_cpu( threepDir, threep_template, configList, \
-                                        particle, ts, srcNum )
+                threeps = readMesonAvgX3File_cpu( threepDir, \
+                                                  threep_template, \
+                                                  configList, \
+                                                  particle, ts, srcNum )
 
             else:
                 
@@ -744,7 +770,8 @@ def readMellinThreepFile( threepDir, configList, threep_tokens, srcNum, \
 
             if moment == 1:
 
-                threeps = readMesonAvgXFile_gpu( threepDir, threep_template, \
+                threeps = readMesonAvgXFile_gpu( threepDir, \
+                                                 threep_template, \
                                                  configList, particle, ts)
 
             else:
@@ -772,36 +799,31 @@ def readMesonAvgXFile_cpu( threepDir, threep_template, configList, \
 
     dsetname_pre = "/thrp/ave{}/dt{}/up/".format( srcNum, ts )
 
-    dsetname_insertion = [ "=der:g0D0:sym=", \
-                           "=der:gxDx:sym=", \
-                           "=der:gyDy:sym=", \
-                           "=der:gzDz:sym=" ]
-                
     dsetname_post = "/msq0000/arr"
             
     threep_gtDt = getDatasets( threepDir, \
                                configList, \
                                filename, \
                                dsetname=[ dsetname_pre \
-                                          + dsetname_insertion[ 0 ] \
+                                          + "=der:g0D0:sym=" \
                                           + dsetname_post])[:,0,0,:,0].real
     threep_gxDx = getDatasets( threepDir, \
                                configList, \
                                filename, \
-                               dsetname=[dsetname_pre\
-                                         +dsetname_insertion[1]\
+                               dsetname=[dsetname_pre \
+                                         +"=der:gxDx:sym=" \
                                          +dsetname_post])[:,0,0,:,0].real
     threep_gyDy = getDatasets( threepDir, \
                                configList, \
                                filename, \
-                               dsetname=[dsetname_pre\
-                                         +dsetname_insertion[2]\
+                               dsetname=[dsetname_pre \
+                                         +"=der:gyDy:sym=" \
                                          +dsetname_post])[:,0,0,:,0].real
     threep_gzDz = getDatasets( threepDir, \
                                configList, \
                                filename, \
-                               dsetname=[dsetname_pre\
-                                         +dsetname_insertion[3]\
+                               dsetname=[dsetname_pre \
+                                         +"=der:gzDz:sym=" \
                                          +dsetname_post])[:,0,0,:,0].real
                 
     if particle == "kaon":
@@ -814,26 +836,26 @@ def readMesonAvgXFile_cpu( threepDir, threep_template, configList, \
         threep_s_gtDt=getDatasets(threepDir, \
                                   configList, \
                                   filename_s, \
-                                  dsetname=[dsetname_s_pre\
-                                            +dsetname_insertion[0]\
+                                  dsetname=[dsetname_s_pre \
+                                            +"=der:g0D0:sym=" \
                                             +dsetname_post])[:,0,0,:,0].real
         threep_s_gxDx=getDatasets(threepDir, \
                                   configList, \
                                   filename_s, \
-                                  dsetname=[dsetname_s_pre\
-                                            +dsetname_insertion[1]\
+                                  dsetname=[dsetname_s_pre \
+                                            +"=der:gxDx:sym=" \
                                             +dsetname_post])[:,0,0,:,0].real
         threep_s_gyDy=getDatasets(threepDir, \
                                   configList, \
                                   filename_s, \
-                                  dsetname=[dsetname_s_pre\
-                                            +dsetname_insertion[2]\
+                                  dsetname=[dsetname_s_pre \
+                                            +"=der:gyDy:sym=" \
                                             +dsetname_post])[:,0,0,:,0].real
         threep_s_gzDz=getDatasets(threepDir, \
                                   configList, \
                                   filename_s, \
-                                  dsetname=[dsetname_s_pre\
-                                            +dsetname_insertion[3]\
+                                  dsetname=[dsetname_s_pre \
+                                            +"=der:gzDz:sym=" \
                                             +dsetname_post])[:,0,0,:,0].real
 
         return np.array( [ threep_gxDx, threep_gyDy, \
@@ -1039,10 +1061,6 @@ def readMesonAvgX2File_cpu( threepDir, threep_template, configList, \
 
     dsetname_pre = "/thrp/ave{}/dt{}/up/".format( srcNum, ts )
 
-    dsetname_insertion = [ "der2:g0DxDy", \
-                           "der2:g0DxDz", \
-                           "der2:g0DyDz" ]
-    
     dsetname_post = "/msq0000/arr"
 
     try:
@@ -1051,8 +1069,9 @@ def readMesonAvgX2File_cpu( threepDir, threep_template, configList, \
                                      configList, \
                                      filename, \
                                      dsetname=[ dsetname_pre \
-                                                + dsetname_insertion[ 0 ] \
-                                                + dsetname_post])[:,0,0,:,0].real
+                                                + "der2:g0DxDy" \
+                                                + dsetname_post])[:,0,0,\
+                                                                  :,0].real
 
     except lqcdjk_DataSetException as dataSetException:
 
@@ -1062,22 +1081,25 @@ def readMesonAvgX2File_cpu( threepDir, threep_template, configList, \
                                      configList, \
                                      filename, \
                                      dsetname=[ dsetname_pre \
-                                                + dsetname_insertion[ 0 ] \
-                                                + dsetname_post])[:,0,0,:,0].real
+                                                + "der2:g0DxDy" \
+                                                + dsetname_post])[:,0,0,\
+                                                                  :,0].real
 
     threep_g0DxDz = getDatasets( threepDir, \
                                  configList, \
                                  filename, \
                                  dsetname=[ dsetname_pre \
-                                            + dsetname_insertion[ 1 ] \
-                                            + dsetname_post])[:,0,0,:,0].real
+                                            + "der2:g0DxDz" \
+                                            + dsetname_post])[:,0,0,\
+                                                              :,0].real
 
     threep_g0DyDz= getDatasets( threepDir, \
                                 configList, \
                                 filename, \
                                 dsetname=[ dsetname_pre \
-                                           + dsetname_insertion[ 2 ] \
-                                           + dsetname_post ] )[:,0,0,:,0].real
+                                           + "der2:g0DyDz" \
+                                           + dsetname_post ] )[:,0,0,\
+                                                               :,0].real
 
     if particle == "kaon":
             
@@ -1095,20 +1117,23 @@ def readMesonAvgX2File_cpu( threepDir, threep_template, configList, \
                                        configList, \
                                        filename_s, \
                                        dsetname=[dsetname_s_pre \
-                                                 +dsetname_insertion[0] \
-                                                 +dsetname_post])[:,0,0,:,0].real
+                                                 +"der2:g0DxDy" \
+                                                 +dsetname_post])[:,0,0,\
+                                                                  :,0].real
         threep_s_g0DxDz = getDatasets( threepDir, \
                                        configList, \
                                        filename_s, \
                                        dsetname=[dsetname_s_pre \
-                                                 +dsetname_insertion[1] \
-                                                 +dsetname_post])[:,0,0,:,0].real
+                                                 +"der2:g0DxDz" \
+                                                 +dsetname_post])[:,0,0,\
+                                                                  :,0].real
         threep_s_g0DyDz = getDatasets( threepDir, \
                                        configList, \
                                        filename_s, \
                                        dsetname=[dsetname_s_pre \
-                                                 +dsetname_insertion[2] \
-                                                 +dsetname_post])[:,0,0,:,0].real
+                                                 +"der2:g0DyDz" \
+                                                 +dsetname_post])[:,0,0,\
+                                                                  :,0].real
 
         return np.array( [ threep_g0DxDy, threep_g0DxDz, \
                            threep_g0DyDz, \
@@ -1125,7 +1150,6 @@ def readMesonAvgX2File_cpu( threepDir, threep_template, configList, \
         mpi_fncs.mpiPrintErr( "Error (readWrite.readMesonAvgX2File_cpu): " \
                               + "Particle " + particle + " not supported.", \
                               comm )
-
 
 
 def readMesonAvgX3File_cpu( threepDir, threep_template, configList, \
@@ -1151,7 +1175,7 @@ def readMesonAvgX3File_cpu( threepDir, threep_template, configList, \
         threep = getDatasets( threepDir, \
                               configList, \
                               filename, \
-                              dsetname=[dsetname])[:,0,0,:,0].real
+                              dsetname=[dsetname])[:,0,0,:,0].imag
 
     if particle == "kaon":
             
@@ -1170,7 +1194,7 @@ def readMesonAvgX3File_cpu( threepDir, threep_template, configList, \
         threep_s = getDatasets( threepDir, \
                                 configList, \
                                 filename_s, \
-                                dsetname=[dsetname_s])[:,0,0,:,0].real
+                                dsetname=[dsetname_s])[:,0,0,:,0].imag
                 
         return np.array( [ threep, threep_s ] )
 
