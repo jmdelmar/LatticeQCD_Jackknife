@@ -1,3 +1,4 @@
+import sys
 import time
 import numpy as np
 import argparse as argp
@@ -8,6 +9,8 @@ import readWrite as rw
 import physQuants as pq
 import lqcdjk_fitting as fit
 from mpi4py import MPI
+
+np.set_printoptions(threshold=sys.maxsize)
 
 L = 32.0
 
@@ -69,6 +72,12 @@ parser.add_argument( "--tsf_fit_start", action='store', type=int, \
                      + "mass starting at given t value, otherwise, will " \
                      + "use lowest t value which satisfies condition." )
 
+parser.add_argument( "--twop_fit_start", action='store', type=int, \
+                     help="If given, will perform one- or two-state fit on " \
+                     + "two-point functions starting at given t value, " \
+                     + "otherwise, will use lowest t value which satisfies " \
+                     + "condition." )
+
 parser.add_argument( "--plat_fit_start", action='store', type=int, \
                      help="If given, will perform plateau fit on effective " \
                      + "mass starting at given t value, otherwise, will " \
@@ -122,6 +131,7 @@ binSize = args.binSize
 output_template = args.output_template
 
 tsf_fitStart = args.tsf_fit_start
+twop_fitStart = args.twop_fit_start
 plat_fitStart = args.plat_fit_start
 
 if tsf_fitStart and plat_fitStart:
@@ -253,7 +263,7 @@ momBoostNum = len( momList )
 # twop[ c, t ]
 
 twop = rw.readTwopFile_zeroQ( twopDir, configList_loc, configNum, \
-                              twop_template, srcNum, 0, particle, dataFormat, \
+                              twop_template, srcNum, 0, dataFormat, \
                               comm )
 
 # Time dimension length
@@ -314,7 +324,7 @@ if rank == 0:
     mEff_avg = np.average( mEff, axis=0 )
     mEff_err = fncs.calcError( mEff, binNum_glob )
 
-    avgOutputFilename = output_template.replace( "*", "mEff_avg" )
+    avgOutputFilename = rw.makeFilename( output_template, "mEff_avg" )
     rw.writeAvgDataFile( avgOutputFilename, mEff_avg, mEff_err )
 
     # Fit the effective mass and two-point functions 
@@ -338,7 +348,7 @@ if rank == 0:
     rangeStart = fitResults[ 3 ]
     mEff_rangeStart = fitResults[ 4 ]
 
-    twopFit_str = "2s" + str( rangeStart ) \
+    mEffFit_str = "2s" + str( rangeStart ) \
                   + ".2e" + str( rangeEnd )
 
     if tsf:
@@ -355,11 +365,10 @@ if rank == 0:
                                              rangeStart, \
                                              rangeEnd )
 
-        curveOutputFilename \
-            = output_template.replace( "*", \
-                                       "mEff_twoStateFit_curve_" \
-                                       + twopFit_str )
-
+        curveOutputFilename = rw.makeFilename( output_template, \
+                                               "mEff_2sf_curve_{}", \
+                                               mEffFit_str )
+        
         c_avg = np.average( c, axis=0 )
         c_err = fncs.calcError( c, binNum_glob )
 
@@ -369,17 +378,15 @@ if rank == 0:
         E1_mEff_avg = np.average( E1_mEff, axis=0 )
         E1_mEff_err = fncs.calcError( E1_mEff, binNum_glob )
 
-        mEff_tsf_outputFilename \
-            = output_template.replace( "*", \
-                                       "mEff_twoStateFit_" \
-                                       + twopFit_str )
-        rw.writeFitDataFile( mEff_tsf_outputFilename, E0_mEff_avg, \
+        mEff_tsf_outputFilename = rw.makeFilename( output_template, \
+                                                   "mEff_2sf_{}", \
+                                                   mEffFit_str )
+        rw.writeFitDataFile( mEff_tsf_outputFilename, E0_mEff_avg,
                              E0_mEff_err, rangeStart, rangeEnd )
 
-        chiSqOutputFilename \
-            = output_template.replace( "*", \
-                                       "mEff_twoStateFit_chiSq_" \
-                                       + twopFit_str )
+        chiSqOutputFilename = rw.makeFilename( output_template, \
+                                               "mEff_2sf_chiSq_{}", \
+                                               mEffFit_str )
 
     else: # One-state fit
 
@@ -391,16 +398,14 @@ if rank == 0:
         curve, t_s = fit.calcTwopOneStateCurve( c, E0_mEff, T, \
                                                 rangeStart, rangeEnd )
 
-        curveOutputFilename \
-            = output_template.replace( "*", \
-                                       "twop_oneStateFit_curve_" \
-                                       + twopFit_str )
-        chiSqOutputFilename \
-            = output_template.replace( "*", \
-                                       "twop_oneStateFit_chiSq_" \
-                                       + twopFit_str )
+        curveOutputFilename = rw.makeFilename( output_template, \
+                                               "twop_1sf_curve_{}", \
+                                               mEffFit_str )
+        chiSqOutputFilename = rw.makeFilename( output_template, \
+                                               "twop_oneStateFit_chiSq_{}", \
+                                               twopFit_str )
 
-    # End if not two-state fit
+    # End if one-state fit
 
     #curve_avg = np.average( curve, axis=0 )
     #curve_err = fncs.calcError( curve, binNum_glob )
@@ -425,7 +430,9 @@ if rank == 0:
     mEff_range_str = "2s" + str( mEff_rangeStart ) \
                      + ".2e" + str( rangeEnd )
 
-    mEff_outputFilename = output_template.replace( "*", "mEff_fit_" + mEff_range_str )
+    mEff_outputFilename = rw.makeFilename( output_template, \
+                                           "mEff_fit_{}", \
+                                           mEff_range_str )
     rw.writeFitDataFile( mEff_outputFilename, mEff_fit_avg, \
                          mEff_fit_err, mEff_rangeStart, rangeEnd )
 
@@ -439,7 +446,7 @@ comm.Barrier()
 if momSq > 0:
 
     twop_boost = rw.readTwopFile_zeroQ( twopDir, configList_loc, configNum, \
-                                        twop_template, srcNum, momSq, particle, \
+                                        twop_template, srcNum, momSq, \
                                         dataFormat, comm )
 
 else:
@@ -538,6 +545,7 @@ for imom in range( momBoostNum ):
     # End loop over tsink
 # End loop over momenta
 
+
 ####################
 # Calculate moment #
 ####################
@@ -547,8 +555,8 @@ if rank == 0:
         
     mellin_p = np.zeros( ( momBoostNum, flavNum, tsinkNum, \
                            binNum_glob, T ) )
-    mellin_avgBeforeRatio = np.zeros( ( flavNum, tsinkNum, \
-                                        binNum_glob, T ) )
+    #mellin_avgBeforeRatio = np.zeros( ( flavNum, tsinkNum, \
+    #                                    binNum_glob, T ) )
 
     c0_p = np.zeros( ( momBoostNum, binNum_glob ) )
     E0_p = np.zeros( ( momBoostNum, binNum_glob ) )
@@ -573,10 +581,18 @@ if rank == 0:
 
             twop_to_fit = twop_fold
 
+        if args.twop_fit_start: # fit starts at given t
+
+            twop_rangeStart = args.twop_fit_start
+
+        else: # fit range starts at same t as was used for mEff
+
+            twop_rangeStart = rangeStart
+
         if tsf:
 
             fitParams_twop,chiSq=fit.twoStateFit_twop(twop_to_fit, \
-                                                      rangeStart, \
+                                                      twop_rangeStart, \
                                                       rangeEnd, T )
             
             c0_p[ imom ] = fitParams_twop[ :, 0 ]
@@ -587,12 +603,15 @@ if rank == 0:
         else:
 
             fitParams_twop,chiSq=fit.oneStateFit_twop(twop_to_fit, \
-                                                      rangeStart, \
+                                                      twop_rangeStart, \
                                                       rangeEnd, T )
 
             c0_p[ imom ] = fitParams_twop[ :, 0 ]
             E0_p[ imom ] = fitParams_twop[ :, 1 ]
 
+        twopFit_str = "2s" + str( twop_rangeStart ) \
+                      + ".2e" + str( rangeEnd )
+    
         # Loop over flavor
         for iflav in range( flavNum ):
             # Loop over tsink
@@ -606,7 +625,6 @@ if rank == 0:
                                                        ts,E0_mEff,momSq,L, \
                                                        c0_p[ imom ], \
                                                        E0_p[ imom ], moment )
-                
                 """
                 # Average over bins
 
@@ -622,14 +640,15 @@ if rank == 0:
 
                 # Write threep output file for each momentum
     
-                template = "threep_{0}_tsink{1}_{2:+}_{3:+}_{4:+}"
-                template = template.format( flav_str[iflav], \
-                                            ts, \
-                                            momList[imom][0], \
-                                            momList[imom][1], \
-                                            momList[imom][2] )
-                threep_outFilename = output_template.replace( "*", \
-                                                              template )
+                threep_outFilename = rw.makeFilename( output_template, \
+                                                      "{}_threep_{}_tsink{}_" \
+                                                      + "{:+}_{:+}_{:+}", \
+                                                      moment_str, \
+                                                      flav_str[iflav], \
+                                                      ts, \
+                                                      momList[imom][0], \
+                                                      momList[imom][1], \
+                                                      momList[imom][2] )
                 
                 rw.writeAvgDataFile( threep_outFilename, \
                                      threep_p_avg, \
@@ -637,22 +656,53 @@ if rank == 0:
                     
                 # Write moment output file for each momentum
     
-                template = "{0}_{1}_tsink{2}_{3:+}_{4:+}_{5:+}"
-                template = template.format( moment_str, \
-                                            flav_str[iflav], \
-                                            ts, \
-                                            momList[imom][0], \
-                                            momList[imom][1], \
-                                            momList[imom][2] )
-                mellin_outFilename = output_template.replace( "*", \
-                                                              template )
-
+                mellin_outFilename = rw.makeFilename( output_template, \
+                                                      "{0}_{1}_tsink{2}_" \
+                                                      + "{3:+}_{4:+}_{5:+}_{6:}", \
+                                                      moment_str, \
+                                                      flav_str[iflav], \
+                                                      ts, \
+                                                      momList[imom][0], \
+                                                      momList[imom][1], \
+                                                      momList[imom][2], \
+                                                      twopFit_str )
                 rw.writeAvgDataFile( mellin_outFilename, \
                                      mellin_p_avg, \
                                      mellin_p_err )
                 """
             # End loop over tsink
         # End loop over flavor
+        """
+        # Average over bins
+        
+        twop_p_avg = np.average( twop_boost_fold_p[ imom ], axis=-2 )
+        twop_p_err = fncs.calcError( twop_boost_fold_p[ imom ], \
+                                     binNum_glob, axis=-2 )
+
+        # Write twop output file for each momentum
+    
+        twop_outFilename = rw.makeFilename( output_template, \
+                                            "twop_{}_{:+}_{:+}_{:+}", \
+                                            flav_str[iflav], \
+                                            momList[imom][0], \
+                                            momList[imom][1], \
+                                            momList[imom][2] )
+                
+        rw.writeAvgDataFile( twop_outFilename, \
+                             twop_p_avg, \
+                             twop_p_err )
+
+        twop_fit_outFilename = rw.makeFilename( output_template, \
+                                                "twop_fit_{}_{:+}_{:+}_{:+}", \
+                                                flav_str[iflav], \
+                                                momList[imom][0], \
+                                                momList[imom][1], \
+                                                momList[imom][2] )
+        
+        rw.writeAvgDataFile( twop_fit_outFilename, \
+                             twop_fit_p_avg, \
+                             twop_fit_p_err )
+        """
     # End loop over momenta
 
     # Average over momenta
@@ -660,14 +710,14 @@ if rank == 0:
 
     mellin = np.average( mellin_p, axis=0 )
     threep_jk = np.average( threep_p_jk, axis=0 )
-    
+
     if momSq > 0:
 
         twop_boost_fold = np.average( twop_boost_fold_p, axis=0 )
 
     c0 = np.average( c0_p, axis=0 )
     E0 = np.average( E0_p, axis=0 )
-    
+    """
     # Calculate moment from averaged twop and threep
 
     # Loop over flavor
@@ -676,21 +726,21 @@ if rank == 0:
         for ts, its in zip( tsink, range( tsinkNum ) ) :
             
             mellin_avgBeforeRatio[iflav, \
-                                  its]=Z*pq.calcAvgX_twopFit(threep_jk[iflav, \
-                                                                       its], \
-                                                             ts,E0_mEff,\
-                                                             momSq,L, \
-                                                             c0, E0 )
-
+                                  its]=Z*pq.calcMellin_twopFit(threep_jk[iflav, \
+                                                                         its], \
+                                                               ts,E0_mEff,\
+                                                               momSq,L, \
+                                                               c0, E0, moment )
+    """
     # Average over bins
     # mellin_avg[ flav, ts, t ]
 
     mellin_avg = np.average( mellin, axis=-2 )
     mellin_err = fncs.calcError( mellin, binNum_glob, axis=-2 )
 
-    mellin_avgBeforeRatio_avg = np.average( mellin_avgBeforeRatio, axis=-2 )
-    mellin_avgBeforeRatio_err = fncs.calcError( mellin_avgBeforeRatio, \
-                                                binNum_glob, axis=-2 )
+    #mellin_avgBeforeRatio_avg = np.average( mellin_avgBeforeRatio, axis=-2 )
+    #mellin_avgBeforeRatio_err = fncs.calcError( mellin_avgBeforeRatio, \
+    #                                            binNum_glob, axis=-2 )
 
     threep_avg = np.average( threep_jk, axis=-2 )
     threep_err = fncs.calcError( threep_jk, binNum_glob, axis=-2 )
@@ -707,8 +757,7 @@ if rank == 0:
 
     # Write twop output file
     
-    twop_outFilename = output_template.replace( "*", "twop" )
-
+    twop_outFilename = rw.makeFilename( output_template, "twop" )
     rw.writeAvgDataFile( twop_outFilename, \
                          twop_avg, \
                          twop_err )
@@ -720,10 +769,10 @@ if rank == 0:
             
             # Write threep output file
     
-            threep_outFilename = output_template.replace( "*", "threep_" \
-                                                          + flav_str[ iflav ] \
-                                                          + "_tsink" \
-                                                          + str( ts ) )
+            threep_outFilename = rw.makeFilename( output_template, \
+                                                  "{}_threep_{}_tsink{}", \
+                                                  moment_str, \
+                                                  flav_str[ iflav ], ts )
 
             rw.writeAvgDataFile( threep_outFilename, \
                                  threep_avg[ iflav, its ], \
@@ -731,24 +780,23 @@ if rank == 0:
 
             # Write moment output file
 
-            mellin_outFilename = output_template.replace( "*", \
-                                                          moment_str + "_" \
-                                                          + flav_str[ iflav ] \
-                                                          + "_tsink" \
-                                                          + str( ts ) )
+            mellin_outFilename \
+                = rw.makeFilename( output_template, \
+                                   "{}_{}_tsink{}_{}", \
+                                   moment_str, flav_str[ iflav ], \
+                                   ts, twopFit_str )
             rw.writeAvgDataFile( mellin_outFilename, mellin_avg[ iflav, its ], \
                                  mellin_err[ iflav, its ] )
-
-            mellin_outFilename = output_template.replace( "*", \
-                                                          moment_str + "_" \
-                                                          + flav_str[ iflav ] \
-                                                          + "_tsink" \
-                                                          + str( ts ) \
-                                                          + "_avgBeforeRatio" )
+            """
+            mellin_outFilename \
+                = rw.makeFilename( output_template, \
+                                   "{}_{}_tsink{}_avgBeforeRatio_{}", \
+                                   moment_str, flav_str[ iflav ], \
+                                   ts, twopFit_str )
             rw.writeAvgDataFile( mellin_outFilename, \
                                  mellin_avgBeforeRatio_avg[ iflav, its ], \
                                  mellin_avgBeforeRatio_err[ iflav, its ] )
-
+            """
             ###############
             # Fit plateau #
             ###############
@@ -776,16 +824,14 @@ if rank == 0:
                 
                 # Write output files
 
-                template = "{0}_{1}_fit_tsink{2}_{3}_{4}"
-                template = template.format( moment_str, \
-                                            flav_str[iflav], \
-                                            str( ts ), \
-                                            str( rangeStart_plat[irange] ), \
-                                            str( fitEnd_plat[irange] ) )
-
-                mellin_fit_outFilename=output_template.replace( "*", \
-                                                                template )
-
+                mellin_fit_outFilename \
+                    = rw.makeFilename( output_template,\
+                                       "{}_{}_fit_{}_{}_tsink{}_{}", \
+                                       moment_str, \
+                                       flav_str[ iflav ], \
+                                       rangeStart_plat[ irange ], \
+                                       fitEnd_plat[ irange ], \
+                                       ts, twopFit_str )
                 rw.writeFitDataFile( mellin_fit_outFilename, mellin_fit_avg, \
                                      mellin_fit_err, rangeStart_plat[ irange ], \
                                      fitEnd_plat[ irange ] )
@@ -953,48 +999,48 @@ if rank == 0:
     
                 # Write output file
 
-                tsf_threep_range_str = twopFit_str + ".3n" + str( neglect )
+                tsf_threep_range_str = mEffFit_str + ".3n" + str( neglect )
 
                 mellinOutputFilename \
-                    = output_template.replace( "*", \
-                                               moment_str + "_" \
-                                               + flav_str[ iflav ] \
-                                               + "_twoStateFit_" \
-                                               + tsf_threep_range_str + "_" \
-                                               + ts_range_str )
+                    = rw.makeFilename( output_template, \
+                                       "{}_{}_2sf_{}_{}", \
+                                       moment_str, \
+                                       flav_str[ iflav ], \
+                                       tsf_threep_range_str, \
+                                       ts_range_str )
                 
                 rw.writeFitDataFile( mellinOutputFilename, \
                                      mellin_avg, mellin_err, 0, 0 )
                 
                 chiSqOutputFilename \
-                    = output_template.replace( "*", \
-                                               moment_str + "_" \
-                                               + flav_str[ iflav ] \
-                                               + "_twoStateFit_threep_chiSq_" \
-                                               + tsf_threep_range_str + "_" \
-                                               + ts_range_str )
+                    = rw.makeFilename( output_template, \
+                                       "{}_{}_2sf_threep_chiSq_{}_{}", \
+                                       moment_str, \
+                                       flav_str[ iflav ], \
+                                       tsf_threep_range_str, \
+                                       ts_range_str )
         
                 rw.writeFitDataFile( chiSqOutputFilename, \
                                      chiSq_avg, chiSq_err, 0, 0 )
                 
                 mellinParamsOutputFilename \
-                    = output_template.replace( "*", \
-                                               moment_str + "_" \
-                                               + flav_str[ iflav ] \
-                                               + "_twoStateFitParams_" \
-                                               + tsf_threep_range_str + "_" \
-                                               + ts_range_str )
+                    = rw.makeFilename( output_template, \
+                                       "{}_{}_2sf_params_{}_{}", \
+                                       moment_str, \
+                                       flav_str[ iflav ], \
+                                       tsf_threep_range_str, \
+                                       ts_range_str )
 
                 rw.writeTSFParamsFile( mellinParamsOutputFilename, \
                                        fitParams_avg, fitParams_err )
             
                 curveOutputFilename \
-                    = output_template.replace( "*", \
-                                               moment_str + "_" \
-                                               + flav_str[ iflav ] \
-                                               + "_twoStateFit_curve_" \
-                                               + tsf_threep_range_str + "_" \
-                                               + ts_range_str )
+                    = rw.makeFilename( output_template, \
+                                       "{}_{}_2sf_curve_{}_{}", \
+                                       moment_str, \
+                                       flav_str[ iflav ], \
+                                       tsf_threep_range_str, \
+                                       ts_range_str )
                 rw.writeAvgDataFile_wX( curveOutputFilename, \
                                         ts_mellin, \
                                         mellin_curve_const_ti_avg, \
@@ -1003,26 +1049,26 @@ if rank == 0:
                 for ts in range( tsinkNum ):
             
                     threep_curveOutputFilename \
-                        = output_template.replace( "*", \
-                                                   "threep_" \
-                                                   + flav_str[ iflav ] \
-                                                   + "_twoStateFit_curve_tsink" \
-                                                   + str( tsink[ ts ] ) + "_" \
-                                                   + tsf_threep_range_str + "_" \
-                                                   + ts_range_str )
+                        = rw.makeFilename( output_template, \
+                                           "{}_threep_{}_2sf_curve_tsink{}_{}_{}", \
+                                           moment_str, \
+                                           flav_str[ iflav ], \
+                                           tsink[ ts ], \
+                                           tsf_threep_range_str, \
+                                           ts_range_str )
                     rw.writeAvgDataFile_wX( threep_curveOutputFilename, \
                                             ti_threep[ ts ], \
                                             threep_curve_avg[ ts ], \
                                             threep_curve_err[ ts ] )
                     
                     curveOutputFilename \
-                        = output_template.replace( "*", \
-                                                   moment_str + "_" \
-                                                   + flav_str[ iflav ] \
-                                                   + "_twoStateFit_curve_tsink" \
-                                                   + str( tsink[ ts ] ) + "_" \
-                                                   + tsf_threep_range_str + "_" \
-                                                   + ts_range_str )
+                        = rw.makeFilename( output_template, \
+                                           "{}_{}_2sf_curve_tsink{}_{}_{}", \
+                                           moment_str, \
+                                           flav_str[ iflav ], \
+                                           tsink[ ts ], \
+                                           tsf_threep_range_str, \
+                                           ts_range_str )
                     rw.writeAvgDataFile_wX( curveOutputFilename, \
                                             ti_mellin[ ts ], \
                                             mellin_curve_const_ts_avg[ ts ], \
