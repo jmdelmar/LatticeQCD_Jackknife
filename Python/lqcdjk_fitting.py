@@ -143,9 +143,49 @@ def testmEffTwopFit( mEff, twop, rangeEnd, pSq, L, tsf ):
     return mEff_results, twop_tsf_results, mEff_tsf_results
 
 
+def testBoostedTwopFit( twop, rangeEnd, pSq, L, tsf ):
+
+    binNum = twop.shape[ 0 ]
+    T = 2 * ( twop.shape[ -1 ] - 1 )
+
+    twop_tsf_results = []
+
+    for twop_rangeStart in range( 1, 8 ):
+
+        # Two-state fit
+
+        if tsf:
+
+            # fitParams[ b, param ]
+
+            fitParams, chiSq = twoStateFit_twop( twop, \
+                                                 twop_rangeStart, \
+                                                 rangeEnd, T )
+
+        else: # One-state fit
+        
+            # fitParams[ b, param ]
+
+            fitParams, chiSq = oneStateFit_twop( twop, \
+                                                 twop_rangeStart, \
+                                                 rangeEnd, T )
+                
+            E_avg = np.average( fitParams[ :, 1 ], axis=0 )
+            E_err = fncs.calcError( fitParams[ :, 1 ], binNum )
+            
+        # End if no two-state fit
+
+        twop_tsf_results.append( ( fitParams, chiSq, \
+                                   twop_rangeStart ) )
+        
+    # End loop over twop fit start
+
+    return twop_tsf_results
+
+
 # Fit the effective mass using two different methods and vary the fit range
 # starting point until the relative difference between the masses calculated
-# by both methods is less than half of both their jackkinfe errors. 
+# by both methods is less than half of both their jackknife errors. 
 # The different methods are fitting the effective mass plateau to a constant
 # value and either a one- or two-state fit on the two-point functions.
 
