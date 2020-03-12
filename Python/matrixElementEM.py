@@ -578,11 +578,17 @@ if rank == 0:
         if momSq > 0: # Boosted two-point functions
             
             twop_to_fit = twop_boost_fold_p[ imom ]
+            mEff_to_fit = pq.mEffFromSymTwop( twop_boost_fold_p[ imom ] )
 
         else: # Zero momentum two-point functions
 
             twop_to_fit = twop_fold
+            mEff_to_fit = mEff
 
+        if np.any( np.isnan( mEff_to_fit ) ):
+
+            rangeEnd = min(np.where(np.isnan(mEff_to_fit))[-1]) - 1
+        """
         if args.twop_fit_start: # fit starts at given t
 
             twop_rangeStart = args.twop_fit_start
@@ -590,6 +596,16 @@ if rank == 0:
         else: # fit range starts at same t as was used for mEff
 
             twop_rangeStart = rangeStart
+        """
+        fitResults_p = fit.mEffTwopFit( mEff_to_fit, twop_to_fit,
+                                          rangeEnd, momSq, L, tsf,
+                                          tsf_t_low_range=[tsf_fitStart],
+                                          plat_t_low_range=[plat_fitStart],
+                                          checkFit=checkFit )
+
+        twop_rangeStart = fitResults_p[ 3 ]
+        
+        #print(twop_rangeStart,fitResults_p[4])
 
         if tsf:
 
@@ -611,8 +627,15 @@ if rank == 0:
             c0_p[ imom ] = fitParams_twop[ :, 0 ]
             E0_p[ imom ] = fitParams_twop[ :, 1 ]
 
-        twopFit_str = "2s" + str( twop_rangeStart ) \
-                      + ".2e" + str( rangeEnd )
+        fitParamsOutputFilename \
+            = rw.makeFilename( output_template,
+                               "twop_2sf_params_{0:+}_{1:+}_{2:+}", 
+                               momList[ imom ][ 0 ],
+                               momList[ imom ][ 1 ],
+                               momList[ imom ][ 2 ] )
+                         
+        rw.writeDataFile( fitParamsOutputFilename, fitParams_twop )
+
         # Loop over flavor
         for iflav in range( flavNum ):
             # Loop over tsink
@@ -710,17 +733,16 @@ if rank == 0:
             # Write GE(0) output files
     
             ratio_outFilename = rw.makeFilename( output_template, \
-                                                 "matrixElemEM_{}_tsink{}_{}", \
-                                                 flav_str[ iflav ], ts, \
-                                                 twopFit_str )
+                                                 "matrixElemEM_{}_tsink{}", \
+                                                 flav_str[ iflav ], ts )
 
             rw.writeAvgDataFile( ratio_outFilename, ratio_avg[ iflav, its ], \
                                  ratio_err[ iflav, its ] )
 
             ratio_outFilename \
                 = rw.makeFilename( output_template, \
-                                   "matrixElemEM_{}_tsink{}_avgBeforeRatio_{}", \
-                                   flav_str[ iflav ], ts, twopFit_str )
+                                   "matrixElemEM_{}_tsink{}_avgBeforeRatio", \
+                                   flav_str[ iflav ], ts )
             rw.writeAvgDataFile( ratio_outFilename, \
                                  ratio_avgBeforeRatio_avg[ iflav, its ], \
                                  ratio_avgBeforeRatio_err[ iflav, its ] )

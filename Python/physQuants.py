@@ -15,8 +15,10 @@ def KK( mEff, Qsq, L ):
 
 
 def twopFit( c0, E0, t ):
+#def twopFit( c0, c1, E0, E1, t ):
 
     return c0 * np.exp( -E0 * t )
+    #return c0 * np.exp( -E0 * t ) + c1 * np.exp( -E1 * t )
 
 
 def kineFactor_GE_GM( ratio_err, mEff, Q, L ):
@@ -272,6 +274,7 @@ def calcMatrixElemEM_ratio( threep, twop_tsink ):
 
 
 def calcMatrixElemEM_twopFit( threep, tsink, c0, E0 ):
+#def calcMatrixElemEM_twopFit( threep, tsink, c0, c1, E0, E1 ):
 
     # threep[ b, t ]
     # twop_tsink[ b ]
@@ -283,9 +286,12 @@ def calcMatrixElemEM_twopFit( threep, tsink, c0, E0 ):
     T = threep.shape[ -1 ]
 
     c0_cp = np.repeat( c0, T ).reshape( binNum, T )
+    #c1_cp = np.repeat( c1, T ).reshape( binNum, T )
     E0_cp = np.repeat( E0, T ).reshape( binNum, T )
+    #E1_cp = np.repeat( E1, T ).reshape( binNum, T )
 
     ratio = threep / twopFit( c0_cp, E0_cp, tsink )
+    #ratio = threep / twopFit( c0_cp, c1_cp, E0_cp, E1_cp, tsink )
 
     return ratio
 

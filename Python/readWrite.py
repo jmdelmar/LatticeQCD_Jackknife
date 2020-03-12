@@ -394,13 +394,21 @@ def readMomentaList( twopDir, twop_template, config, particle, \
 
         else:
 
-            mpi_fncs.mpiPrintErr( "ERROR: nonzero momenta boost not yet " \
-                                  + "supported for gpu format", comm )
+            pList = getDatasets( twopDir, [ config ], twop_template, 
+                                 "Momenta_list" )[ :, 0, 0, ... ]
+
+            pSqList, pSqStart, pSqEnd = fncs.processMomList( pList )
+
+            ipSq = np.where( pSqList == momSq )[0][0]
+            ipSqStart = pSqStart[ ipSq ]
+            ipSqEnd = pSqEnd[ ipSq ]
+
+            momList = pList[ 0, ipSqStart : ipSqEnd + 1 ]
 
     return momList
 
 def readTwopFile_zeroQ( twopDir, configList, configNum, twop_template, \
-                        srcNum, momSq, dataFormat, comm ):
+                        srcNum, pSq, dataFormat, comm ):
 
     t0 = time()
 
@@ -409,41 +417,40 @@ def readTwopFile_zeroQ( twopDir, configList, configNum, twop_template, \
         twop_loc = getDatasets( twopDir, configList, \
                                 twop_template, \
                                 "ave{}".format( srcNum ), \
-                                "msq{:0>4}".format( momSq ), \
+                                "msq{:0>4}".format( pSq ), \
                                 "arr" )[ :, 0, 0, ... ].real
         
     else:
         
-        if momSq == 0:
+        pList = getDatasets( twopDir, configList, twop_template, 
+                             "Momenta_list" )[ :, 0, 0, ... ]
 
-            twop_loc = getDatasets( twopDir, configList, \
-                                   twop_template, \
-                                   "twop" )[ :, 0, 0, :, 0, 0 ]
+        pSqList, pSqStart, pSqEnd = fncs.processMomList( pList )
 
-        else:
+        ipSq = np.where( pSqList == pSq )[0][0]
+        ipSqStart = pSqStart[ ipSq ]
+        ipSqEnd = pSqEnd[ ipSq ]
 
-            mpi_fncs.mpiError( "Non-zero momentum boost not supported for " \
-                               + "gpu data format." )
-        
+        twop_loc = getDatasets( twopDir, configList, \
+                                twop_template, \
+                                "twop" )[ :, 0, 0, :, 
+                                          ipSqStart:ipSqEnd+1, 0 ]
+
     twop_loc = np.asarray( twop_loc, order='c', dtype=float )
 
     twop = np.zeros( ( configNum, ) + twop_loc.shape[ 1: ] )
 
     comm.Allgather( twop_loc, twop )
 
-    if dataFormat == "cpu":
+    if pSq > 0:
 
-        if momSq > 0:
-
-            # twop[ c, t, mom ] -> twop [mom, c, t ]
+        # twop[ c, t, mom ] -> twop [mom, c, t ]
     
-            twop = np.moveaxis( twop, -1, 0 )
+        twop = np.moveaxis( twop, -1, 0 )
 
-        else:
+    else:
 
-            twop = twop[ ..., 0 ]
-
-    # End if cpu format
+        twop = twop[ ..., 0 ]
 
     mpi_fncs.mpiPrint( "Read two-point functions from HDF5 files " \
                        + "in {:.3} seconds".format( time() - t0 ), \
@@ -2767,7 +2774,6 @@ def writeDataFile( filename, data ):
                                                           data[ d0, d1 ] ) )
 
     print( "Wrote " + filename )
-
 
 # Write an ASCII file with three columns. The first column is row number,
 # the second column is a set of data, and the third column is another 
