@@ -90,6 +90,8 @@ args = parser.parse_args()
 
 # Set MPI values
 
+mpi_info = mpi_fncs_init()
+
 comm = MPI.COMM_WORLD
 procNum = comm.Get_size()
 rank = comm.Get_rank()
@@ -209,12 +211,12 @@ else:
     elif dataFormat == "ASCII":
 
         mpi_fncs.mpiPrintError( "ERROR: ASCII format requires a " \
-                                + "momentum list to be given.", comm )
+                                + "momentum list to be given.", mpi_info )
 
     else: # dataFormat == gpu
 
         mpi_fncs.mpiPrintError( "ERROR: No momentum list given. " \
-                                + "I'll fix this later. -CJL", comm )
+                                + "I'll fix this later. -CJL", mpi_info )
 
 QNum = len( Q )
 
@@ -264,7 +266,7 @@ recvCount, recvOffset = mpi_fncs.recvCountOffset( procNum, binNum )
 
 finalMomList = rw.readMomentaList( twopDir, twop_template, \
                                    configList_loc[ 0 ], particle, \
-                                   srcNum, momSq, dataFormat, comm )
+                                   srcNum, momSq, dataFormat, mpi_info )
 
 finalMomNum = len( finalMomList )
 
@@ -320,7 +322,7 @@ T = twop_loc.shape[ -1 ]
 
 twop = np.zeros( ( configNum, QNum, T ), dtype=float )
 
-comm.Allgather( twop_loc, twop )
+mpi_info[ 'comm' ].Allgather( twop_loc, twop )
 
 #################################
 # Jackknife two-point functions #
@@ -359,9 +361,9 @@ else:
 
 recvCount, recvOffset = mpi_fncs.recvCountOffset( procNum, binNum )
 
-#comm.Gatherv( twop_jk_loc, [ twop_jk, recvCount * QNum * T, \
+#mpi_info[ 'comm' ].Gatherv( twop_jk_loc, [ twop_jk, recvCount * QNum * T, \
 #                             recvOffset * QNum * T, MPI.DOUBLE ], root=0 )
-comm.Gatherv( mEff_loc, [ mEff, recvCount * T, \
+mpi_info[ 'comm' ].Gatherv( mEff_loc, [ mEff, recvCount * T, \
                           recvOffset * T, MPI.DOUBLE ], root=0 )
 
 if rank == 0:
@@ -394,7 +396,7 @@ if rank == 0:
     except fit.lqcdjk_BadFitError as error:
         
         mpi_fncs.mpiPrintErr( "ERROR (lqcdjk_fitting.mEffTwopFit):" \
-                              + str( error ), comm )
+                              + str( error ), mpi_info )
 
     fitParams = fitResults[ 0 ]
     chiSq = fitResults[ 1 ]
@@ -501,7 +503,7 @@ if momSq > 0:
 
     twop_boost = np.zeros( ( finalMomNum, configNum, T ) )
 
-    comm.Allgather( twop_boost_loc, twop_boost )
+    mpi_info[ 'comm' ].Allgather( twop_boost_loc, twop_boost )
 
 else:
     
@@ -524,7 +526,7 @@ if momSq > 0:
     
     twop_boost = rw.readTwopFile_zeroQ( twopDir, configList_loc, configNum, \
                                         twop_template, srcNum, momSq, particle, \
-                                        dataFormat, comm )
+                                        dataFormat, mpi_info )
 
     # Loop over final momenta
     for imom in range( finalMomNum ):
@@ -543,7 +545,7 @@ if momSq > 0:
 
             twop_boost_jk = np.array( [] )
 
-        comm.Gatherv( twop_boost_jk, [ twop_boost_jk[ imom ], \
+        mpi_info[ 'comm' ].Gatherv( twop_boost_jk, [ twop_boost_jk[ imom ], \
                                            recvCount * T, recvOffset * T, \
                                            MPI.DOUBLE ], root=0 )
 
@@ -610,7 +612,7 @@ for ts, its in zip( tsink, range( tsinkNum ) ) :
             threep_loc[ 1 ] = 0.5 * ( threep_tmp[ 0 ] \
                                       + threep_tmp[ 1 ] )
 
-        #mpi_fncs.mpiPrintAllRanks(threep_loc.shape, comm)
+        #mpi_fncs.mpiPrintAllRanks(threep_loc.shape, mpi_info)
 
         # Get the projection and insertion combinations we want
         # threep_loc[ flav, proj, conf, Q, curr, t ]
@@ -650,7 +652,7 @@ for ts, its in zip( tsink, range( tsinkNum ) ) :
         # Loop over flavor
         for iflav in range( flavNum ):
 
-            comm.Allgather( threep_loc[ iflav ], \
+            mpi_info[ 'comm' ].Allgather( threep_loc[ iflav ], \
                             threep[ iflav ] )
 
         # End loop over flavor
@@ -705,7 +707,7 @@ for ts, its in zip( tsink, range( tsinkNum ) ) :
             ratio = np.zeros( ( binNum_glob, QNum, \
                                 ratioNum, threepTimeNum ) )
 
-            comm.Allgatherv( ratio_loc, \
+            mpi_info[ 'comm' ].Allgatherv( ratio_loc, \
                              [ ratio, \
                                recvCount * QNum \
                                * ratioNum * threepTimeNum, \
@@ -715,7 +717,7 @@ for ts, its in zip( tsink, range( tsinkNum ) ) :
 
             ratio_err = fncs.calcError( ratio, binNum_glob )
 
-            #mpi_fncs.mpiPrintAllRanks(ratio_err,comm)
+            #mpi_fncs.mpiPrintAllRanks(ratio_err,mpi_info)
 
             if binNum_loc:
 
@@ -732,7 +734,7 @@ for ts, its in zip( tsink, range( tsinkNum ) ) :
 
             ratio_fit = np.zeros( ( binNum_glob, QNum, ratioNum ) )
 
-            comm.Gatherv( ratio_fit_loc, \
+            mpi_info[ 'comm' ].Gatherv( ratio_fit_loc, \
                           [ ratio_fit, \
                             recvCount * QNum * ratioNum, \
                             recvOffset * QNum * ratioNum, \

@@ -253,7 +253,7 @@ def getConfigList( configListFilename, configDir ):
 
     #print( "Number of configurations: " + str( len( configList ) ) )
 
-    return configList
+    return np.array( configList )
 
 
 # Calculates Q^2 from a given list of Q's and determines the 

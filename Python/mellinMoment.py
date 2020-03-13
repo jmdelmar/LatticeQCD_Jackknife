@@ -98,9 +98,7 @@ args = parser.parse_args()
 
 # Set MPI values
 
-comm = MPI.COMM_WORLD
-procNum = comm.Get_size()
-rank = comm.Get_rank()
+mpi_confs_info = mpi_fncs.lqcdjk_mpi_init()
 
 # Input directories and filename templates
 
@@ -125,8 +123,6 @@ tsinkNum = len( tsink )
 ts_range_str = "tsink" + str(tsink[0]) + "_" + str(tsink[-1])
 
 # Other info
-
-binSize = args.binSize
 
 output_template = args.output_template
 
@@ -155,8 +151,16 @@ moment = args.moment
 # Get configurations from given list or from given 
 # threep directory if list not given
 
-configList = np.array( fncs.getConfigList( args.config_list, threepDir ) )
-configNum = len( configList )
+mpi_confs_info[ 'configList' ] = fncs.getConfigList( args.config_list, 
+                                                     threepDir )
+mpi_confs_info[ 'configNum' ] = len( mpi_confs_info[ 'configList' ] )
+mpi_confs_info[ 'binSize' ] = args.binSize
+
+# Set mpi configuration information
+
+mpi_fncs.lqcdjk_mpi_confs_info( mpi_confs_info )
+
+binNum = mpi_confs_info[ 'binNum_glob' ]
 
 # Check inputs
 
@@ -181,14 +185,6 @@ assert dataFormat in format_list, \
     "Error: Data format not supported. " \
     + "Supported particles: " + str( format_list ) \
 
-assert configNum % binSize == 0, "Number of configurations " \
-    + str( configNum ) + " not evenly divided by bin size " \
-    + str( binSize ) + "."
-
-assert configNum % procNum == 0, "Number of configurations " \
-    + str( configNum ) + " not evenly divided by number of processes " \
-    + str( procNum ) + "."
-
 assert moment in moment_list, \
     "Error: Moment order not supported. " \
     + "Supported moments: " + str( moment_list )
@@ -209,49 +205,11 @@ elif moment == 3:
     Z = 1.0
     moment_str = "avgX3"
 
-# Number of configurations on each process
-
-procSize = configNum // procNum
-
-# Total number of bins across processes
-
-binNum_glob = configNum // binSize
-
-# Global index of confs for each process
-
-iconf = np.array( [ np.array( [ r * procSize + cl
-                                for cl in range( procSize ) ], dtype=int )
-                    for r in range( procNum ) ] )
-
-# List of configurations on this process
-
-configList_loc = configList[ iconf[ rank ] ]
-
-# Global index of first conf of bins for each process
-
-binStart = np.array( [ np.array( [ cl for cl in iconf[ r ]
-                                   if cl % binSize == 0 ], dtype=int )
-                       for r in range( procNum ) ] )
-
-# Global bin index for each process
-
-bin_glob = binStart // binSize
-
-# Number of bins for each process
-
-binNum = [ len( binStart[ r ] ) for r in range( procNum ) ]
-
-# Number of bins for this process
-
-binNum_loc = binNum[ rank ]
-
-recvCount, recvOffset = mpi_fncs.recvCountOffset( procNum, binNum )
-
 # Read momentum list
 
 momList = rw.readMomentaList( twopDir, twop_template,
-                              configList_loc[ 0 ], particle,
-                              srcNum, momSq, dataFormat, comm )
+                              mpi_confs_info[ 'configList_loc' ][ 0 ], particle,
+                              srcNum, momSq, dataFormat, mpi_confs_info )
 
 momBoostNum = len( momList )
 
@@ -262,9 +220,10 @@ momBoostNum = len( momList )
 # Zero momentum two-point functions
 # twop[ c, t ]
 
-twop = rw.readTwopFile_zeroQ( twopDir, configList_loc, configNum,
+twop = rw.readTwopFile_zeroQ( twopDir, mpi_confs_info[ 'configList_loc' ], 
+                              mpi_confs_info[ 'configNum' ],
                               twop_template, srcNum, 0, dataFormat,
-                              comm )
+                              mpi_confs_info )
 
 # Time dimension length
 
@@ -278,9 +237,10 @@ T_fold = T // 2 + 1
 # Jackknife and fold two-point functions #
 ##########################################
 
-if binNum_loc:
+if mpi_confs_info[ 'binNum_loc' ]:
 
-    twop_jk_loc = fncs.jackknifeBinSubset( twop, binSize, bin_glob[ rank ] )
+    twop_jk_loc = fncs.jackknifeBinSubset( twop, mpi_confs_info[ 'binSize' ], 
+                                           mpi_confs_info[ 'binList_loc' ] )
 
     # twop_fold[ b, t ]
 
@@ -302,27 +262,31 @@ else:
 # Effective mass #
 ##################
 
-if rank == 0:
+if mpi_confs_info[ 'rank' ] == 0:
 
-    twop_fold = np.zeros( ( binNum_glob, T_fold ) )
-    mEff = np.zeros( ( binNum_glob, T_fold ) )
+    twop_fold = np.zeros( ( binNum, T_fold ) )
+    mEff = np.zeros( ( binNum, T_fold ) )
 
 else:
 
     twop_fold = None
     mEff = None
 
-comm.Gatherv( twop_fold_loc, [ twop_fold, recvCount * T_fold,
-                             recvOffset * T_fold, MPI.DOUBLE ], root=0 )
-comm.Gatherv( mEff_loc, [ mEff, recvCount * T_fold,
-                          recvOffset * T_fold, MPI.DOUBLE ], root=0 )
+mpi_confs_info[ 'comm' ].Gatherv( twop_fold_loc, 
+                            [ twop_fold, mpi_confs_info[ 'recvCount' ] * T_fold,
+                              mpi_confs_info[ 'recvOffset' ] * T_fold, 
+                              MPI.DOUBLE ], root=0 )
+mpi_confs_info[ 'comm' ].Gatherv( mEff_loc, 
+                            [ mEff, mpi_confs_info[ 'recvCount' ] * T_fold,
+                              mpi_confs_info[ 'recvOffset' ] * T_fold, 
+                              MPI.DOUBLE ], root=0 )
 
-if rank == 0:
+if mpi_confs_info[ 'rank' ] == 0:
 
     # mEff_avg[ t ]
 
     mEff_avg = np.average( mEff, axis=0 )
-    mEff_err = fncs.calcError( mEff, binNum_glob )
+    mEff_err = fncs.calcError( mEff, binNum )
 
     avgOutputFilename = rw.makeFilename( output_template, "mEff_avg" )
     rw.writeAvgDataFile( avgOutputFilename, mEff_avg, mEff_err )
@@ -340,7 +304,7 @@ if rank == 0:
     except fit.lqcdjk_BadFitError as error:
         
         mpi_fncs.mpiPrintErr( "ERROR (lqcdjk_fitting.mEffTwopFit):"
-                              + str( error ), comm )
+                              + str( error ), mpi_confs_info )
 
     fitParams = fitResults[ 0 ]
     chiSq = fitResults[ 1 ]
@@ -360,7 +324,7 @@ if rank == 0:
         # Calculate fitted curve
 
         curve, \
-            t_s = fit.calcmEffTwoStateCurve( np.ones( binNum_glob ),
+            t_s = fit.calcmEffTwoStateCurve( np.ones( binNum ),
                                              c, E0_mEff, E1_mEff, T,
                                              rangeStart,
                                              rangeEnd )
@@ -370,13 +334,13 @@ if rank == 0:
                                                mEffFit_str )
         
         c_avg = np.average( c, axis=0 )
-        c_err = fncs.calcError( c, binNum_glob )
+        c_err = fncs.calcError( c, binNum )
 
         E0_mEff_avg = np.average( E0_mEff, axis=0 )
-        E0_mEff_err = fncs.calcError( E0_mEff, binNum_glob )
+        E0_mEff_err = fncs.calcError( E0_mEff, binNum )
 
         E1_mEff_avg = np.average( E1_mEff, axis=0 )
-        E1_mEff_err = fncs.calcError( E1_mEff, binNum_glob )
+        E1_mEff_err = fncs.calcError( E1_mEff, binNum )
 
         mEff_tsf_outputFilename = rw.makeFilename( output_template,
                                                    "mEff_2sf_{}",
@@ -408,13 +372,13 @@ if rank == 0:
     # End if one-state fit
 
     #curve_avg = np.average( curve, axis=0 )
-    #curve_err = fncs.calcError( curve, binNum_glob )
+    #curve_err = fncs.calcError( curve, binNum )
             
     curve_avg = np.average( curve, axis=0 )
-    curve_err = fncs.calcError( curve, binNum_glob )
+    curve_err = fncs.calcError( curve, binNum )
 
     chiSq_avg = np.average( chiSq, axis=0 )
-    chiSq_err = fncs.calcError( chiSq, binNum_glob )
+    chiSq_err = fncs.calcError( chiSq, binNum )
             
     # Write output files
 
@@ -425,7 +389,7 @@ if rank == 0:
                          chiSq_err, rangeStart, rangeEnd )
 
     mEff_fit_avg = np.average( mEff_fit, axis=0 )
-    mEff_fit_err = fncs.calcError( mEff_fit, binNum_glob )
+    mEff_fit_err = fncs.calcError( mEff_fit, binNum )
 
     mEff_range_str = "2s" + str( mEff_rangeStart ) \
                      + ".2e" + str( rangeEnd )
@@ -438,26 +402,29 @@ if rank == 0:
 
 # End if first process
 
-comm.Barrier()
+mpi_confs_info[ 'comm' ].Barrier()
 
 # Boosted two-point functions
 # twop_boost[ mom, c, t ]
 
 if momSq > 0:
 
-    twop_boost = rw.readTwopFile_zeroQ( twopDir, configList_loc, configNum,
+    twop_boost = rw.readTwopFile_zeroQ( twopDir, 
+                                        mpi_confs_info[ 'configList_loc' ], 
+                                        mpi_confs_info[ 'configNum' ],
                                         twop_template, srcNum, momSq,
-                                        dataFormat, comm )
+                                        dataFormat, mpi_confs_info )
 
 else:
 
     twop_boost = np.array( [] )
 
-if rank == 0:
+if mpi_confs_info[ 'rank' ] == 0:
         
-    twop_boost_fold_p = np.zeros( ( momBoostNum, binNum_glob, T_fold ) )
+    twop_boost_fold_p = np.zeros( ( momBoostNum, 
+                                    binNum, T_fold ) )
     threep_p_jk = np.zeros( ( momBoostNum, flavNum,
-                                tsinkNum, binNum_glob, T ) )
+                                tsinkNum, binNum, T ) )
 
 else:
 
@@ -475,11 +442,12 @@ for imom in range( momBoostNum ):
         # Jackknife boosted two-point functions #
         #########################################
 
-        if binNum_loc:
+        if mpi_confs_info[ 'binNum_loc' ]:
 
-            twop_boost_jk_loc = fncs.jackknifeBinSubset( twop_boost[ imom ],\
-                                                         binSize,
-                                                         bin_glob[ rank ] )
+            twop_boost_jk_loc \
+                = fncs.jackknifeBinSubset( twop_boost[ imom ],\
+                                           mpi_confs_info[ 'binSize' ],
+                                           mpi_confs_info[ 'binList_loc' ] )
 
             twop_boost_fold_loc = fncs.fold( twop_boost_jk_loc )
 
@@ -487,10 +455,13 @@ for imom in range( momBoostNum ):
 
             twop_boost_fold_loc = np.array( [] )
 
-        comm.Gatherv( twop_boost_fold_loc, [ twop_boost_fold_p[ imom ],
-                                             recvCount * T_fold,
-                                             recvOffset * T_fold,
-                                             MPI.DOUBLE ], root=0 )
+        mpi_confs_info[ 'comm' ].Gatherv( twop_boost_fold_loc, 
+                                          [ twop_boost_fold_p[ imom ],
+                                            mpi_confs_info[ 'recvCount' ] 
+                                            * T_fold,
+                                            mpi_confs_info[ 'recvOffset' ] 
+                                            * T_fold,
+                                            MPI.DOUBLE ], root=0 )
 
     # End if non-zero momentum boost
     
@@ -503,11 +474,13 @@ for imom in range( momBoostNum ):
     
         # threep_p[ iflav, c, t ]
 
-        threep_p = rw.getMellinMomentThreep( threepDir, configList_loc,
-                                             configNum, threep_tokens,
+        threep_p = rw.getMellinMomentThreep( threepDir, 
+                                             mpi_confs_info[ 'configList_loc' ],
+                                             mpi_confs_info[ 'configNum' ], 
+                                             threep_tokens,
                                              srcNum, ts, momList[ imom ],
                                              particle, dataFormat, moment,
-                                             L, T, comm )
+                                             L, T, mpi_confs_info )
 
         # Loop over flavor
         for iflav in range( flavNum ):
@@ -515,21 +488,25 @@ for imom in range( momBoostNum ):
             # Jackknife
             # threep_p_jk[ iflav, ts, b, t ]
 
-            threep_p_jk_loc = fncs.jackknifeBinSubset( threep_p[ iflav ],
-                                                         binSize,
-                                                         bin_glob[ rank ] )
+            threep_p_jk_loc \
+                = fncs.jackknifeBinSubset( threep_p[ iflav ],
+                                           mpi_confs_info[ 'binSize' ],
+                                           mpi_confs_info[ 'binList_loc' ] )
 
-            comm.Gatherv( threep_p_jk_loc,
-                          [ threep_p_jk[ imom, iflav, its ],
-                            recvCount * T,
-                            recvOffset * T,
-                            MPI.DOUBLE ], root=0 )
+            mpi_confs_info[ 'comm' ].Gatherv( threep_p_jk_loc,
+                                              [ threep_p_jk[ imom, iflav, its ],
+                                                mpi_confs_info[ 'recvCount' ] 
+                                                * T,
+                                                mpi_confs_info[ 'recvOffset' ] 
+                                                * T,
+                                                MPI.DOUBLE ], root=0 )
             """
-            if rank == 0:
+            if mpi_confs_info[ 'rank' ] == 0:
 
-                threep_p_avg = np.average( threep_p_jk[ imom, iflav, its ], axis=-2 )
+                threep_p_avg = np.average( threep_p_jk[ imom, iflav, its ], 
+            axis=-2 )
                 threep_p_err = fncs.calcError( threep_p_jk[ imom, iflav, its ],
-                                                 binNum_glob,
+                                                 binNum,
                                                  axis=-2 )
 
                 threep_output_template = "threep_{0}_tsink{1}_{2:+}_{3:+}_{4:+}".format( flav_str[iflav], ts, momList[imom][0], momList[imom][1], momList[imom][2] )
@@ -551,20 +528,20 @@ for imom in range( momBoostNum ):
 ####################
 
 
-if rank == 0:
+if mpi_confs_info[ 'rank' ] == 0:
         
     mellin_p = np.zeros( ( momBoostNum, flavNum, tsinkNum,
-                           binNum_glob, T ) )
+                           binNum, T ) )
     #mellin_avgBeforeRatio = np.zeros( ( flavNum, tsinkNum,
-    #                                    binNum_glob, T ) )
+    #                                    binNum, T ) )
 
-    c0_p = np.zeros( ( momBoostNum, binNum_glob ) )
-    E0_p = np.zeros( ( momBoostNum, binNum_glob ) )
+    c0_p = np.zeros( ( momBoostNum, binNum ) )
+    E0_p = np.zeros( ( momBoostNum, binNum ) )
 
     if tsf:
 
-        c1_p = np.zeros( ( momBoostNum, binNum_glob ) )
-        E1_p = np.zeros( ( momBoostNum, binNum_glob ) )
+        c1_p = np.zeros( ( momBoostNum, binNum ) )
+        E1_p = np.zeros( ( momBoostNum, binNum ) )
 
     # mellin_p[ p, flav, ts, b, t ]
 
@@ -644,11 +621,11 @@ if rank == 0:
         
         twop_p_avg = np.average( twop_boost_fold_p[ imom ], axis=-2 )
         twop_p_err = fncs.calcError( twop_boost_fold_p[ imom ],
-                                     binNum_glob, axis=-2 )
+                                     binNum, axis=-2 )
 
         twop_curve_p_avg = np.average( twop_curve_p, axis=-2 )
         twop_curve_p_err = fncs.calcError( twop_curve_p,
-                                           binNum_glob, axis=-2 )
+                                           binNum, axis=-2 )
 
         # Write twop output file for each momentum
     
@@ -688,12 +665,14 @@ if rank == 0:
                 threep_p_avg = np.average( threep_p_jk[imom,iflav,its],
                                            axis=-2 )
                 threep_p_err = fncs.calcError( threep_p_jk[imom,iflav,its],
-                                               binNum_glob, axis=-2 )
+                                               binNum, 
+                axis=-2 )
 
                 mellin_p_avg = np.average( mellin_p[imom,iflav,its],
                                            axis=-2 )
                 mellin_p_err = fncs.calcError( mellin_p[imom,iflav,its],
-                                               binNum_glob, axis=-2 )
+                                               binNum, 
+                axis=-2 )
 
                 # Write threep output file for each momentum
     
@@ -784,24 +763,28 @@ if rank == 0:
     # mellin_avg[ flav, ts, t ]
 
     mellin_avg = np.average( mellin, axis=-2 )
-    mellin_err = fncs.calcError( mellin, binNum_glob, axis=-2 )
+    mellin_err = fncs.calcError( mellin, binNum, axis=-2 )
 
     #mellin_avgBeforeRatio_avg = np.average( mellin_avgBeforeRatio, axis=-2 )
     #mellin_avgBeforeRatio_err = fncs.calcError( mellin_avgBeforeRatio,
-    #                                            binNum_glob, axis=-2 )
+    #                                            binNum, 
+    #                                            axis=-2 )
 
     threep_avg = np.average( threep_jk, axis=-2 )
-    threep_err = fncs.calcError( threep_jk, binNum_glob, axis=-2 )
+    threep_err = fncs.calcError( threep_jk, binNum, 
+                                 axis=-2 )
 
     if momSq > 0: # Boosted two-point functions
             
         twop_avg = np.average( twop_boost_fold, axis=-2 )
-        twop_err = fncs.calcError( twop_boost_fold, binNum_glob, axis=-2 )
+        twop_err = fncs.calcError( twop_boost_fold, 
+                                   binNum, axis=-2 )
 
     else: # Zero momentum two-point functions
 
         twop_avg = np.average( twop_fold, axis=-2 )
-        twop_err = fncs.calcError( twop_fold, binNum_glob, axis=-2 )
+        twop_err = fncs.calcError( twop_fold, binNum, 
+                                   axis=-2 )
 
     # Write twop output file
     
@@ -868,7 +851,8 @@ if rank == 0:
                 # Average over bins
 
                 mellin_fit_avg = np.average( mellin_fit )
-                mellin_fit_err = fncs.calcError( mellin_fit, binNum_glob )
+                mellin_fit_err = fncs.calcError( mellin_fit, 
+                                                 binNum )
                 
                 # Write output files
 
@@ -895,7 +879,7 @@ if rank == 0:
 
     if tsf:
 
-        mpi_fncs.mpiPrint( "Will perform the two-state fit", rank )
+        mpi_fncs.mpiPrint( "Will perform the two-state fit", mpi_confs_info )
 
         # Loop over flavors
         for iflav in range( flavNum ):
@@ -926,9 +910,12 @@ if rank == 0:
 
                 # End loop over tsink
 
-                fitParams = np.zeros( ( momBoostNum, binNum_glob, 7 ) )
-                mellin = np.zeros( ( momBoostNum, binNum_glob ) )
-                chiSq = np.zeros( ( momBoostNum, binNum_glob ) )
+                fitParams = np.zeros( ( momBoostNum, 
+                                        binNum, 7 ) )
+                mellin = np.zeros( ( momBoostNum, 
+                                     binNum ) )
+                chiSq = np.zeros( ( momBoostNum, 
+                                    binNum ) )
 
                 threep_curve = fncs.initEmptyList( momBoostNum, 1 )
                 mellin_curve_const_ts = fncs.initEmptyList( momBoostNum, 1 )
@@ -1024,26 +1011,28 @@ if rank == 0:
                 # Average over bins
                     
                 threep_curve_avg = np.average( threep_curve, axis=0 )
-                threep_curve_err = fncs.calcError( threep_curve, binNum_glob )
+                threep_curve_err = fncs.calcError( threep_curve, 
+                                                   binNum )
             
                 mellin_curve_const_ts_avg = np.average( mellin_curve_const_ts,
                                                         axis=0 )
                 mellin_curve_const_ts_err = fncs.calcError( mellin_curve_const_ts,
-                                                            binNum_glob )
+                                                            binNum )
                 
                 mellin_curve_const_ti_avg = np.average( mellin_curve_const_ti,
                                                         axis=0 )
                 mellin_curve_const_ti_err = fncs.calcError( mellin_curve_const_ti,
-                                                            binNum_glob )
+                                                            binNum )
                 
                 fitParams_avg = np.average( fitParams, axis=0 )
-                fitParams_err = fncs.calcError( fitParams, binNum_glob )
+                fitParams_err = fncs.calcError( fitParams, 
+                                                binNum )
                 
                 chiSq_avg = np.average( chiSq, axis=0 )
-                chiSq_err = fncs.calcError( chiSq, binNum_glob )
+                chiSq_err = fncs.calcError( chiSq, binNum )
                 
                 mellin_avg = np.average( mellin )
-                mellin_err = fncs.calcError( mellin, binNum_glob )
+                mellin_err = fncs.calcError( mellin, binNum )
     
                 # Write output file
 

@@ -372,7 +372,7 @@ def makeFilename( genTemplate, specTemplate, *args ):
 
 
 def readMomentaList( twopDir, twop_template, config, particle, \
-                     srcNum, momSq, dataFormat, comm ):
+                     srcNum, momSq, dataFormat, mpi_info ):
 
     momList = []
 
@@ -408,7 +408,9 @@ def readMomentaList( twopDir, twop_template, config, particle, \
     return momList
 
 def readTwopFile_zeroQ( twopDir, configList, configNum, twop_template, \
-                        srcNum, pSq, dataFormat, comm ):
+                        srcNum, pSq, dataFormat, mpi_info ):
+
+    comm = mpi_info[ 'comm' ]
 
     t0 = time()
 
@@ -530,7 +532,7 @@ def readTwopFile( twopDir, configList, twop_template, \
 
 def getMellinMomentThreep( threepDir, configList, configNum, threep_tokens, \
                            srcNum, ts, p, particle, dataFormat, moment, \
-                           L, T, comm, **kwargs ):
+                           L, T, mpi_info, **kwargs ):
 
     # Get the relevant three-point functions 
     # to calcualte mellin moment of order 1-3 at zero-momentum
@@ -548,9 +550,11 @@ def getMellinMomentThreep( threepDir, configList, configNum, threep_tokens, \
     # moment: Which mellin moment to get
     # L: Length of lattice space dimensions
     # T: Length of lattice time dimension
-    # comm: MPI communicator
+    # comm: MPI info dictionary containing communicator
     # dsetname (optional kwarg): List of datasets to read. 
     #                            Overrides keyword
+
+    comm = mpi_info[ 'comm' ]
 
     threeps = readMellinThreepFile( threepDir, configList, \
                                     threep_tokens, srcNum, ts, p, \
