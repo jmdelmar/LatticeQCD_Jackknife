@@ -100,6 +100,9 @@ args = parser.parse_args()
 
 mpi_confs_info = mpi_fncs.lqcdjk_mpi_init()
 
+comm = mpi_confs_info[ 'comm' ]
+rank = mpi_confs_info[ 'rank' ]
+
 # Input directories and filename templates
 
 threepDir = args.threep_dir
@@ -161,6 +164,8 @@ mpi_confs_info[ 'binSize' ] = args.binSize
 mpi_fncs.lqcdjk_mpi_confs_info( mpi_confs_info )
 
 binNum = mpi_confs_info[ 'binNum_glob' ]
+recvCount = mpi_confs_info[ 'recvCount' ]
+recvOffset = mpi_confs_info[ 'recvOffset' ]
 
 # Check inputs
 
@@ -262,26 +267,20 @@ else:
 # Effective mass #
 ##################
 
-if mpi_confs_info[ 'rank' ] == 0:
+twop_fold = np.zeros( ( binNum, T_fold ) )
+mEff = np.zeros( ( binNum, T_fold ) )
 
-    twop_fold = np.zeros( ( binNum, T_fold ) )
-    mEff = np.zeros( ( binNum, T_fold ) )
+comm.Allgatherv( twop_fold_loc, 
+                 [ twop_fold, 
+                   recvCount * T_fold,
+                   recvOffset * T_fold, 
+                   MPI.DOUBLE ] )
+comm.Allgatherv( mEff_loc, 
+                 [ mEff, recvCount * T_fold,
+                   recvOffset * T_fold, 
+                   MPI.DOUBLE ] )
 
-else:
-
-    twop_fold = None
-    mEff = None
-
-mpi_confs_info[ 'comm' ].Gatherv( twop_fold_loc, 
-                            [ twop_fold, mpi_confs_info[ 'recvCount' ] * T_fold,
-                              mpi_confs_info[ 'recvOffset' ] * T_fold, 
-                              MPI.DOUBLE ], root=0 )
-mpi_confs_info[ 'comm' ].Gatherv( mEff_loc, 
-                            [ mEff, mpi_confs_info[ 'recvCount' ] * T_fold,
-                              mpi_confs_info[ 'recvOffset' ] * T_fold, 
-                              MPI.DOUBLE ], root=0 )
-
-if mpi_confs_info[ 'rank' ] == 0:
+if rank == 0:
 
     # mEff_avg[ t ]
 
@@ -291,27 +290,30 @@ if mpi_confs_info[ 'rank' ] == 0:
     avgOutputFilename = rw.makeFilename( output_template, "mEff_avg" )
     rw.writeAvgDataFile( avgOutputFilename, mEff_avg, mEff_err )
 
-    # Fit the effective mass and two-point functions 
+# Fit the effective mass and two-point functions 
 
-    try:
+try:
     
-        fitResults = fit.mEffTwopFit( mEff, twop_fold,
-                                      rangeEnd, 0, L, tsf,
-                                      tsf_t_low_range=[tsf_fitStart],
-                                      plat_t_low_range=[plat_fitStart],
-                                      checkFit=checkFit )
+    fitResults = fit.mEffTwopFit( mEff, twop_fold,
+                                  rangeEnd, 0, L, tsf,
+                                  mpi_confs_info,
+                                  tsf_t_low_range=[tsf_fitStart],
+                                  plat_t_low_range=[plat_fitStart],
+                                  checkFit=checkFit )
     
-    except fit.lqcdjk_BadFitError as error:
+except fit.lqcdjk_BadFitError as error:
         
-        mpi_fncs.mpiPrintErr( "ERROR (lqcdjk_fitting.mEffTwopFit):"
-                              + str( error ), mpi_confs_info )
+    mpi_fncs.mpiPrintErr( "ERROR (lqcdjk_fitting.mEffTwopFit):"
+                          + str( error ), mpi_confs_info )
+
+if rank == 0:
 
     fitParams = fitResults[ 0 ]
     chiSq = fitResults[ 1 ]
     mEff_fit = fitResults[ 2 ]
     rangeStart = fitResults[ 3 ]
     mEff_rangeStart = fitResults[ 4 ]
-
+    
     mEffFit_str = "2s" + str( rangeStart ) \
                   + ".2e" + str( rangeEnd )
 
@@ -402,7 +404,7 @@ if mpi_confs_info[ 'rank' ] == 0:
 
 # End if first process
 
-mpi_confs_info[ 'comm' ].Barrier()
+comm.Barrier()
 
 # Boosted two-point functions
 # twop_boost[ mom, c, t ]
@@ -419,19 +421,10 @@ else:
 
     twop_boost = np.array( [] )
 
-if mpi_confs_info[ 'rank' ] == 0:
-        
-    twop_boost_fold_p = np.zeros( ( momBoostNum, 
-                                    binNum, T_fold ) )
-    threep_p_jk = np.zeros( ( momBoostNum, flavNum,
-                                tsinkNum, binNum, T ) )
-
-else:
-
-    twop_boost_fold_p = np.array( [ None for imom in range( momBoostNum ) ] )
-    threep_p_jk = np.array( [ [ [ None for ts in tsink ]
-                                  for f in flav_str ]
-                                for imom in range( momBoostNum ) ] )
+twop_boost_fold_p = np.zeros( ( momBoostNum, 
+                                binNum, T_fold ) )
+threep_p_jk = np.zeros( ( momBoostNum, flavNum,
+                          tsinkNum, binNum, T ) )
 
 # Loop over momenta
 for imom in range( momBoostNum ):
@@ -455,13 +448,11 @@ for imom in range( momBoostNum ):
 
             twop_boost_fold_loc = np.array( [] )
 
-        mpi_confs_info[ 'comm' ].Gatherv( twop_boost_fold_loc, 
-                                          [ twop_boost_fold_p[ imom ],
-                                            mpi_confs_info[ 'recvCount' ] 
-                                            * T_fold,
-                                            mpi_confs_info[ 'recvOffset' ] 
-                                            * T_fold,
-                                            MPI.DOUBLE ], root=0 )
+        comm.Allgatherv( twop_boost_fold_loc, 
+                         [ twop_boost_fold_p[ imom ],
+                           recvCount * T_fold,
+                           recvOffset * T_fold,
+                           MPI.DOUBLE ] )
 
     # End if non-zero momentum boost
     
@@ -493,15 +484,13 @@ for imom in range( momBoostNum ):
                                            mpi_confs_info[ 'binSize' ],
                                            mpi_confs_info[ 'binList_loc' ] )
 
-            mpi_confs_info[ 'comm' ].Gatherv( threep_p_jk_loc,
-                                              [ threep_p_jk[ imom, iflav, its ],
-                                                mpi_confs_info[ 'recvCount' ] 
-                                                * T,
-                                                mpi_confs_info[ 'recvOffset' ] 
-                                                * T,
-                                                MPI.DOUBLE ], root=0 )
+            comm.Gatherv( threep_p_jk_loc,
+                          [ threep_p_jk[ imom, iflav, its ],
+                            recvCount * T,
+                            recvOffset * T,
+                            MPI.DOUBLE ], root=0 )
             """
-            if mpi_confs_info[ 'rank' ] == 0:
+            if rank == 0:
 
                 threep_p_avg = np.average( threep_p_jk[ imom, iflav, its ], 
             axis=-2 )
@@ -528,7 +517,7 @@ for imom in range( momBoostNum ):
 ####################
 
 
-if mpi_confs_info[ 'rank' ] == 0:
+if rank == 0:
         
     mellin_p = np.zeros( ( momBoostNum, flavNum, tsinkNum,
                            binNum, T ) )
@@ -545,53 +534,59 @@ if mpi_confs_info[ 'rank' ] == 0:
 
     # mellin_p[ p, flav, ts, b, t ]
 
-    # Loop over momenta
-    for imom in range( momBoostNum ):
+# Loop over momenta
+for imom in range( momBoostNum ):
 
-        # Fit the two-point functions
+    # Fit the two-point functions
 
-        if momSq > 0: # Boosted two-point functions
+    if momSq > 0: # Boosted two-point functions
             
-            twop_to_fit = twop_boost_fold_p[ imom ]
-            mEff_to_fit = pq.mEffFromSymTwop( twop_boost_fold_p[ imom ] )
+        twop_to_fit = twop_boost_fold_p[ imom ]
+        mEff_to_fit = pq.mEffFromSymTwop( twop_boost_fold_p[ imom ] )
 
-        else: # Zero momentum two-point functions
+    else: # Zero momentum two-point functions
 
-            twop_to_fit = twop_fold
-            mEff_to_fit = mEff
+        twop_to_fit = twop_fold
+        mEff_to_fit = mEff
 
-        if np.any( np.isnan( mEff_to_fit ) ):
+    if np.any( np.isnan( mEff_to_fit ) ):
 
-            rangeEnd = min(np.where(np.isnan(mEff_to_fit))[-1]) - 1
-        """
-        if args.twop_fit_start: # fit starts at given t
+        rangeEnd = min(np.where(np.isnan(mEff_to_fit))[-1]) - 1
+    """
+    if args.twop_fit_start: # fit starts at given t
+    
+    twop_rangeStart = args.twop_fit_start
 
-            twop_rangeStart = args.twop_fit_start
+    else: # fit range starts at same t as was used for mEff
 
-        else: # fit range starts at same t as was used for mEff
+    twop_rangeStart = rangeStart
 
-            twop_rangeStart = rangeStart
+    twopFit_str = "2s" + str( twop_rangeStart ) \
+    + ".2e" + str( rangeEnd )
+    """
+    fitResults_tmp = fit.mEffTwopFit( mEff_to_fit, twop_to_fit,
+                                      rangeEnd, momSq, L, tsf,
+                                      mpi_confs_info,
+                                      tsf_t_low_range=[tsf_fitStart],
+                                      plat_t_low_range=[plat_fitStart],
+                                      checkFit=checkFit )
 
-        twopFit_str = "2s" + str( twop_rangeStart ) \
-                      + ".2e" + str( rangeEnd )
-        """
-        fitResults_tmp = fit.mEffTwopFit( mEff_to_fit, twop_to_fit,
-                                          rangeEnd, momSq, L, tsf,
-                                          tsf_t_low_range=[tsf_fitStart],
-                                          plat_t_low_range=[plat_fitStart],
-                                          checkFit=checkFit )
-
-        twop_rangeStart = fitResults_tmp[ 3 ]
+    twop_rangeStart = fitResults_tmp[ 3 ]
         
-        #twopFit_str = "2s" + str( twop_rangeStart ) \
-        #              + ".2e" + str( rangeEnd )
+    #twopFit_str = "2s" + str( twop_rangeStart )
+    #              + ".2e" + str( rangeEnd )
 
-        if tsf:
+    if tsf:
 
-            fitParams_twop,chiSq=fit.twoStateFit_twop( twop_to_fit,
-                                                       twop_rangeStart,
-                                                       rangeEnd, T )
+        twop_rangeStart = comm.bcast( twop_rangeStart, root=0 )
+
+        fitParams_twop,chiSq=fit.twoStateFit_twop( twop_to_fit,
+                                                   twop_rangeStart,
+                                                   rangeEnd, T,
+                                                   mpi_confs_info )
             
+        if rank == 0:
+
             c0_p[ imom ] = fitParams_twop[ :, 0 ]
             c1_p[ imom ] = fitParams_twop[ :, 1 ]
             E0_p[ imom ] = fitParams_twop[ :, 2 ]
@@ -601,10 +596,16 @@ if mpi_confs_info[ 'rank' ] == 0:
                                                                c1_p[ imom ], 
                                                                E0_p[ imom ], 
                                                                E1_p[ imom ], 
-                                                               T, twop_rangeStart, 
+                                                               T, 
+                                                               twop_rangeStart, 
                                                                rangeEnd )
 
-        else:
+        # End if first process
+    # End two-state fit
+
+    else:
+        
+        if rank == 0:
 
             fitParams_twop,chiSq=fit.oneStateFit_twop(twop_to_fit,
                                                       twop_rangeStart,
@@ -615,8 +616,15 @@ if mpi_confs_info[ 'rank' ] == 0:
 
             twop_curve_p, ts_twop = fit.calcTwopOneStateCurve( c0_p[ imom ], 
                                                                E0_p[ imom ], 
-                                                               T, twop_rangeStart, 
+                                                               T, 
+                                                               twop_rangeStart, 
                                                                rangeEnd )
+
+        # End if first process
+    # End one-state fit
+
+    if rank == 0:
+
         # Average over bins
         
         twop_p_avg = np.average( twop_boost_fold_p[ imom ], axis=-2 )
@@ -708,7 +716,10 @@ if mpi_confs_info[ 'rank' ] == 0:
                 """
             # End loop over tsink
         # End loop over flavor
-    # End loop over momenta
+    # End if first process
+# End loop over momenta
+
+if rank == 0:
 
     # Average over momenta
     # mellin[ flav, ts, b, t ]
@@ -872,7 +883,9 @@ if mpi_confs_info[ 'rank' ] == 0:
         # End loop over tsink
     # End loop over flavor
 
-    exit()
+exit()
+
+if False:
     ##################
     # Two-state Fit  #
     ##################

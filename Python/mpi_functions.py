@@ -68,7 +68,7 @@ def lqcdjk_mpi_confs_info( mpi_confs_info ):
 
     # Number of bins for this process
     binNum_loc = binNum[ rank ]
-    mpi_confs_info[ 'binNum_loc' ] = binNum_loc
+    mpi_confs_info[ 'binNum_loc' ] = np.array( binNum_loc, dtype='i' )
 
     # Number of bins on each process and offset for gatherv functions
     recvCount, recvOffset = recvCountOffset( procNum, binNum )
