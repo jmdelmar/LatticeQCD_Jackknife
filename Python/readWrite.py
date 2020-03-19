@@ -456,7 +456,7 @@ def readTwopFile_zeroQ( twopDir, configList, configNum, twop_template, \
 
     mpi_fncs.mpiPrint( "Read two-point functions from HDF5 files " \
                        + "in {:.3} seconds".format( time() - t0 ), \
-                       comm.Get_rank() )
+                       mpi_info )
 
     return np.asarray( twop, order='c', dtype=float )
 
@@ -550,7 +550,7 @@ def getMellinMomentThreep( threepDir, configList, configNum, threep_tokens, \
     # moment: Which mellin moment to get
     # L: Length of lattice space dimensions
     # T: Length of lattice time dimension
-    # comm: MPI info dictionary containing communicator
+    # mpi_info: MPI info dictionary containing communicator
     # dsetname (optional kwarg): List of datasets to read. 
     #                            Overrides keyword
 
@@ -559,7 +559,7 @@ def getMellinMomentThreep( threepDir, configList, configNum, threep_tokens, \
     threeps = readMellinThreepFile( threepDir, configList, \
                                     threep_tokens, srcNum, ts, p, \
                                     particle, moment, dataFormat, \
-                                    T, comm )
+                                    T, mpi_info )
 
     if moment == 1:
 
@@ -686,7 +686,7 @@ def getMellinMomentThreep( threepDir, configList, configNum, threep_tokens, \
         error = "Error (readWrite.getMelinMomentThreep): moment " + moment \
                 + " not supported."
 
-        mpi_fncs.mpiPrintError( error, comm )
+        mpi_fncs.mpiPrintError( error, mpi_error )
 
     threep = np.zeros( ( 1 if particle == "pion" else 2, configNum, T ), \
                        order='c', dtype=float )
@@ -699,9 +699,11 @@ def getMellinMomentThreep( threepDir, configList, configNum, threep_tokens, \
 
     return threep
 
-def readMellinThreepFile( threepDir, configList, threep_tokens, srcNum, \
-                          ts, p, particle, moment, dataFormat, \
-                          T, comm, **kwargs ):
+def readMellinThreepFile( threepDir, configList, threep_tokens, srcNum,
+                          ts, p, particle, moment, dataFormat,
+                          T, mpi_info, **kwargs ):
+
+    comm = mpi_info[ 'comm' ]
 
     t0 = time()
 
@@ -717,7 +719,7 @@ def readMellinThreepFile( threepDir, configList, threep_tokens, srcNum, \
 
             threep_template = "{0}{1}{2}{3:+}_{4:+}_{5:+}"
             threep_template = threep_template.format( threep_tokens[ 0 ], \
-                                                      ts, threep_tokens[ 1 ], \
+                                                      ts, threep_tokens[ 1 ],
                                                       p[ 0 ], p[ 1 ], p[ 2 ] )
 
     else: # Particle is meson
@@ -730,22 +732,21 @@ def readMellinThreepFile( threepDir, configList, threep_tokens, srcNum, \
                 
             if dataFormat == "cpu":
 
-                threeps = readNucleonAvgXFile_cpu( threepDir, threep_template, \
+                threeps = readNucleonAvgXFile_cpu( threepDir, 
+                                                   threep_template,
                                                    configList, ts )
 
             else:
 
                 error = "Error (readWrite.readMellinThreepFile): " \
                         + "GPU format not supported for nucleon."
-
-                mpi_fncs.mpiPrintError( error, comm )
+                mpi_fncs.mpiPrintError( error, mpi_info )
 
         else:
 
             error = "Error (readWrite.readMellinThreepFile): " \
                     + "moments of order >1 not supported for nucleon."
-
-            mpi_fncs.mpiPrintError( error, comm )
+            mpi_fncs.mpiPrintError( error, mpi_info )
 
     else: # Particle is meson
 
@@ -753,43 +754,50 @@ def readMellinThreepFile( threepDir, configList, threep_tokens, srcNum, \
 
             if moment == 1:
 
-                threeps = readMesonAvgXFile_cpu( threepDir, \
-                                                 threep_template, \
-                                                 configList, \
-                                                 particle, ts, srcNum )
+                threeps = readMesonAvgXFile_cpu( threepDir,
+                                                 threep_template,
+                                                 configList,
+                                                 particle, ts, 
+                                                 srcNum, mpi_info )
 
             elif moment == 2:
 
-                threeps = readMesonAvgX2File_cpu( threepDir, \
-                                                  threep_template, \
-                                                  configList, \
-                                                  particle, ts, srcNum )
+                threeps = readMesonAvgX2File_cpu( threepDir,
+                                                  threep_template,
+                                                  configList,
+                                                  particle, ts, 
+                                                  srcNum, mpi_info )
                 
             elif moment == 3:
 
-                threeps = readMesonAvgX3File_cpu( threepDir, \
-                                                  threep_template, \
-                                                  configList, \
-                                                  particle, ts, srcNum )
+                threeps = readMesonAvgX3File_cpu( threepDir,
+                                                  threep_template,
+                                                  configList,
+                                                  particle, ts, 
+                                                  srcNum, mpi_info )
 
             else:
                 
                 error = "Error (readWrite.readMellinThreepFile): " \
                         + "moments of order >3 not supported."
+                mpi_fncs.mpiPrintError( error, mpi_info )
+                
 
         elif dataFormat == "gpu":
 
             if moment == 1:
 
-                threeps = readMesonAvgXFile_gpu( threepDir, \
-                                                 threep_template, \
-                                                 configList, particle, ts)
+                threeps = readMesonAvgXFile_gpu( threepDir,
+                                                 threep_template,
+                                                 configList, particle, 
+                                                 ts, mpi_info )
 
             else:
 
                 error = "Error (readWrite.readMellinThreepFile): " \
                         + "moments of order >1 not supported for " \
                         + dataFormat + " data format."
+                mpi_fncs.mpiPrintError( error, mpi_info )
     
     threeps = np.pad( threeps, ( ( 0, 0 ), ( 0, 0 ), \
                                  ( 0, T - threeps.shape[ -1 ] ) ), \
@@ -798,13 +806,13 @@ def readMellinThreepFile( threepDir, configList, threep_tokens, srcNum, \
 
     mpi_fncs.mpiPrint( "Read three-point functions from HDF5 files " \
                        + "in {:.3} seconds".format( time() - t0 ), \
-                       comm.Get_rank() )
+                       mpi_info )
 
     return np.asarray( threeps, order='c', dtype=float )
 
 
 def readMesonAvgXFile_cpu( threepDir, threep_template, configList, \
-                           particle, ts, srcNum ):
+                           particle, ts, srcNum, mpi_info ):
 
     filename = threep_template + ".up.h5"
 
@@ -883,12 +891,11 @@ def readMesonAvgXFile_cpu( threepDir, threep_template, configList, \
         
         error = "Error (readwrite.readMesonAvgXFile_cpu): Particle " \
                 + particle + " not supported."
-
-        mpi_fncs.mpiPrintError( error, comm )
+        mpi_fncs.mpiPrintError( error, mpi_info )
 
 
 def readMesonAvgXFile_gpu( threepDir, threep_template, configList, \
-                           particle, ts):
+                           particle, ts, mpi_info ):
 
     threep_gxDx = getDatasets( threepDir, \
                                configList, \
@@ -987,7 +994,7 @@ def readMesonAvgXFile_gpu( threepDir, threep_template, configList, \
         error = "Error (readWrite.readMesonsAvgXFile_gpu): Particle " \
                 + particle + " not supported."
         
-        mpi_fncs.mpiPrintError( error, comm )
+        mpi_fncs.mpiPrintError( error, mpi_info )
 
 
 def readNucleonAvgXFile_cpu( threepDir, threep_template, configList, \
@@ -1066,7 +1073,7 @@ def readNucleonAvgXFile_cpu( threepDir, threep_template, configList, \
 
 
 def readMesonAvgX2File_cpu( threepDir, threep_template, configList, \
-                            particle, ts, srcNum ):
+                            particle, ts, srcNum, mpi_info ):
     
     filename = threep_template + ".up.h5"
 
@@ -1160,11 +1167,11 @@ def readMesonAvgX2File_cpu( threepDir, threep_template, configList, \
 
         mpi_fncs.mpiPrintErr( "Error (readWrite.readMesonAvgX2File_cpu): " \
                               + "Particle " + particle + " not supported.", \
-                              comm )
+                              mpi_info )
 
 
 def readMesonAvgX3File_cpu( threepDir, threep_template, configList, \
-                            particle, ts, srcNum ):
+                            particle, ts, srcNum, mpi_info ):
     
     filename = threep_template + ".up.h5"
 
@@ -1216,11 +1223,11 @@ def readMesonAvgX3File_cpu( threepDir, threep_template, configList, \
     else: 
 
         mpi_fncs.mpiPrintErr( "Error (readAvgX2File): Particle " \
-                              + particle + " not supported.", comm )
+                              + particle + " not supported.", mpi_info )
 
 
 def readAvgXFile( threepDir, configList, threep_tokens, srcNum, \
-                  ts, momList, particle, dataFormat, T, comm, **kwargs ):
+                  ts, momList, particle, dataFormat, T, mpi_info, **kwargs ):
 
     t0 = time()
 
@@ -1328,7 +1335,7 @@ def readAvgXFile( threepDir, configList, threep_tokens, srcNum, \
 
             error = "Error (readWrite.readAvgXFile): GPU format not supported for nucleon."
             
-            mpi_fncs.mpiPrintError( error, comm )
+            mpi_fncs.mpiPrintError( error, mpi_info )
 
     else: # Particle is meson
 
@@ -1529,7 +1536,7 @@ def readAvgXFile( threepDir, configList, threep_tokens, srcNum, \
 
     mpi_fncs.mpiPrint( "Read three-point functions from HDF5 files " \
                        + "in {:.3} seconds".format( time() - t0 ), \
-                       comm.Get_rank() )
+                       mpi_info )
 
     threeps = np.pad( threeps, ( ( 0, 0 ), ( 0, 0 ), \
                                  ( 0, T - threeps.shape[ -1 ] ) ), \
@@ -1551,7 +1558,7 @@ def readAvgXFile( threepDir, configList, threep_tokens, srcNum, \
 #                             keyword
 
 def readAvgX2File( threepDir, configList, threep_tokens, srcNum, \
-                   ts, p, particle, dataFormat, T, comm, **kwargs ):
+                   ts, p, particle, dataFormat, T, mpi_info, **kwargs ):
 
     t0 = time()
 
@@ -1568,7 +1575,7 @@ def readAvgX2File( threepDir, configList, threep_tokens, srcNum, \
 
         error = "Error (readWrite.readAvgX2File): GPU format not supported"
 
-        mpi_fncs.mpiPrintError( error, comm )
+        mpi_fncs.mpiPrintError( error, mpi_info )
 
     if particle == "nucleon":
         """
@@ -1663,7 +1670,7 @@ def readAvgX2File( threepDir, configList, threep_tokens, srcNum, \
             exit()
         """
         mpi_fncs.mpiPrintError( "Error (readWrite.readAvgX2File): " \
-                                + "Nucleon not supported", comm )
+                                + "Nucleon not supported", mpi_info )
     else: # Particle is meson
         
         if dataFormat == "gpu":
@@ -1773,7 +1780,7 @@ def readAvgX2File( threepDir, configList, threep_tokens, srcNum, \
             """
             mpi_fncs.mpiPrintError( "Error (readWrite.readAvgX2File): " \
                                     + "GPU format not supported, yet.", \
-                                    comm )
+                                    mpi_info )
 
         elif dataFormat == "cpu":
 
@@ -1848,11 +1855,11 @@ def readAvgX2File( threepDir, configList, threep_tokens, srcNum, \
             else: 
 
                 mpi_fncs.mpiPrintErr( "Error (readAvgX2File): Particle " \
-                    + particle + " not supported.", comm )
+                    + particle + " not supported.", mpi_info )
 
     mpi_fncs.mpiPrint( "Read three-point functions from HDF5 files " \
                        + "in {:.3} seconds".format( time() - t0 ), \
-                       comm.Get_rank() )
+                       mpi_info )
 
     threeps = np.pad( threeps, ( ( 0, 0 ), ( 0, 0 ), \
                                  ( 0, T - threeps.shape[ -1 ] ) ), \
@@ -1874,7 +1881,7 @@ def readAvgX2File( threepDir, configList, threep_tokens, srcNum, \
 #                             keyword
 
 def readAvgX3File( threepDir, configList, threep_tokens, srcNum, 
-                   ts, p, particle, dataFormat, T, comm, **kwargs ):
+                   ts, p, particle, dataFormat, T, mpi_info, **kwargs ):
 
     t0 = time()
 
@@ -1891,7 +1898,7 @@ def readAvgX3File( threepDir, configList, threep_tokens, srcNum,
 
         error = "Error (readWrite.readAvgX2File): GPU format not supported"
 
-        mpi_fncs.mpiPrintError( error, comm )
+        mpi_fncs.mpiPrintError( error, mpi_info )
 
     if particle == "nucleon":
         """
@@ -1986,7 +1993,7 @@ def readAvgX3File( threepDir, configList, threep_tokens, srcNum,
             exit()
         """
         mpi_fncs.mpiPrintError( "Error (readWrite.readAvgX2File): " \
-                                + "Nucleon not supported, yet.", comm )
+                                + "Nucleon not supported, yet.", mpi_info )
     else: # Particle is meson
         
         if dataFormat == "gpu":
@@ -2096,7 +2103,7 @@ def readAvgX3File( threepDir, configList, threep_tokens, srcNum,
             """
             mpi_fncs.mpiPrintError( "Error (readWrite.readAvgX2File): " \
                                     + "GPU format not supported, yet.", \
-                                    comm )
+                                    mpi_info )
 
         elif dataFormat == "cpu":
 
@@ -2131,11 +2138,11 @@ def readAvgX3File( threepDir, configList, threep_tokens, srcNum,
             else: 
 
                 mpi_fncs.mpiPrintErr( "Error (readAvgX2File): Particle " \
-                    + particle + " not supported.", comm )
+                    + particle + " not supported.", mpi_info )
 
     mpi_fncs.mpiPrint( "Read three-point functions from HDF5 files " \
                        + "in {:.3} seconds".format( time() - t0 ), \
-                       comm.Get_rank() )
+                       mpi_info )
 
     threeps = np.pad( threeps, ( ( 0, 0 ), ( 0, 0 ), \
                                  ( 0, T - threeps.shape[ -1 ] ) ), \
@@ -2147,7 +2154,7 @@ def readAvgX3File( threepDir, configList, threep_tokens, srcNum,
 
 def readEMFile( threepDir, configList, threep_tokens, srcNum,
                 ts, momList, particle, dataFormat, insType, 
-                T, comm, **kwargs ):
+                T, mpi_info, **kwargs ):
 
     t0 = time()
 
@@ -2260,7 +2267,7 @@ def readEMFile( threepDir, configList, threep_tokens, srcNum,
 
     mpi_fncs.mpiPrint( "Read three-point functions from HDF5 files " \
                        + "in {:.3} seconds".format( time() - t0 ), \
-                       comm.Get_rank() )
+                       mpi_info )
 
     threeps = np.pad( threeps, ( ( 0, 0 ), ( 0, 0 ), \
                                  ( 0, T - threeps.shape[ -1 ] ) ), \

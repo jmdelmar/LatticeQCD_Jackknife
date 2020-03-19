@@ -80,14 +80,14 @@ def lqcdjk_mpi_confs_info( mpi_confs_info ):
 # message: Message to be printed
 # rank: Rank of process. Prints if rank is 0
 
-def mpiPrint( message, rank ):
+def mpiPrint( message, mpi_info ):
 
-    if rank == 0:
+    if mpi_info[ 'rank' ] == 0:
 
         print( message )
 
 
-# Same as mpiPrint() but prints to stderr
+# Same as mpiPrint() but prints to stderr and aborts
 
 # message: Message to be printed
 # rank: Rank of process. Prints if rank is 0
@@ -109,16 +109,18 @@ def mpiPrintErr( message, mpi_info ):
 # mpi_info: MPI info dictionary containing communicator 
 
 def mpiPrintAllRanks( message, mpi_info ):
+    
+    comm = mpi_info[ 'comm' ]
+    rank = mpi_info[ 'rank' ]
+    procNum = mpi_info[ 'procNum' ]
 
-    rank = mpi_info[ 'comm' ].Get_rank()
-
-    for p in range( mpi_info[ 'comm' ].Get_size() ):
+    for p in range( procNum ):
 
         if p == rank:
 
             print( "rank {}: {}".format( rank, message ) )
 
-        mpi_info[ 'comm' ].Barrier()
+        comm.Barrier()
 
 
 # Return number of bins to be received and their offsets
