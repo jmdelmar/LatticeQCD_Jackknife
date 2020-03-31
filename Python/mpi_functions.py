@@ -28,26 +28,45 @@ def lqcdjk_mpi_confs_info( mpi_confs_info ):
         + " not evenly divided by bin size " \
         + str( binSize ) + "."
 
-    assert configNum % procNum == 0, \
-        "Number of configurations " + str( configNum ) \
-        + " not evenly divided by number of processes " \
-        + str( procNum ) + "."
-
-    # Number of configurations on each process
-    procSize = mpi_confs_info[ 'configNum' ] // mpi_confs_info[ 'procNum' ]
+    #assert configNum % procNum == 0, \
+    #    "Number of configurations " + str( configNum ) \
+    #    + " not evenly divided by number of processes " \
+    #    + str( procNum ) + "."
 
     # Total number of bins across processes
     binNum_glob = mpi_confs_info[ 'configNum' ] // mpi_confs_info[ 'binSize' ]
     mpi_confs_info[ 'binNum_glob' ] = binNum_glob
 
-    # Global index of confs for each process
-    iconf = np.array( [ np.array( [ r * procSize + cl
-                                    for cl in range( procSize ) ], 
-                                  dtype=int )
-                        for r in range( procNum ) ] )
+    conf_remain = configNum % procNum
 
-    # List of configurations on this process
-    configList_loc = configList[ iconf[ rank ] ]
+    # Number of configurations on each process
+    procSize = mpi_confs_info[ 'configNum' ] // mpi_confs_info[ 'procNum' ]
+
+
+    # Global index of confs for each process
+    iconf = [ [] for r in range( procNum ) ]
+
+    for r in range( procNum - conf_remain ):
+
+        #iconf[ r ] = [ r * procSize + cl for cl in range( procSize ) ]
+        iconf[ r ] = [ ir for ir  in range( r * procSize, ( r + 1 ) * procSize ) ]
+
+    for rr in range( conf_remain ):
+
+        #iconf[ rr ] = [ r * procSize + cl for cl in range( procSize ) ]
+        iconf[ procNum - conf_remain + rr ] \
+            = [ ir for ir in range( ( procNum - conf_remain + rr ) 
+                                    * procSize + rr, 
+                                    ( procNum - conf_remain + rr + 1 ) 
+                                    * procSize + 1 + rr ) ]
+
+    #iconf = np.array( [ np.array( [ r * procSize + cl
+    #                                for cl in range( procSize ) ], 
+    #                              dtype=int )
+    #                    for r in range( procNum ) ] )
+
+    # List of global indices for configurations on this process
+    configList_loc = [ configList[ ic ] for ic in iconf[ rank ] ]
     mpi_confs_info[ 'configList_loc' ] = configList_loc
 
     # Global index of first conf of bins for each process
@@ -70,10 +89,28 @@ def lqcdjk_mpi_confs_info( mpi_confs_info ):
     binNum_loc = binNum[ rank ]
     mpi_confs_info[ 'binNum_loc' ] = np.array( binNum_loc, dtype='i' )
 
+    # Number of configurations on each process and offset 
+    # for gatherv functions
+
+    confNum = np.zeros( procNum, dtype=int )
+    confOffset = np.zeros( procNum, dtype=int )
+    offsetSum = 0
+
+    for r in range( procNum ):
+
+        confNum[ r ] = len( iconf[ r ] )
+        confOffset[ r ] = offsetSum
+
+        offsetSum += confNum[ r ]
+        
+    mpi_confs_info[ 'confNum' ] = confNum
+    mpi_confs_info[ 'confOffset' ] = confOffset
+
     # Number of bins on each process and offset for gatherv functions
     recvCount, recvOffset = recvCountOffset( procNum, binNum )
     mpi_confs_info[ 'recvCount' ] = recvCount
     mpi_confs_info[ 'recvOffset' ] = recvOffset
+
 
 # Prints message run by first process
 

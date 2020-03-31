@@ -5,7 +5,7 @@ from os import listdir as ls
 from glob import glob
 import functions as fncs
 import mpi_functions as mpi_fncs
-
+from mpi4py import MPI
 
 # Exception thrown there is an error reading an HDF5 dataset
 
@@ -411,6 +411,8 @@ def readTwopFile_zeroQ( twopDir, configList, configNum, twop_template, \
                         srcNum, pSq, dataFormat, mpi_info ):
 
     comm = mpi_info[ 'comm' ]
+    confNum = mpi_info[ 'confNum' ]
+    confOffset = mpi_info[ 'confOffset' ]
 
     t0 = time()
 
@@ -441,8 +443,10 @@ def readTwopFile_zeroQ( twopDir, configList, configNum, twop_template, \
     twop_loc = np.asarray( twop_loc, order='c', dtype=float )
 
     twop = np.zeros( ( configNum, ) + twop_loc.shape[ 1: ] )
-
-    comm.Allgather( twop_loc, twop )
+    
+    comm.Allgatherv( twop_loc, [ twop, confNum * np.prod( twop_loc.shape[ 1: ] ),
+                                 confOffset * np.prod( twop_loc.shape[ 1: ] ),
+                                 MPI.DOUBLE ] )
 
     if pSq > 0:
 
@@ -555,6 +559,8 @@ def getMellinMomentThreep( threepDir, configList, configNum, threep_tokens, \
     #                            Overrides keyword
 
     comm = mpi_info[ 'comm' ]
+    confNum = mpi_info[ 'confNum' ]
+    confOffset = mpi_info[ 'confOffset' ]
 
     threeps = readMellinThreepFile( threepDir, configList, \
                                     threep_tokens, srcNum, ts, p, \
@@ -691,11 +697,17 @@ def getMellinMomentThreep( threepDir, configList, configNum, threep_tokens, \
     threep = np.zeros( ( 1 if particle == "pion" else 2, configNum, T ), \
                        order='c', dtype=float )
 
-    comm.Allgather( threep_loc, threep[ 0 ] )
+    comm.Allgatherv( threep_loc, [ threep[ 0 ], 
+                                   confNum * np.prod( threep_loc.shape[ 1: ] ),
+                                   confOffset * np.prod( threep_loc.shape[ 1: ] ), 
+                                   MPI.DOUBLE ] )
 
     if particle == "kaon":
 
-        comm.Allgather( threep_s_loc, threep[ 1 ] )
+        comm.Allgatherv( threep_s_loc, [ threep[ 1 ], 
+                                       confNum * np.prod( threep_s_loc.shape[ 1: ] ),
+                                       confOffset * np.prod( threep_s_loc.shape[ 1: ] ), 
+                                       MPI.DOUBLE ] )
 
     return threep
 
