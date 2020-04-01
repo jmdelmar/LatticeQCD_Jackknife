@@ -156,18 +156,33 @@ moment = args.moment
 
 mpi_confs_info[ 'configList' ] = fncs.getConfigList( args.config_list, 
                                                      threepDir )
-mpi_confs_info[ 'configNum' ] = len( mpi_confs_info[ 'configList' ] )
-mpi_confs_info[ 'binSize' ] = args.binSize
+configNum = len( mpi_confs_info[ 'configList' ] )
+mpi_confs_info[ 'configNum' ] = configNum
+
+binSize = args.binSize
+mpi_confs_info[ 'binSize' ] = binSize
 
 # Set mpi configuration information
 
 mpi_fncs.lqcdjk_mpi_confs_info( mpi_confs_info )
 
 binNum = mpi_confs_info[ 'binNum_glob' ]
+binNum_loc = mpi_confs_info[ 'binNum_loc' ]
+binList_loc = mpi_confs_info[ 'binList_loc' ]
+configList_loc = mpi_confs_info[ 'configList_loc' ]
 recvCount = mpi_confs_info[ 'recvCount' ]
 recvOffset = mpi_confs_info[ 'recvOffset' ]
 
 # Check inputs
+
+assert dataFormat in format_list, \
+    "Error: Data format not supported. " \
+    + "Supported particles: " + str( format_list ) \
+
+assert moment in moment_list, \
+    "Error: Moment order not supported. " \
+    + "Supported moments: " + str( moment_list )
+
 
 assert particle in particle_list, \
     "Error: Particle not supported. " \
@@ -185,15 +200,6 @@ else:
 # If pion, will not access strange.
 
 flav_str = [ "u", "s" ]
-
-assert dataFormat in format_list, \
-    "Error: Data format not supported. " \
-    + "Supported particles: " + str( format_list ) \
-
-assert moment in moment_list, \
-    "Error: Moment order not supported. " \
-    + "Supported moments: " + str( moment_list )
-
 
 if moment == 1:
 
@@ -213,7 +219,7 @@ elif moment == 3:
 # Read momentum list
 
 momList = rw.readMomentaList( twopDir, twop_template,
-                              mpi_confs_info[ 'configList_loc' ][ 0 ], particle,
+                              configList_loc[ 0 ], particle,
                               srcNum, momSq, dataFormat, mpi_confs_info )
 
 momBoostNum = len( momList )
@@ -225,8 +231,7 @@ momBoostNum = len( momList )
 # Zero momentum two-point functions
 # twop[ c, t ]
 
-twop = rw.readTwopFile_zeroQ( twopDir, mpi_confs_info[ 'configList_loc' ], 
-                              mpi_confs_info[ 'configNum' ],
+twop = rw.readTwopFile_zeroQ( twopDir, configList_loc, configNum,
                               twop_template, srcNum, 0, dataFormat,
                               mpi_confs_info )
 
@@ -242,10 +247,9 @@ T_fold = T // 2 + 1
 # Jackknife and fold two-point functions #
 ##########################################
 
-if mpi_confs_info[ 'binNum_loc' ]:
+if binNum_loc:
 
-    twop_jk_loc = fncs.jackknifeBinSubset( twop, mpi_confs_info[ 'binSize' ], 
-                                           mpi_confs_info[ 'binList_loc' ] )
+    twop_jk_loc = fncs.jackknifeBinSubset( twop, binSize, binList_loc )
 
     # twop_fold[ b, t ]
 
@@ -270,15 +274,10 @@ else:
 twop_fold = np.zeros( ( binNum, T_fold ) )
 mEff = np.zeros( ( binNum, T_fold ) )
 
-comm.Allgatherv( twop_fold_loc, 
-                 [ twop_fold, 
-                   recvCount * T_fold,
-                   recvOffset * T_fold, 
-                   MPI.DOUBLE ] )
-comm.Allgatherv( mEff_loc, 
-                 [ mEff, recvCount * T_fold,
-                   recvOffset * T_fold, 
-                   MPI.DOUBLE ] )
+comm.Allgatherv( twop_fold_loc, [ twop_fold, recvCount * T_fold,
+                                  recvOffset * T_fold, MPI.DOUBLE ] )
+comm.Allgatherv( mEff_loc, [ mEff, recvCount * T_fold, 
+                             recvOffset * T_fold, MPI.DOUBLE ] )
 
 if rank == 0:
 
@@ -294,35 +293,60 @@ if rank == 0:
 
 try:
     
-    fitResults = fit.mEffTwopFit( mEff, twop_fold,
-                                  rangeEnd, 0, L, tsf,
-                                  mpi_confs_info,
-                                  tsf_t_low_range=[tsf_fitStart],
-                                  plat_t_low_range=[plat_fitStart],
-                                  checkFit=checkFit )
+    fitResults = fit.effEnergyTwopFit( mEff, twop_fold,
+                                       rangeEnd, 0, L, tsf,
+                                       mpi_confs_info,
+                                       plat_t_low_range=[plat_fitStart],
+                                       checkFit=checkFit,
+                                       fitType="twop",
+                                       tsf_t_low_range=range(3,5) )
+    #                                  tsf_t_low_range=[tsf_fitStart],
+
+    fitType = "twop"
     
 except fit.lqcdjk_BadFitError as error:
-        
-    mpi_fncs.mpiPrintErr( "ERROR (lqcdjk_fitting.mEffTwopFit):"
-                          + str( error ), mpi_confs_info )
 
+    try:
+        
+        fitResults = fit.effEnergyTwopFit( mEff, twop_fold,
+                                           rangeEnd, 0, L, tsf,
+                                           mpi_confs_info,
+                                           tsf_t_low_range=[tsf_fitStart],
+                                           plat_t_low_range=[plat_fitStart],
+                                           checkFit=checkFit,
+                                           fitType="effEnergy" )
+        
+    except fit.lqcdjk_BadFitError as error:
+
+        mpi_fncs.mpiPrintErr( "ERROR (lqcdjk_fitting.mEffTwopFit):"
+                              + str( error ), mpi_confs_info )
+
+    fitType = "effEnergy"
+
+fitParams = fitResults[ 0 ]
+chiSq = fitResults[ 1 ]
+mEff_fit = fitResults[ 2 ]
+rangeStart = fitResults[ 3 ]
+mEff_rangeStart = fitResults[ 4 ]
+    
 if rank == 0:
 
-    fitParams = fitResults[ 0 ]
-    chiSq = fitResults[ 1 ]
-    mEff_fit = fitResults[ 2 ]
-    rangeStart = fitResults[ 3 ]
-    mEff_rangeStart = fitResults[ 4 ]
-    
     mEffFit_str = "2s" + str( rangeStart ) \
                   + ".2e" + str( rangeEnd )
 
     if tsf:
 
-        c = fitParams[ :, 0 ]
-        E0_mEff = fitParams[ :, 1 ]
-        E1_mEff = fitParams[ :, 2 ]
+        if fitType == "twop":
 
+            E0_mEff = fitParams[ :, 2 ]
+            E1_mEff = fitParams[ :, 3 ]
+
+        elif fitType == "effEnergy":
+
+            #c = fitParams[ :, 0 ]
+            E0_mEff = fitParams[ :, 1 ]
+            E1_mEff = fitParams[ :, 2 ]
+        """
         # Calculate fitted curve
 
         curve, \
@@ -330,14 +354,11 @@ if rank == 0:
                                              c, E0_mEff, E1_mEff, T,
                                              rangeStart,
                                              rangeEnd )
-
+            
         curveOutputFilename = rw.makeFilename( output_template,
                                                "mEff_2sf_curve_{}",
                                                mEffFit_str )
-        
-        c_avg = np.average( c, axis=0 )
-        c_err = fncs.calcError( c, binNum )
-
+        """
         E0_mEff_avg = np.average( E0_mEff, axis=0 )
         E0_mEff_err = fncs.calcError( E0_mEff, binNum )
 
@@ -355,7 +376,7 @@ if rank == 0:
                                                mEffFit_str )
 
     else: # One-state fit
-
+        """
         c = fitParams[ :, 0 ]
         E0_mEff = fitParams[ :, 1 ]
 
@@ -366,7 +387,8 @@ if rank == 0:
 
         curveOutputFilename = rw.makeFilename( output_template,
                                                "twop_1sf_curve_{}",
-                                               mEffFit_str )
+        mEffFit_str )
+        """
         chiSqOutputFilename = rw.makeFilename( output_template,
                                                "twop_oneStateFit_chiSq_{}",
                                                twopFit_str )
@@ -376,16 +398,13 @@ if rank == 0:
     #curve_avg = np.average( curve, axis=0 )
     #curve_err = fncs.calcError( curve, binNum )
             
-    curve_avg = np.average( curve, axis=0 )
-    curve_err = fncs.calcError( curve, binNum )
-
     chiSq_avg = np.average( chiSq, axis=0 )
     chiSq_err = fncs.calcError( chiSq, binNum )
             
     # Write output files
 
-    rw.writeAvgDataFile_wX( curveOutputFilename, t_s,
-                            curve_avg, curve_err )
+    #rw.writeAvgDataFile_wX( curveOutputFilename, t_s,
+    #                        curve_avg, curve_err )
         
     rw.writeFitDataFile( chiSqOutputFilename, chiSq_avg,
                          chiSq_err, rangeStart, rangeEnd )
@@ -402,9 +421,15 @@ if rank == 0:
     rw.writeFitDataFile( mEff_outputFilename, mEff_fit_avg,
                          mEff_fit_err, mEff_rangeStart, rangeEnd )
 
-# End if first process
+else: # Not first process
 
-comm.Barrier()
+    mEff_fit = None
+    mEff_fit_avg = None
+
+# End not first process
+
+mEff_fit = comm.bcast( mEff_fit, root=0 )
+mEff_fit_avg = comm.bcast( mEff_fit_avg, root=0 )
 
 
 ###############################
@@ -414,26 +439,20 @@ comm.Barrier()
 
 if momSq > 0:
 
-    twop_boost = rw.readTwopFile_zeroQ( twopDir, 
-                                        mpi_confs_info[ 'configList_loc' ], 
-                                        mpi_confs_info[ 'configNum' ],
+    twop_boost = rw.readTwopFile_zeroQ( twopDir, configList_loc, configNum,
                                         twop_template, srcNum, momSq,
                                         dataFormat, mpi_confs_info )
 
-    twop_boost_fold_p = np.zeros( ( momBoostNum, 
-                                    binNum, T_fold ) )
+    twop_boost_fold_p = np.zeros( ( momBoostNum, binNum, T_fold ) )
 
-# Loop over momenta
-for imom in range( momBoostNum ):
+    # Loop over momenta
+    for imom in range( momBoostNum ):
 
-    if momSq > 0:
+        if binNum_loc:
 
-        if mpi_confs_info[ 'binNum_loc' ]:
-
-            twop_boost_jk_loc \
-                = fncs.jackknifeBinSubset( twop_boost[ imom ],\
-                                           mpi_confs_info[ 'binSize' ],
-                                           mpi_confs_info[ 'binList_loc' ] )
+            twop_boost_jk_loc = fncs.jackknifeBinSubset( twop_boost[ imom ],
+                                                         binSize, 
+                                                         binList_loc )
 
             twop_boost_fold_loc = fncs.fold( twop_boost_jk_loc )
 
@@ -441,16 +460,14 @@ for imom in range( momBoostNum ):
 
             twop_boost_fold_loc = np.array( [] )
 
-        comm.Allgatherv( twop_boost_fold_loc, 
-                         [ twop_boost_fold_p[ imom ],
-                           recvCount * T_fold,
-                           recvOffset * T_fold,
-                           MPI.DOUBLE ] )
+        comm.Allgatherv( twop_boost_fold_loc, [ twop_boost_fold_p[ imom ],
+                                                recvCount * T_fold,
+                                                recvOffset * T_fold, 
+                                                MPI.DOUBLE ] )
 
-    # End if non-zero momentum boost
+    # End loop over momenta
+# End if non-zero momentum boost
 
-# End loop over momenta
-    
 
 ###########################
 # Fit two-point functions #
@@ -461,56 +478,106 @@ if momSq > 0: # Boosted two-point functions
 
     # Average over momenta
 
-    twop_to_fit = twop_boost_fold = np.average( twop_boost_fold_p, axis=0 )
+    twop_to_fit = np.average( twop_boost_fold_p, axis=0 )
     mEff_to_fit = pq.mEffFromSymTwop( twop_to_fit )
 
     if np.any( np.isnan( mEff_to_fit ) ):
 
-        rangeEnd = min(np.where(np.isnan(mEff_to_fit))[-1]) - 1
+        rangeEnd = min( np.where( np.isnan( mEff_to_fit ) )[-1] ) - 1
 
-    fitResults_tmp = fit.mEffTwopFit( mEff_to_fit, twop_to_fit,
-                                      rangeEnd, momSq, L, tsf,
-                                      mpi_confs_info,
-                                      tsf_t_low_range=[tsf_fitStart],
-                                      plat_t_low_range=[plat_fitStart],
-                                      checkFit=checkFit )
+    # End nan in mEff_to_fit
 
-    twop_rangeStart = fitResults_tmp[ 3 ]
+    try:
+            
+        fitResults_twop \
+            = fit.effEnergyTwopFit( mEff_to_fit, twop_to_fit,
+                                    rangeEnd, momSq, L, tsf,
+                                    mpi_confs_info,
+                                    tsf_t_low_range=[tsf_fitStart],
+                                    plat_t_low_range=[plat_fitStart],
+                                    checkFit=checkFit,
+                                    fitType="twop" )
+
+        twop_rangeStart = fitResults_twop[ 3 ]
+            
+    except fit.lqcdjk_BadFitError as error:
         
+        try:
+            
+            fitResults_tmp \
+                = fit.effEnergyTwopFit( mEff_to_fit, twop_to_fit,
+                                        rangeEnd, momSq, L, tsf,
+                                        mpi_confs_info,
+                                        tsf_t_low_range=[tsf_fitStart],
+                                        plat_t_low_range=[plat_fitStart],
+                                        checkFit=checkFit,
+                                        fitType="effEnergy" )
+
+        except fit.lqcdjk_BadFitError as error:
+        
+            mpi_fncs.mpiPrintErr( "ERROR (lqcdjk_fitting.mEffTwopFit):"
+                                  + str( error ), mpi_confs_info )
+
+        # End bad mEff fit
+
+        twop_rangeStart = fitResults_tmp[ 3 ]
+            
+        twop_rangeStart = comm.bcast( twop_rangeStart, root=0 )
+        
+        E_guess = np.sqrt( mEff_fit_avg ** 2 
+                           + ( 2.0 * np.pi / L ) ** 2 * momSq )
+
+        fitParams_twop,chiSq=fit.twoStateFit_twop( twop_to_fit,
+                                                   twop_rangeStart,
+                                                   rangeEnd, 
+                                                   E_guess, T,
+                                                   mpi_confs_info )
+
+    # End bad twop fit
+
 else: # Zero momentum two-point functions
 
     twop_to_fit = twop_fold
     twop_rangeStart = rangeStart
-    
-"""
-if args.twop_fit_start: # fit starts at given t
-    
-twop_rangeStart = args.twop_fit_start
 
-else: # fit range starts at same t as was used for mEff
+    if fitType == "effEnergy":
 
-twop_rangeStart = rangeStart
+        if tsf:
 
-twopFit_str = "2s" + str( twop_rangeStart ) \
-+ ".2e" + str( rangeEnd )
-"""
-#twopFit_str = "2s" + str( twop_rangeStart )
-#              + ".2e" + str( rangeEnd )
+            E_guess = mEff_fit
 
-twop_rangeStart = comm.bcast( twop_rangeStart, root=0 )
+            fitParams_twop, chiS = fit.twoStateFit_twop( twop_to_fit,
+                                                         twop_rangeStart,
+                                                         rangeEnd, 
+                                                         E_guess, T,
+                                                         mpi_confs_info )
+
+        else: # One-state fit
+
+            fitParams_twop,chiSq=fit.oneStateFit_twop( twop_to_fit,
+                                                       twop_rangeStart,
+                                                       rangeEnd, T )
+
+    elif fitType == "twop":
+
+        fitResults_twop = fitResults
+        twop_rangeStart = rangeStart
+
+fitParams_twop = fitResults_twop[ 0 ]
 
 if tsf:
 
-    fitParams_twop,chiSq=fit.twoStateFit_twop( twop_to_fit,
-                                               twop_rangeStart,
-                                               rangeEnd, T,
-                                               mpi_confs_info )
+    c0 = fitParams_twop[ :, 0 ]
+    c1 = fitParams_twop[ :, 1 ]
+    E0 = fitParams_twop[ :, 2 ]
+    E1 = fitParams_twop[ :, 3 ]
 
-else: # One-state fit
+else: # One-state Fit
+    
+    c0 = fitParams_twop[ :, 0 ]
+    E0 = fitParams_twop[ :, 1 ]
 
-    fitParams_twop,chiSq=fit.oneStateFit_twop( twop_to_fit,
-                                               twop_rangeStart,
-                                               rangeEnd, T )
+# End one-state fit
 
 
 ######################################################
@@ -522,16 +589,30 @@ if rank == 0:
 
     if tsf:
         
-        c0 = fitParams_twop[ :, 0 ]
-        c1 = fitParams_twop[ :, 1 ]
-        E0 = fitParams_twop[ :, 2 ]
-        E1 = fitParams_twop[ :, 3 ]
-
         twop_curve, ts_twop = fit.calcTwopTwoStateCurve( c0, c1, 
                                                          E0, E1, T,
                                                          twop_rangeStart, 
                                                          rangeEnd )
 
+        twopParams_filename = rw.makeFilename( output_template,
+                                               "twop_2sf_params" )
+
+        rw.writeDataFile( twopParams_filename, fitParams_twop )
+
+        fitParams_twop_avg = np.concatenate( ( [ 0, 0, 0 ], \
+                                          np.average( fitParams_twop, \
+                                                      axis=0 ) ) )
+        fitParams_twop_err = np.concatenate( ( [ 0, 0, 0 ], \
+                                          fncs.calcError( fitParams_twop, \
+                                                          binNum ) ) )
+            
+        fitParams_twopOutputFilename \
+            = rw.makeFilename( output_template,
+                               "twop_2sf_params_t_low_{:0>2}",
+                               rangeStart )
+        rw.writeTSFParamsFile( fitParams_twopOutputFilename, \
+                               fitParams_twop_avg, fitParams_twop_err )
+                
     else: # One-state fit
         
         c0 = fitParams_twop[ :, 0 ]
@@ -599,15 +680,19 @@ for imom in range( momBoostNum ):
                                            mpi_confs_info[ 'binSize' ],
                                            mpi_confs_info[ 'binList_loc' ] )
 
-            comm.Gatherv( threep_p_jk_loc,
-                          [ threep_p_jk[ imom, iflav, its ],
-                            recvCount * T,
-                            recvOffset * T,
-                            MPI.DOUBLE ], root=0 )
+            comm.Allgatherv( threep_p_jk_loc,
+                             [ threep_p_jk[ imom, iflav, its ],
+                               recvCount * T,
+                               recvOffset * T,
+                               MPI.DOUBLE ] )
 
         # End loop over flavor
     # End loop over tsink
 # End loop over momenta
+
+# Average threep over momenta
+
+threep_jk = np.average( threep_p_jk, axis=0 )
 
 
 ####################
@@ -615,27 +700,24 @@ for imom in range( momBoostNum ):
 ####################
 
 
+E = np.sqrt( mEff_fit ** 2 + (2.0*np.pi/L) ** 2 * momSq )
+#E = E0
+
 if rank == 0:
 
     # mellin[ flav, ts, b, t ]
 
     mellin = np.zeros( ( flavNum, tsinkNum, binNum, T ) )
 
-    # Average threep over momenta
-
-    threep_jk = np.average( threep_p_jk, axis=0 )
-
     # Loop over flavor
     for iflav in range( flavNum ):
         # Loop over tsink
         for ts, its in zip( tsink, range( tsinkNum ) ) :
-            
-            mellin[ iflav,
-                    its ] = Z * pq.calcMellin_twopFit( threep_jk[ iflav,
-                                                                  its ],
-                                                       ts,E0_mEff,momSq,
-                                                       L, c0, E0, 
-                                                       moment )
+
+            mellin[ iflav, its ] \
+                = Z * pq.calcMellin_twopFit( threep_jk[ iflav, its ],
+                                             ts, mEff_fit, momSq, L, 
+                                             c0, E, moment )
 
         # End loop over tsink
     # End loop over flavor
@@ -647,8 +729,7 @@ if rank == 0:
     mellin_err = fncs.calcError( mellin, binNum, axis=-2 )
 
     threep_avg = np.average( threep_jk, axis=-2 )
-    threep_err = fncs.calcError( threep_jk, binNum, 
-                                 axis=-2 )
+    threep_err = fncs.calcError( threep_jk, binNum, axis=-2 )
 
     # Loop over flavor
     for iflav in range( flavNum ):
@@ -661,7 +742,6 @@ if rank == 0:
                                                   "{}_threep_{}_tsink{}",
                                                   moment_str,
                                                   flav_str[ iflav ], ts )
-
             rw.writeAvgDataFile( threep_outFilename,
                                  threep_avg[ iflav, its ],
                                  threep_err[ iflav, its ] )
@@ -715,163 +795,125 @@ if rank == 0:
             # End loop over fit ranges
         # End loop over tsink
     # End loop over flavor
+# End first process
 
-    exit()
 
-    ##################
-    # Two-state Fit  #
-    ##################
+##################
+# Two-state Fit  #
+##################
 
-    if tsf:
 
-        mpi_fncs.mpiPrint( "Will perform the two-state fit", mpi_confs_info )
+#CJL:HERE
+if tsf:
 
-        # Loop over flavors
-        for iflav in range( flavNum ):
-            # Loop over number of neglected three-point functions
-            for neglect in 2,3:
+    mpi_fncs.mpiPrint( "Will perform the two-state fit", mpi_confs_info )
 
-                ti_to_fit = fncs.initEmptyList( tsinkNum, 1 )
+    # Loop over flavors
+    for iflav in range( flavNum ):
+        # Loop over number of neglected three-point functions
+        for neglect in 2,3:
 
-                # Loop over tsinks
-                for ts in range( tsinkNum ):
-
-                    ti_to_fit[ ts ] = range( neglect,
-                                             tsink[ ts ] - neglect + 1 )
-                    """
-                    ti_to_fit[ ts ] = np.concatenate( ( range( neglect,
-                    tsink[ ts ]
-                    - neglect
-                    + 1 ),
-                    range( tsink[ ts ]
-                    + neglect
-                    + 5,
-                    T -
-                    neglect
-                    - 5 + 1 ) ) )
-                    ti_to_fit[ ts ] = range( tsink[ ts ] + neglect + 5,
-                    T - neglect - 5 + 1 )
-                    """
-
-                # End loop over tsink
-
-                fitParams = np.zeros( ( momBoostNum, 
-                                        binNum, 7 ) )
-                mellin = np.zeros( ( momBoostNum, 
-                                     binNum ) )
-                chiSq = np.zeros( ( momBoostNum, 
-                                    binNum ) )
-
-                threep_curve = fncs.initEmptyList( momBoostNum, 1 )
-                mellin_curve_const_ts = fncs.initEmptyList( momBoostNum, 1 )
-                mellin_curve_const_ti = fncs.initEmptyList( momBoostNum, 1 )
+            ti_to_fit = fncs.initEmptyList( tsinkNum, 1 )
             
-                # Loop over momenta
-                for imom in range( momBoostNum ):
+            # Loop over tsink
+            for its, ts in zip( range( tsinkNum ), tsink ):
+
+                ti_to_fit[ its ] = np.arange( neglect, ts - neglect + 1 )
                 
-                    fitParams_threep, \
-                        chiSq[imom]=fit.twoStateFit_threep(threep_p_jk[imom,
-                                                                       iflav],
-                                                           ti_to_fit,
-                                                           tsink, E0, E1, T )
+                """
+                ti_to_fit[ ts ] = np.concatenate( ( range( neglect,
+                tsink[ ts ]
+                - neglect
+                + 1 ),
+                range( tsink[ ts ]
+                + neglect
+                + 5,
+                T -
+                neglect
+                - 5 + 1 ) ) )
+                ti_to_fit[ ts ] = range( tsink[ ts ] + neglect + 5,
+                T - neglect - 5 + 1 )
+                """
+
+            # End loop over tsink
+
+            fitParams_threep, \
+                chiSq = fit.twoStateFit_threep( threep_jk[ iflav ],
+                                                ti_to_fit, tsink,
+                                                E, E1, T,
+                                                mpi_confs_info )
                     
-                    a00 = fitParams_threep[ :, 0 ]
-                    a01 = fitParams_threep[ :, 1 ]
-                    a11 = fitParams_threep[ :, 2 ]
+            if rank == 0:
+
+                a00 = fitParams_threep[ :, 0 ]
+                a01 = fitParams_threep[ :, 1 ]
+                a11 = fitParams_threep[ :, 2 ]
           
-                    # CJL: This needs to be fixed for multi momenta
-                    fitParams[ imom ] = np.stack( ( a00, a01, a11,
-                                                    c0, c1, E0, E1 ),
-                                                  axis=1 )
+                fitParams = np.stack( ( a00, a01, a11,
+                                        c0, c1, E0, E1 ),
+                                      axis=1 )
                 
-                    # Calculate curve with constant tsink
+                # Calculate curve with constant tsink
+                
+                # curve[ b, ts, t ]
+                # ti[ ts, t ]
+
+                threep_curve, \
+                    ti_threep = fit.calcThreepTwoStateCurve( a00, a01,
+                                                             a11, E,
+                                                             E1, T,
+                                                             tsink,
+                                                             ti_to_fit,
+                                                             neglect )
+
+                mellin_curve_const_ts, \
+                    ti_mellin = fit.calcAvgXTwoStateCurve_const_ts( a00, 
+                                                                    a01, a11,
+                                                                    c0, c1, 
+                                                                    E, E1,
+                                                                    mEff_fit,
+                                                                    momSq, 
+                                                                    L, T, Z, 
+                                                                    tsink,
+                                                                    ti_to_fit,
+                                                                    neglect )
+                
+                mellin_curve_const_ti, \
+                    ts_mellin = fit.calcAvgXTwoStateCurve_const_ti( a00, 
+                                                                    a01, a11,
+                                                                    c0, c1,
+                                                                    E, E1,
+                                                                    mEff_fit,
+                                                                    momSq,
+                                                                    L, T, Z,
+                                                                    tsink[0]
+                                                                    -2,
+                                                                    tsink[-1]
+                                                                    +5 )
                     
-                    # curve[ p, b, ts, t ]
-                    # ti[ ts, t ]
+                # mellin[ b ]
 
-                    threep_curve[ imom ], \
-                        ti_threep = fit.calcThreepTwoStateCurve( a00, a01,
-                                                                 a11, E0,
-                                                                 E1, T,
-                                                                 tsink,
-                                                                 ti_to_fit,
-                                                                 neglect )
-
-                    mellin_curve_const_ts[ imom ], \
-                        ti_mellin = fit.calcAvgXTwoStateCurve_const_ts( a00,
-                                                                        a01,
-                                                                        a11,
-                                                                        c0,
-                                                                        c1,
-                                                                        E0,
-                                                                        E1,
-                                                                        E0_mEff,
-                                                                        momSq,
-                                                                        L, T,
-                                                                        Z,
-                                                                        tsink,
-                                                                        ti_to_fit,
-                                                                        neglect )
-
-                    mellin_curve_const_ti[ imom ], \
-                        ts_mellin = fit.calcAvgXTwoStateCurve_const_ti( a00,
-                                                                        a01,
-                                                                        a11,
-                                                                        c0,
-                                                                        c1,
-                                                                        E0,
-                                                                        E1,
-                                                                        E0_mEff,
-                                                                        momSq,
-                                                                        L, T,
-                                                                        Z,
-                                                                        tsink[0]-2,
-                                                                        tsink[-1]+5 )
-                    
-                    # mellin[ p, b ]
-
-                    mellin[ imom ] = pq.calcAvgX_twoStateFit( a00, c0,
-                                                              E0_mEff,
-                                                              momSq,
-                                                              L, Z )
+                mellin = pq.calcAvgX_twoStateFit( a00, c0, mEff_fit, 
+                                                  momSq, L, Z )
                 
-                # End loop over momenta
-
-                # Average over momenta
-                    
-                threep_curve = np.average( threep_curve, axis=0 )
-            
-                mellin_curve_const_ts = np.average( mellin_curve_const_ts,
-                                                    axis=0 )
-                
-                mellin_curve_const_ti = np.average( mellin_curve_const_ti,
-                                                    axis=0 )
-                
-                fitParams = np.average( fitParams, axis=0 )
-            
-                chiSq = np.average( chiSq, axis=0 )
-                
-                mellin = np.average( mellin, axis=0 )
-    
                 # Average over bins
                     
                 threep_curve_avg = np.average( threep_curve, axis=0 )
                 threep_curve_err = fncs.calcError( threep_curve, 
-                                                   binNum )
+                                               binNum )
             
-                mellin_curve_const_ts_avg = np.average( mellin_curve_const_ts,
-                                                        axis=0 )
-                mellin_curve_const_ts_err = fncs.calcError( mellin_curve_const_ts,
-                                                            binNum )
+                mellin_curve_const_ts_avg \
+                    = np.average( mellin_curve_const_ts, axis=0 )
+                mellin_curve_const_ts_err \
+                    = fncs.calcError( mellin_curve_const_ts, binNum )
                 
-                mellin_curve_const_ti_avg = np.average( mellin_curve_const_ti,
-                                                        axis=0 )
-                mellin_curve_const_ti_err = fncs.calcError( mellin_curve_const_ti,
-                                                            binNum )
+                mellin_curve_const_ti_avg \
+                    = np.average( mellin_curve_const_ti, axis=0 )
+                mellin_curve_const_ti_err \
+                    = fncs.calcError( mellin_curve_const_ti, binNum )
                 
                 fitParams_avg = np.average( fitParams, axis=0 )
-                fitParams_err = fncs.calcError( fitParams, 
-                                                binNum )
+                fitParams_err = fncs.calcError( fitParams, binNum )
                 
                 chiSq_avg = np.average( chiSq, axis=0 )
                 chiSq_err = fncs.calcError( chiSq, binNum )
@@ -880,7 +922,7 @@ if rank == 0:
                 mellin_err = fncs.calcError( mellin, binNum )
     
                 # Write output file
-
+            
                 tsf_threep_range_str = mEffFit_str + ".3n" + str( neglect )
 
                 mellinOutputFilename \
@@ -927,12 +969,13 @@ if rank == 0:
                                         ts_mellin,
                                         mellin_curve_const_ti_avg,
                                         mellin_curve_const_ti_err )
-                
+            
                 for ts in range( tsinkNum ):
             
                     threep_curveOutputFilename \
                         = rw.makeFilename( output_template,
-                                           "{}_threep_{}_2sf_curve_tsink{}_{}_{}",
+                                           "{}_threep_{}_2sf_curve_" \
+                                           + "tsink{}_{}_{}",
                                            moment_str,
                                            flav_str[ iflav ],
                                            tsink[ ts ],
@@ -957,7 +1000,7 @@ if rank == 0:
                                             mellin_curve_const_ts_err[ ts ] )
             
                 # End loop over tsink
-            # End loop over number of neglected three-point functions
-        # End loop over flavors
-    # End if two-state fit
-# End if first process
+            # End first process
+        # End loop over number of neglected three-point functions
+    # End loop over flavors
+# End two-state fit

@@ -819,19 +819,24 @@ def twoStateFit_threep( threep, ti_to_fit, tsink, E0, E1, T,
 
         fitParams_avg = leastSq_avg.x
 
-        fitParams = np.zeros( ( 3, 2 ) )
+        fitParams = np.zeros( ( paramNum, 2 ) )
 
         # a00
 
         if fitParams_avg[ 0 ] > 0:
 
-            fitParams[ 0 ] = [ max( fitParams_avg[ 0 ] - 10 ** -4, 0.0 ), 
-                               fitParams_avg[ 0 ] + 10 ** -4 ]
+            fitParams[ 0 ] = [ max( fitParams_avg[ 0 ] - 10 ** -5, 0.0 ), 
+                               fitParams_avg[ 0 ] + 10 ** -5 ]
 
-        else: # fitParams_avg[ 0 ] <= 0
+        elif fitParams_avg[ 0 ] < 0:
 
-            fitParams[ 0 ] = [ fitParams_avg[ 0 ] - 10 ** -4,
-                               min( fitParams_avg[ 0 ] + 10 ** -4, 0.0 ) ]
+            fitParams[ 0 ] = [ fitParams_avg[ 0 ] - 10 ** -5,
+                               min( fitParams_avg[ 0 ] + 10 ** -5, 0.0 ) ]
+
+        else: # fitParams_avg[ 0 ] == 0
+
+            fitParams[ 0 ] = [ fitParams_avg[ 0 ] - 10 ** -5,
+                               fitParams_avg[ 0 ] + 10 ** -5 ]
 
         # a01
 
@@ -840,10 +845,15 @@ def twoStateFit_threep( threep, ti_to_fit, tsink, E0, E1, T,
             fitParams[ 1 ] = [ max( fitParams_avg[ 1 ] - 10 ** -4, 0.0 ), 
                                fitParams_avg[ 1 ] + 10 ** -4 ]
 
-        else: # fitParams_avg[ 1 ] <= 0
+        elif fitParams_avg[ 1 ] < 0:
 
             fitParams[ 1 ] = [ fitParams_avg[ 1 ] - 10 ** -4,
                                min( fitParams_avg[ 1 ] + 10 ** -4, 0.0 ) ]
+
+        else: # fitParams_avg[ 1 ] == 0
+
+            fitParams[ 1 ] = [ fitParams_avg[ 1 ] - 10 ** -4,
+                               fitParams_avg[ 1 ] + 10 ** -4 ]
 
         # a11
 
@@ -852,11 +862,15 @@ def twoStateFit_threep( threep, ti_to_fit, tsink, E0, E1, T,
             fitParams[ 2 ] = [ max( fitParams_avg[ 2 ] - 10 ** -4, 0.0 ), 
                                fitParams_avg[ 2 ] + 10 ** -4 ]
 
-        else: # fitParams_avg[ 2 ] <= 0
+        elif fitParams_avg[ 2 ] < 0:
 
             fitParams[ 2 ] = [ fitParams_avg[ 2 ] - 10 ** -4,
                                min( fitParams_avg[ 2 ] + 10 ** -4, 0.0 ) ]
 
+        else: # fitParams_avg[ 2 ] == 0
+
+            fitParams[ 2 ] = [ fitParams_avg[ 2 ] - 10 ** -4,
+                               fitParams_avg[ 2 ] + 10 ** -4 ]
 
         #fitParams = leastSq_avg.x
 
