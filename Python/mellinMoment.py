@@ -546,11 +546,11 @@ else: # Zero momentum two-point functions
 
             E_guess = mEff_fit
 
-            fitParams_twop, chiS = fit.twoStateFit_twop( twop_to_fit,
-                                                         twop_rangeStart,
-                                                         rangeEnd, 
-                                                         E_guess, T,
-                                                         mpi_confs_info )
+            fitParams_twop, chiSq = fit.twoStateFit_twop( twop_to_fit,
+                                                          twop_rangeStart,
+                                                          rangeEnd, 
+                                                          E_guess, T,
+                                                          mpi_confs_info )
 
         else: # One-state fit
 
@@ -567,15 +567,15 @@ fitParams_twop = fitResults_twop[ 0 ]
 
 if tsf:
 
-    c0 = fitParams_twop[ :, 0 ]
-    c1 = fitParams_twop[ :, 1 ]
-    E0 = fitParams_twop[ :, 2 ]
-    E1 = fitParams_twop[ :, 3 ]
+    c0 = np.asarray( fitParams_twop[ :, 0 ], order = 'c', dtype=float )
+    c1 = np.asarray( fitParams_twop[ :, 1 ], order = 'c', dtype=float )
+    E0 = np.asarray( fitParams_twop[ :, 2 ], order = 'c', dtype=float )
+    E1 = np.asarray( fitParams_twop[ :, 3 ], order = 'c', dtype=float )
 
 else: # One-state Fit
     
-    c0 = fitParams_twop[ :, 0 ]
-    E0 = fitParams_twop[ :, 1 ]
+    c0 = np.asarray( fitParams_twop[ :, 0 ], order = 'c', dtype=float )
+    E0 = np.asarray( fitParams_twop[ :, 1 ], order = 'c', dtype=float )
 
 # End one-state fit
 
@@ -700,8 +700,10 @@ threep_jk = np.average( threep_p_jk, axis=0 )
 ####################
 
 
-E = np.sqrt( mEff_fit ** 2 + (2.0*np.pi/L) ** 2 * momSq )
-#E = E0
+#E = np.sqrt( mEff_fit ** 2 + (2.0*np.pi/L) ** 2 * momSq )
+E = E0
+
+E = np.asarray( E, order='c', dtype=float )
 
 if rank == 0:
 
@@ -803,10 +805,12 @@ if rank == 0:
 ##################
 
 
-#CJL:HERE
 if tsf:
 
     mpi_fncs.mpiPrint( "Will perform the two-state fit", mpi_confs_info )
+
+    comm.Bcast( E, root=0 )
+    comm.Bcast( E1, root=0 )
 
     # Loop over flavors
     for iflav in range( flavNum ):

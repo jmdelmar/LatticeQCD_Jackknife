@@ -384,7 +384,7 @@ def effEnergyTwopFit( effEnergy, twop, rangeEnd, pSq, L, tsf,
                     if rank == 0:
 
                         E = fitParams[ :, 2 ]
-                    
+
                 else:
 
                     print( "ERROR (lqcdjk_fitting.effEnergyTwopFit): " \
@@ -580,7 +580,7 @@ def twoStateFit_twop( twop, rangeStart, rangeEnd, E_guess, T,
 
     chiSq = np.array( chiSq ) / dof
 
-    return np.array( fit ), np.array( chiSq )
+    return fit, chiSq
 
 
 def twoStateFit_effEnergy( effEnergy, rangeStart, rangeEnd, E_guess, T, 
@@ -781,9 +781,9 @@ def twoStateFit_threep( threep, ti_to_fit, tsink, E0, E1, T,
 
     # Find fit parameters of mean values to use as initial guess
 
-    #a00 = 1.0
-    #a01 = 1.0
-    #a11 = 1.0
+    #a00 = -10.0 ** -5
+    #a01 = -10.0 ** -4
+    #a11 = -10.0 ** -4
     a00 = [ -10 ** -2, 10 ** 2 ]
     a01 = [ -10 ** -2, 10 ** 2 ]
     a11 = [ -10 ** -2, 10 ** 2 ]
@@ -803,12 +803,21 @@ def twoStateFit_threep( threep, ti_to_fit, tsink, E0, E1, T,
         # End loop over tsink
 
         #leastSq_avg = least_squares( twoStateErrorFunction_threep, 
-        #                             fitParams, \
-        #                             args = ( ti_to_fit, tsink, T, \
-        #                                      threep_to_fit_avg, \
-        #                                      threep_to_fit_err, \
-        #                                      E0_avg, E1_avg ), \
+        #                             fitParams,
+        #                             args = ( ti_flat,
+        #                                      tsink_flat, T,
+        #                                      threep_flat,
+        #                                      threep_err_flat,
+        #                                      E0_avg, E1_avg ),
         #                             method="lm" )
+        #leastSq_avg = minimize( twoStateCostFunction_threep, 
+        #                    fitParams,
+        #                    args = ( ti_flat, 
+        #                             tsink_flat, T, 
+        #                             threep_flat,
+        #                             threep_err_flat,
+        #                             E0_avg, E1_avg ),
+        #                    method="BFGS" )
         leastSq_avg = differential_evolution( twoStateCostFunction_threep,
                                               fitParams, ( ti_flat, 
                                                            tsink_flat, T, 
@@ -817,12 +826,14 @@ def twoStateFit_threep( threep, ti_to_fit, tsink, E0, E1, T,
                                                            E0_avg, E1_avg ),
                                               tol=0.01 )
 
+        #fitParams = leastSq_avg.x
+
         fitParams_avg = leastSq_avg.x
 
         fitParams = np.zeros( ( paramNum, 2 ) )
 
         # a00
-
+        
         if fitParams_avg[ 0 ] > 0:
 
             fitParams[ 0 ] = [ max( fitParams_avg[ 0 ] - 10 ** -5, 0.0 ), 
@@ -872,8 +883,6 @@ def twoStateFit_threep( threep, ti_to_fit, tsink, E0, E1, T,
             fitParams[ 2 ] = [ fitParams_avg[ 2 ] - 10 ** -4,
                                fitParams_avg[ 2 ] + 10 ** -4 ]
 
-        #fitParams = leastSq_avg.x
-
     comm.Bcast( fitParams, root=0 )
 
     # Find fit parameters for each bin
@@ -896,12 +905,21 @@ def twoStateFit_threep( threep, ti_to_fit, tsink, E0, E1, T,
 
         # End loop over tsink
 
-        #leastSq = least_squares( twoStateErrorFunction_threep, fitParams, \
-        #                         args = ( ti_to_fit, tsink, T, \
-        #                                  threep_cp, \
-        #                                  threep_to_fit_err, \
-        #                                  E0[ b ], E1[ b ] ), \
+        #leastSq = least_squares( twoStateErrorFunction_threep, 
+        #                         fitParams,
+        #                         args = ( ti_flat, tsink_flat, T,
+        #                                  threep_flat,
+        #                                  threep_err_flat,
+        #                                  E0[ b ], E1[ b ] ),
         #                         method="lm" )
+        #leastSq = minimize( twoStateCostFunction_threep, 
+        #                    fitParams,
+        #                    args = ( ti_flat, 
+        #                             tsink_flat, T, 
+        #                             threep_flat,
+        #                             threep_err_flat,
+        #                             E0[ b ], E1[ b ] ),
+        #                    method="BFGS" )
         leastSq = differential_evolution( twoStateCostFunction_threep, 
                                           fitParams,
                                           args = ( ti_flat, tsink_flat, T, \
@@ -932,17 +950,10 @@ def twoStateFit_threep( threep, ti_to_fit, tsink, E0, E1, T,
 
     chiSq = np.array( chiSq ) / dof
     
-    return np.array( fit ), np.array( chiSq )
+    return fit, chiSq
 
 
 def twoStateCostFunction_twop( fitParams, tsink, T, twop, twop_err ):
-
-    #print(twoStateErrorFunction_twop( fitParams, tsink, 
-    #                                  T, twop, twop_err ))
-    #print(twoStateErrorFunction_twop( fitParams, tsink, 
-    #                                  T, twop, twop_err ) ** 2)
-    #print(np.sum( twoStateErrorFunction_twop( fitParams, tsink, 
-    #                                           T, twop, twop_err ) ** 2 ))
 
     return np.sum( twoStateErrorFunction_twop( fitParams, 
                                                tsink, 
@@ -966,13 +977,6 @@ def twoStateErrorFunction_twop( fitParams, tsink, T, twop, twop_err ):
     c1 = fitParams[ 1 ]
     E0 = fitParams[ 2 ]
     E1 = fitParams[ 3 ]
-
-    #print(fitParams)
-    #print(tsink)
-    #print(T)
-    #print(twop)
-    #print(twop_err)
-    #print(twoStateTwop( tsink, T, c0, c1, E0, E1 ))
 
     twopErr = np.array( ( twoStateTwop( tsink, T, c0, c1, E0, E1 ) \
                           - twop ) / twop_err )
