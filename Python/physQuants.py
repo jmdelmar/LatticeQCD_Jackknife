@@ -176,15 +176,9 @@ def mEff( twop ):
 
 def avgXKineFactor( mEff, momSq, L ):
 
-    #return 2.0 * mEff \
-    #    / ( 0.5 * mEff ** 2 \
-    #        - 2.0 * energy( mEff, momSq, L ) ** 2 )
     return 2.0 * energy( mEff, momSq, L ) \
         / ( 0.5 * mEff ** 2 \
             - 2.0 * energy( mEff, momSq, L ) ** 2 )
-    #return 2.0 * energy( mEff, momSq, L ) ** 2 \
-    #    / ( mEff * ( 0.5 * mEff ** 2 \
-    #                 - 2.0 * energy( mEff, momSq, L ) ** 2 ) )
 
 
 def avgX2KineFactor( mEff, momSq, L ):
@@ -323,7 +317,7 @@ def calcMellin_twopFit( threep, tsink, mEff, momSq, L, \
 
     elif moment == 3:
 
-        preFactor = 1.0        
+        preFactor = -1.0        
 
     return preFactor * threep \
         / twopFit( c0_cp, E0_cp, tsink )
