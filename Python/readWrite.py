@@ -697,17 +697,19 @@ def getMellinMomentThreep( threepDir, configList, configNum, threep_tokens, \
     threep = np.zeros( ( 1 if particle == "pion" else 2, configNum, T ), \
                        order='c', dtype=float )
 
-    comm.Allgatherv( threep_loc, [ threep[ 0 ], 
-                                   confNum * np.prod( threep_loc.shape[ 1: ] ),
-                                   confOffset * np.prod( threep_loc.shape[ 1: ] ), 
-                                   MPI.DOUBLE ] )
+    comm.Allgatherv( threep_loc, 
+                     [ threep[ 0 ], 
+                       confNum * np.prod( threep_loc.shape[ 1: ] ),
+                       confOffset * np.prod( threep_loc.shape[ 1: ] ),
+                       MPI.DOUBLE ] )
 
     if particle == "kaon":
 
-        comm.Allgatherv( threep_s_loc, [ threep[ 1 ], 
-                                       confNum * np.prod( threep_s_loc.shape[ 1: ] ),
-                                       confOffset * np.prod( threep_s_loc.shape[ 1: ] ), 
-                                       MPI.DOUBLE ] )
+        comm.Allgatherv( threep_s_loc, 
+                         [ threep[ 1 ], 
+                           confNum * np.prod( threep_s_loc.shape[ 1: ] ),
+                           confOffset * np.prod( threep_s_loc.shape[ 1: ] ),
+                           MPI.DOUBLE ] )
 
     return threep
 
@@ -2164,11 +2166,15 @@ def readAvgX3File( threepDir, configList, threep_tokens, srcNum,
     return np.asarray( threeps, order='c', dtype=float )
 
 
-def readEMFile( threepDir, configList, threep_tokens, srcNum,
+def readEMFile( threepDir, configList, configNum, threep_tokens, srcNum,
                 ts, momList, particle, dataFormat, insType, 
                 T, mpi_info, **kwargs ):
 
     t0 = time()
+
+    comm = mpi_info[ 'comm' ]
+    confNum = mpi_info[ 'confNum' ]
+    confOffset = mpi_info[ 'confOffset' ]
 
     # Set filename template
 
@@ -2184,39 +2190,26 @@ def readEMFile( threepDir, configList, threep_tokens, srcNum,
 
             iins = 3
 
-        threep = getDatasets( threepDir, \
-                              configList, \
-                              threep_template, \
-                              "tsink_" + str( ts ), \
-                              insType, \
-                              "up", \
-                              "threep" )[ :, 0, 0, ..., \
-                                          0, iins, 0 ]
+        threep_loc = getDatasets( threepDir, \
+                                  configList, \
+                                  threep_template, \
+                                  "tsink_" + str( ts ), \
+                                  insType, \
+                                  "up", \
+                                  "threep" )[ :, 0, 0, ..., \
+                                              0, iins, 0 ]
 
         if particle == "kaon":
             
-            threep_s = getDatasets( threepDir, \
-                                    configList, \
-                                    threep_template, \
-                                    "tsink_" + str( ts ), \
-                                    "local", \
-                                    "strange", \
-                                    "threep" )[ :, 0, 0, ..., \
-                                                0, iins, 0 ]
+            threep_s_loc = getDatasets( threepDir, \
+                                        configList, \
+                                        threep_template, \
+                                        "tsink_" + str( ts ), \
+                                        insType, \
+                                        "strange", \
+                                        "threep" )[ :, 0, 0, ..., \
+                                                    0, iins, 0 ]
                 
-            threeps = np.array( [ threep, threep_s ] )
-
-        elif particle == "pion": 
-            
-            threeps = np.array( [ threep ] )
-
-        else: 
-
-            print( "Error (readAvgXFile): Particle " \
-                   + particle + " not supported." )
-
-            exit()                
-
     elif dataFormat == "cpu":
 
         threep_template = threep_tokens[0] + str(ts) \
@@ -2249,44 +2242,65 @@ def readEMFile( threepDir, configList, threep_tokens, srcNum,
 
         dsetname_post = "/msq0000/arr"
             
-        threep = getDatasets( threepDir, \
-                              configList, \
-                              filename, \
-                              dsetname=[ dsetname_pre \
-                                         + dsetname_insertion \
-                                         + dsetname_post ] )[ :, 0, 0, \
-                                                              :, 0 ].real
-
+        threep_loc = getDatasets( threepDir, \
+                                  configList, \
+                                  filename, \
+                                  dsetname=[ dsetname_pre \
+                                             + dsetname_insertion \
+                                             + dsetname_post ] )[ :, 0, 0, \
+                                                                  :, 0 ].real
+        
         if particle == "kaon":
 
             filename = threep_template + ".strange.h5"
 
             dsetname_pre = "/thrp/ave{}/dt{}/strange/".format( srcNum, ts )
 
-            threep_s = getDatasets( threepDir, \
-                                    configList, \
-                                    filename, \
-                                    dsetname=[ dsetname_pre \
-                                               + dsetname_insertion \
-                                               + dsetname_post ] )[ :, 0, 0, \
-                                                                    :, 0 ].real
+            threep_s_loc \
+                = getDatasets( threepDir,
+                               configList,
+                               filename,
+                               dsetname=[ dsetname_pre
+                                          + dsetname_insertion
+                                          + dsetname_post ] )[ :, 0, 0,
+                                                               :, 0 ].real
             
-            threeps = np.array( [ threep, threep_s ] )
-
-        else:
-
-            threeps = np.array( [ threep ] )
-
     mpi_fncs.mpiPrint( "Read three-point functions from HDF5 files " \
                        + "in {:.3} seconds".format( time() - t0 ), \
                        mpi_info )
 
-    threeps = np.pad( threeps, ( ( 0, 0 ), ( 0, 0 ), \
-                                 ( 0, T - threeps.shape[ -1 ] ) ), \
-                      'constant', \
-                      constant_values=( 0.0, 0.0 ) )    
+    threep = np.zeros( ( 1 if particle == "pion" else 2, configNum, T ), \
+                       order='c', dtype=float )    
 
-    return np.asarray( threeps, order='c', dtype=float )
+    threep_loc = np.asarray( np.pad( threep_loc, 
+                                     ( ( 0, 0 ),
+                                       ( 0, T - threep_loc.shape[ -1 ] ) ),
+                                     'constant',
+                                     constant_values=( 0.0, 0.0 ) ),
+                             dtype=float, order='c' )    
+
+    comm.Allgatherv( threep_loc, 
+                     [ threep[ 0 ],
+                       confNum * np.prod( threep_loc.shape[ 1: ] ),
+                       confOffset * np.prod( threep_loc.shape[ 1: ] ), 
+                       MPI.DOUBLE ] )
+
+    if particle == "kaon":
+
+        threep_s_loc =np.asarray( np.pad( threep_s_loc, 
+                                          ( ( 0, 0 ),
+                                            ( 0, T - threep_s_loc.shape[ -1 ] ) ),
+                                          'constant',
+                                          constant_values=( 0.0, 0.0 ) ),
+                                   dtype=float, order='c' )
+
+        comm.Allgatherv( threep_s_loc, 
+                         [ threep[ 1 ], 
+                           confNum * np.prod( threep_s_loc.shape[ 1: ] ),
+                           confOffset * np.prod( threep_s_loc.shape[ 1: ] ),
+                           MPI.DOUBLE ] )
+
+    return threep
 
 def readEMFF_cpu( threepDir, configList, threep_template, srcNum, \
                   Qsq, ts, proj, \
