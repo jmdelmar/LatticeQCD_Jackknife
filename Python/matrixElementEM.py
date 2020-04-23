@@ -283,25 +283,42 @@ if rank == 0:
 
 try:
     
-    fitResults = fit.mEffTwopFit( mEff, twop_fold,
-                                  rangeEnd, 0, L, tsf,
-                                  mpi_confs_info,
-                                  tsf_t_low_range=[tsf_fitStart],
-                                  plat_t_low_range=[plat_fitStart],
-                                  checkFit=checkFit )
+    fitResults = fit.effEnergyTwopFit( mEff, twop_fold,
+                                       rangeEnd, 0, L, tsf,
+                                       mpi_confs_info,
+                                       tsf_t_low_range=[tsf_fitStart],
+                                       plat_t_low_range=[plat_fitStart],
+                                       fitType="twop",
+                                       checkFit=checkFit )
     
+    fitType = "twop"
+
 except fit.lqcdjk_BadFitError as error:
         
-    mpi_fncs.mpiPrintErr( "ERROR (lqcdjk_fitting.mEffTwopFit):" \
-                          + str( error ), mpi_confs_info )
-    
-if rank == 0:
+    try:
+        
+        fitResults = fit.effEnergyTwopFit( mEff, twop_fold,
+                                           rangeEnd, 0, L, tsf,
+                                           mpi_confs_info,
+                                           tsf_t_low_range=[tsf_fitStart],
+                                           plat_t_low_range=[plat_fitStart],
+                                           checkFit=checkFit,
+                                           fitType="effEnergy" )
+        
+    except fit.lqcdjk_BadFitError as error:
 
-    fitParams = fitResults[ 0 ]
-    chiSq = fitResults[ 1 ]
-    mEff_fit = fitResults[ 2 ]
-    rangeStart = fitResults[ 3 ]
-    mEff_rangeStart = fitResults[ 4 ]
+        mpi_fncs.mpiPrintErr( "ERROR (lqcdjk_fitting.mEffTwopFit):"
+                              + str( error ), mpi_confs_info )
+
+    fitType = "effEnergy"
+
+fitParams = fitResults[ 0 ]
+chiSq = fitResults[ 1 ]
+mEff_fit = fitResults[ 2 ]
+rangeStart = fitResults[ 3 ]
+mEff_rangeStart = fitResults[ 4 ]
+
+if rank == 0:
 
     twopFit_str = "2s" + str( rangeStart ) \
                   + ".2e" + str( rangeEnd )
@@ -449,63 +466,100 @@ if momSq > 0: # Boosted two-point functions
 
         rangeEnd = min( np.where( np.isnan( mEff_to_fit ) )[-1] ) - 1
 
+    # End nan in mEff_to_fit
+
+    try:
+            
+        fitResults_twop \
+            = fit.effEnergyTwopFit( mEff_to_fit, twop_to_fit,
+                                    rangeEnd, momSq, L, tsf,
+                                    mpi_confs_info,
+                                    tsf_t_low_range=[tsf_fitStart],
+                                    plat_t_low_range=[plat_fitStart],
+                                    checkFit=checkFit,
+                                    fitType="twop" )
+    
+        twop_rangeStart = fitResults_twop[ 3 ]
+            
+    except fit.lqcdjk_BadFitError as error:
+        
         try:
             
             fitResults_tmp \
-                = fit.mEffTwopFit( mEff_to_fit, twop_to_fit,
-                                   rangeEnd, momSq, L, tsf,
-                                   mpi_confs_info,
-                                   tsf_t_low_range=[tsf_fitStart],
-                                   plat_t_low_range=[plat_fitStart],
-                                   checkFit=checkFit,
-                                   fitType="twop" )
-    
+                = fit.effEnergyTwopFit( mEff_to_fit, twop_to_fit,
+                                        rangeEnd, momSq, L, tsf,
+                                        mpi_confs_info,
+                                        tsf_t_low_range=[tsf_fitStart],
+                                        plat_t_low_range=[plat_fitStart],
+                                        checkFit=checkFit,
+                                        fitType="effEnergy" )
+
         except fit.lqcdjk_BadFitError as error:
         
-            try:
-            
-                fitResults_tmp \
-                    = fit.mEffTwopFit( mEff_to_fit, twop_to_fit,
-                                       rangeEnd, momSq, L, tsf,
-                                       mpi_confs_info,
-                                       tsf_t_low_range=[tsf_fitStart],
-                                       plat_t_low_range=[plat_fitStart],
-                                       checkFit=checkFit,
-                                       fitType="mEff" )
+            mpi_fncs.mpiPrintErr( "ERROR (lqcdjk_fitting.mEffTwopFit):"
+                                  + str( error ), mpi_confs_info )
 
-            except fit.lqcdjk_BadFitError as error:
-        
-                mpi_fncs.mpiPrintErr( "ERROR (lqcdjk_fitting.mEffTwopFit):"
-                                      + str( error ), mpi_confs_info )
+        # End bad mEff fit
 
-    twop_rangeStart = fitResults_tmp[ 3 ]
+        twop_rangeStart = fitResults_tmp[ 3 ]
         
+        twop_rangeStart = comm.bcast( twop_rangeStart, root=0 )
+        
+        E_guess = np.sqrt( mEff_fit_avg ** 2 
+                           + ( 2.0 * np.pi / L ) ** 2 * momSq )
+
+        fitParams_twop,chiSq=fit.twoStateFit_twop( twop_to_fit,
+                                                   twop_rangeStart,
+                                                   rangeEnd, 
+                                                   E_guess, T,
+                                                   mpi_confs_info )
+
+    # End bad twop fit
+
 else: # Zero momentum two-point functions
 
     twop_to_fit = twop_fold
-    
-    if rank == 0:
+    twop_rangeStart = rangeStart    
 
+
+    if fitType == "effEnergy":
+
+        if tsf:
+
+            E_guess = mEff_fit
+
+            fitParams_twop, chiSq = fit.twoStateFit_twop( twop_to_fit,
+                                                          twop_rangeStart,
+                                                          rangeEnd, 
+                                                          E_guess, T,
+                                                          mpi_confs_info )
+
+        else: # One-state fit
+
+            fitParams_twop,chiSq=fit.oneStateFit_twop( twop_to_fit,
+                                                       twop_rangeStart,
+                                                       rangeEnd, T )
+
+    elif fitType == "twop":
+
+        fitResults_twop = fitResults
         twop_rangeStart = rangeStart
 
-    else:
-        
-        twop_rangeStart = None
-    
-twop_rangeStart = comm.bcast( twop_rangeStart, root=0 )
+fitParams_twop = fitResults_twop[ 0 ]
 
 if tsf:
 
-    fitParams_twop,chiSq=fit.twoStateFit_twop( twop_to_fit,
-                                               twop_rangeStart,
-                                               rangeEnd, T,
-                                               mpi_confs_info )
+    c0 = np.asarray( fitParams_twop[ :, 0 ], order = 'c', dtype=float )
+    c1 = np.asarray( fitParams_twop[ :, 1 ], order = 'c', dtype=float )
+    E0 = np.asarray( fitParams_twop[ :, 2 ], order = 'c', dtype=float )
+    E1 = np.asarray( fitParams_twop[ :, 3 ], order = 'c', dtype=float )
 
-else: # One-state fit
+else: # One-state Fit
+    
+    c0 = np.asarray( fitParams_twop[ :, 0 ], order = 'c', dtype=float )
+    E0 = np.asarray( fitParams_twop[ :, 1 ], order = 'c', dtype=float )
 
-    fitParams_twop,chiSq=fit.oneStateFit_twop( twop_to_fit,
-                                               twop_rangeStart,
-                                               rangeEnd, T )
+# End one-state fit
 
 
 ######################################################
@@ -517,11 +571,6 @@ if rank == 0:
 
     if tsf:
         
-        c0 = fitParams_twop[ :, 0 ]
-        c1 = fitParams_twop[ :, 1 ]
-        E0 = fitParams_twop[ :, 2 ]
-        E1 = fitParams_twop[ :, 3 ]
-
         twop_curve, ts_twop = fit.calcTwopTwoStateCurve( c0, c1, 
                                                          E0, E1, T,
                                                          twop_rangeStart, 
@@ -564,6 +613,8 @@ if rank == 0:
 ##############################
 
 
+# threep_p_jk[ p, flav, ts, b, t ]
+
 threep_p_jk = np.zeros( ( momBoostNum, flavNum,
                           tsinkNum, binNum, T ) )
 
@@ -577,21 +628,12 @@ for imom in range( momBoostNum ):
         # three-point functions at zero-momentum
         # threep[ iflav, c, t ]
 
-        threeps = rw.readEMFile( threepDir, mpi_confs_info[ 'configList_loc' ],
-                                 threep_tokens, srcNum, ts, momList[ imom ], \
-                                 particle, dataFormat, insType, T, mpi_confs_info )
-
-        threep_loc = threeps[ 0 ]
-
-        threep = np.zeros( ( flavNum, configNum, T ) )
-
-        comm.Allgather( threep_loc, threep[ 0 ] )
-
-        if particle == "kaon":
-
-            threep_loc = threeps[ 1 ]
-
-            comm.Allgather( threep_loc, threep[ 1 ] )
+        threep = rw.readEMFile( threepDir, 
+                                mpi_confs_info[ 'configList_loc' ],
+                                configNum,
+                                threep_tokens, srcNum, ts, 
+                                momList[ imom ], particle, 
+                                dataFormat, insType, T, mpi_confs_info )
 
         # Loop over flavor
         for iflav in range( flavNum ):
