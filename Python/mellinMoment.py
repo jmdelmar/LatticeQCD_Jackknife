@@ -208,7 +208,7 @@ if moment == 1:
 
 elif moment == 2:
 
-    Z = 1.0
+    Z = 1.34
     moment_str = "avgX2"
 
 elif moment == 3:
@@ -286,7 +286,11 @@ if rank == 0:
     mEff_avg = np.average( mEff, axis=0 )
     mEff_err = fncs.calcError( mEff, binNum )
 
-    avgOutputFilename = rw.makeFilename( output_template, "mEff_avg" )
+    avgOutputFilename = rw.makeFilename( output_template, 
+                                         "mEff_avg_{}_psq{}" \
+                                         + "_{}configs_binSize{}",
+                                         particle, 0, 
+                                         configNum, binSize )
     rw.writeAvgDataFile( avgOutputFilename, mEff_avg, mEff_err )
 
 # Fit the effective mass and two-point functions 
@@ -299,13 +303,16 @@ try:
                                        plat_t_low_range=[plat_fitStart],
                                        checkFit=checkFit,
                                        fitType="twop",
-                                       tsf_t_low_range=range(3,5) )
-    #                                  tsf_t_low_range=[tsf_fitStart],
+                                       tsf_t_low_range=[tsf_fitStart] )
+                                       #tsf_t_low_range=range(1,4) )
 
     fitType = "twop"
-    
+
 except fit.lqcdjk_BadFitError as error:
 
+    mpi_fncs.mpiPrintErr( "ERROR (lqcdjk_fitting.mEffTwopFit):"
+                          + str( error ), mpi_confs_info )
+    """
     try:
         
         fitResults = fit.effEnergyTwopFit( mEff, twop_fold,
@@ -322,7 +329,7 @@ except fit.lqcdjk_BadFitError as error:
                               + str( error ), mpi_confs_info )
 
     fitType = "effEnergy"
-
+    """
 fitParams = fitResults[ 0 ]
 chiSq = fitResults[ 1 ]
 mEff_fit = fitResults[ 2 ]
@@ -366,14 +373,20 @@ if rank == 0:
         E1_mEff_err = fncs.calcError( E1_mEff, binNum )
 
         mEff_tsf_outputFilename = rw.makeFilename( output_template,
-                                                   "mEff_2sf_{}",
-                                                   mEffFit_str )
+                                                   "mEff_{}_2sf_{}_{}" \
+                                                   + "_psq{}_{}configs_binSize{}",
+                                                   fitType, particle, 
+                                                   mEffFit_str, 0,
+                                                   configNum, binSize )
         rw.writeFitDataFile( mEff_tsf_outputFilename, E0_mEff_avg,
                              E0_mEff_err, rangeStart, rangeEnd )
 
         chiSqOutputFilename = rw.makeFilename( output_template,
-                                               "mEff_2sf_chiSq_{}",
-                                               mEffFit_str )
+                                               "mEff_{}_2sf_chiSq_{}_{}" \
+                                               + "_psq{}_{}configs_binSize{}",
+                                               fitType, particle, 
+                                               mEffFit_str, 0,
+                                               configNum, binSize )
 
     else: # One-state fit
         """
@@ -390,8 +403,11 @@ if rank == 0:
         mEffFit_str )
         """
         chiSqOutputFilename = rw.makeFilename( output_template,
-                                               "twop_oneStateFit_chiSq_{}",
-                                               twopFit_str )
+                                               "mEff_{}_1sf_chiSq_{}_{}" \
+                                               + "_psq{}_{}configs_binSize{}",
+                                               "twop", particle, 
+                                               mEffFit_str, 0,
+                                               configNum, binSize )
 
     # End if one-state fit
 
@@ -412,12 +428,14 @@ if rank == 0:
     mEff_fit_avg = np.average( mEff_fit, axis=0 )
     mEff_fit_err = fncs.calcError( mEff_fit, binNum )
 
-    mEff_range_str = "2s" + str( mEff_rangeStart ) \
-                     + ".2e" + str( rangeEnd )
+    mEff_plat_fit_str = "2s" + str( mEff_rangeStart ) \
+                        + ".2e" + str( rangeEnd )
 
     mEff_outputFilename = rw.makeFilename( output_template,
-                                           "mEff_fit_{}",
-                                           mEff_range_str )
+                                           "mEff_plat_fit_{}_{}" \
+                                           + "_psq{}_{}configs_binSize{}",
+                                           particle, mEff_plat_fit_str, 
+                                           0, configNum, binSize )
     rw.writeFitDataFile( mEff_outputFilename, mEff_fit_avg,
                          mEff_fit_err, mEff_rangeStart, rangeEnd )
 
@@ -594,8 +612,14 @@ if rank == 0:
                                                          twop_rangeStart, 
                                                          rangeEnd )
 
+        twopFit_str = "2s" + str( twop_rangeStart ) \
+                        + ".2e" + str( rangeEnd )
+
         twopParams_filename = rw.makeFilename( output_template,
-                                               "twop_2sf_params" )
+                                               "twop_2sf_params_per_bin_{}_{}" \
+                                               + "_psq{}_{}configs_binSize{}",
+                                               particle, twopFit_str, 
+                                               momSq, configNum, binSize )
 
         rw.writeDataFile( twopParams_filename, fitParams_twop )
 
@@ -605,14 +629,16 @@ if rank == 0:
         fitParams_twop_err = np.concatenate( ( [ 0, 0, 0 ], \
                                           fncs.calcError( fitParams_twop, \
                                                           binNum ) ) )
-            
+
         fitParams_twopOutputFilename \
             = rw.makeFilename( output_template,
-                               "twop_2sf_params_t_low_{:0>2}",
-                               rangeStart )
+                               "twop_2sf_params_{}_{}" \
+                               + "_psq{}_{}configs_binSize{}",
+                               particle, twopFit_str, 
+                               momSq, configNum, binSize )
         rw.writeTSFParamsFile( fitParams_twopOutputFilename, \
                                fitParams_twop_avg, fitParams_twop_err )
-                
+
     else: # One-state fit
         
         c0 = fitParams_twop[ :, 0 ]
@@ -634,11 +660,20 @@ if rank == 0:
 
     # Write twop output file for each momentum
     
-    twop_outFilename = rw.makeFilename( output_template, "twop" )
+    twop_outFilename = rw.makeFilename( output_template,
+                                        "twop_{}_psq{}" \
+                                        + "_{}configs_binSize{}",
+                                        particle, momSq,
+                                        configNum, binSize )
+
     rw.writeAvgDataFile( twop_outFilename, twop_avg, twop_err )
 
     twop_curve_outFilename = rw.makeFilename( output_template,
-                                              "twop_2sf_curve" )
+                                        "twop_2sf_curve_{}_psq{}" \
+                                        + "_{}configs_binSize{}",
+                                        particle, momSq,
+                                        configNum, binSize )
+
     rw.writeAvgDataFile_wX( twop_curve_outFilename, ts_twop,
                             twop_curve_avg, twop_curve_err )
 
@@ -649,6 +684,8 @@ if rank == 0:
 # Read three-point functions #
 ##############################
 
+
+# threep_p_jk[ p, flav, ts, b, t ]
 
 threep_p_jk = np.zeros( ( momBoostNum, flavNum,
                           tsinkNum, binNum, T ) )
@@ -673,7 +710,6 @@ for imom in range( momBoostNum ):
         for iflav in range( flavNum ):
 
             # Jackknife
-            # threep_p_jk[ iflav, ts, b, t ]
 
             threep_p_jk_loc \
                 = fncs.jackknifeBinSubset( threep_p[ iflav ],
@@ -741,9 +777,11 @@ if rank == 0:
             # Write threep output file
     
             threep_outFilename = rw.makeFilename( output_template,
-                                                  "{}_threep_{}_tsink{}",
-                                                  moment_str,
-                                                  flav_str[ iflav ], ts )
+                                                  "{}_threep_{}_{}_tsink{}" \
+                                                  + "_psq{}_{}configs_binSize{}",
+                                                  moment_str, particle, 
+                                                  flav_str[ iflav ], ts,
+                                                  momSq, configNum, binSize )
             rw.writeAvgDataFile( threep_outFilename,
                                  threep_avg[ iflav, its ],
                                  threep_err[ iflav, its ] )
@@ -752,9 +790,11 @@ if rank == 0:
 
             mellin_outFilename \
                 = rw.makeFilename( output_template,
-                                   "{}_{}_tsink{}",
-                                   moment_str, flav_str[ iflav ],
-                                   ts )
+                                   "{}_{}_{}_tsink{}" \
+                                   + "_psq{}_{}configs_binSize{}",
+                                   moment_str, particle, 
+                                   flav_str[ iflav ], ts,
+                                   momSq, configNum, binSize )
             rw.writeAvgDataFile( mellin_outFilename, mellin_avg[ iflav, its ],
                                  mellin_err[ iflav, its ] )
 
@@ -784,12 +824,13 @@ if rank == 0:
 
                 mellin_fit_outFilename \
                     = rw.makeFilename( output_template,\
-                                       "{}_{}_fit_{}_{}_tsink{}",
-                                       moment_str,
-                                       flav_str[ iflav ],
-                                       rangeStart_plat[ irange ],
+                                       "{}_plat_fit_{}_{}" \
+                                       + "_{}_{}_tsink{}" \
+                                       + "_psq{}_{}configs_binSize{}",
+                                       moment_str, rangeStart_plat[ irange ],
                                        fitEnd_plat[ irange ],
-                                       ts)
+                                       particle, flav_str[ iflav ], ts,
+                                       momSq, configNum, binSize )
                 rw.writeFitDataFile( mellin_fit_outFilename, mellin_fit_avg,
                                      mellin_fit_err, rangeStart_plat[ irange ],
                                      fitEnd_plat[ irange ] )
@@ -927,48 +968,52 @@ if tsf:
     
                 # Write output file
             
-                tsf_threep_range_str = mEffFit_str + ".3n" + str( neglect )
+                tsf_threep_range_str = twopFit_str + ".3n" \
+                                       + str( neglect )
 
                 mellinOutputFilename \
                     = rw.makeFilename( output_template,
-                                       "{}_{}_2sf_{}_{}",
-                                       moment_str,
-                                       flav_str[ iflav ],
+                                       "{}_2sf_{}_{}_{}_{}" \
+                                       + "_psq{}_{}configs_binSize{}",
+                                       moment_str, particle, flav_str[ iflav ],
                                        tsf_threep_range_str,
-                                       ts_range_str )
-                
+                                       ts_range_str,
+                                       momSq, configNum, binSize )
                 rw.writeFitDataFile( mellinOutputFilename,
                                      mellin_avg, mellin_err, 0, 0 )
                 
                 chiSqOutputFilename \
                     = rw.makeFilename( output_template,
-                                       "{}_{}_2sf_threep_chiSq_{}_{}",
-                                       moment_str,
-                                       flav_str[ iflav ],
+                                       "{}_2sf_threep_chiSq_{}_{}_{}_{}" \
+                                       + "_psq{}_{}configs_binSize{}",
+                                       moment_str, particle, flav_str[ iflav ],
                                        tsf_threep_range_str,
-                                       ts_range_str )
+                                       ts_range_str,
+                                       momSq, configNum, binSize )
         
                 rw.writeFitDataFile( chiSqOutputFilename,
                                      chiSq_avg, chiSq_err, 0, 0 )
                 
                 mellinParamsOutputFilename \
                     = rw.makeFilename( output_template,
-                                       "{}_{}_2sf_params_{}_{}",
-                                       moment_str,
-                                       flav_str[ iflav ],
+                                       "{}_2sf_params_{}_{}_{}_{}" \
+                                       + "_psq{}_{}configs_binSize{}",
+                                       moment_str, particle, flav_str[ iflav ],
                                        tsf_threep_range_str,
-                                       ts_range_str )
+                                       ts_range_str,
+                                       momSq, configNum, binSize )
 
                 rw.writeTSFParamsFile( mellinParamsOutputFilename,
                                        fitParams_avg, fitParams_err )
             
                 curveOutputFilename \
                     = rw.makeFilename( output_template,
-                                       "{}_{}_2sf_curve_{}_{}",
-                                       moment_str,
-                                       flav_str[ iflav ],
+                                       "{}_2sf_curve_{}_{}_{}_{}" \
+                                       + "_psq{}_{}configs_binSize{}",
+                                       moment_str, particle, flav_str[ iflav ],
                                        tsf_threep_range_str,
-                                       ts_range_str )
+                                       ts_range_str,
+                                       momSq, configNum, binSize )
                 rw.writeAvgDataFile_wX( curveOutputFilename,
                                         ts_mellin,
                                         mellin_curve_const_ti_avg,
@@ -978,13 +1023,13 @@ if tsf:
             
                     threep_curveOutputFilename \
                         = rw.makeFilename( output_template,
-                                           "{}_threep_{}_2sf_curve_" \
-                                           + "tsink{}_{}_{}",
-                                           moment_str,
-                                           flav_str[ iflav ],
+                                           "{}_2sf_threep_curve_{}_{}_tsink{}_{}_{}" \
+                                           + "_psq{}_{}configs_binSize{}",
+                                           moment_str, particle, flav_str[ iflav ],
                                            tsink[ ts ],
                                            tsf_threep_range_str,
-                                           ts_range_str )
+                                           ts_range_str,
+                                           momSq, configNum, binSize )
                     rw.writeAvgDataFile_wX( threep_curveOutputFilename,
                                             ti_threep[ ts ],
                                             threep_curve_avg[ ts ],
@@ -992,12 +1037,13 @@ if tsf:
                     
                     curveOutputFilename \
                         = rw.makeFilename( output_template,
-                                           "{}_{}_2sf_curve_tsink{}_{}_{}",
-                                           moment_str,
-                                           flav_str[ iflav ],
+                                           "{}_2sf_curve_{}_{}_tsink{}_{}_{}" \
+                                           + "_psq{}_{}configs_binSize{}",
+                                           moment_str, particle, flav_str[ iflav ],
                                            tsink[ ts ],
                                            tsf_threep_range_str,
-                                           ts_range_str )
+                                           ts_range_str,
+                                           momSq, configNum, binSize )
                     rw.writeAvgDataFile_wX( curveOutputFilename,
                                             ti_mellin[ ts ],
                                             mellin_curve_const_ts_avg[ ts ],
