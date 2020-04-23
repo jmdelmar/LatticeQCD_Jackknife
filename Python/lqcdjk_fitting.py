@@ -3,7 +3,8 @@ import functions as fncs
 import physQuants as pq
 import mpi_functions as mpi_fncs
 from mpi4py import MPI
-from scipy.optimize import least_squares, minimize, differential_evolution
+from scipy.optimize import least_squares, minimize, \
+    differential_evolution, curve_fit
 
 # Exception thrown if good fit cannot be found.
 # The definition of a good fit can vary on fitting routine.
@@ -226,13 +227,12 @@ def testEffEnergyTwopFit( effEnergy, twop, rangeEnd, pSq, L, particle,
 
                 # Check if the fits are good
             
-                relDiff = np.abs( plat_fit_avg - E_avg ) \
-                          / ( 0.5 * ( plat_fit_avg + E_avg ) )
+                diff = np.abs( plat_fit_avg - E_avg )
         
-                if 0.5 * plat_fit_err > relDiff:
+                if 0.5 * plat_fit_err > diff and E_err > diff:
 
-                    template = "plat tlow={}, twop tlow={}, " \
-                               + "plat={}, twop E={}"
+                    template = "plat tlow={}, 2sf twop tlow={}, " \
+                               + "plat={}, 2sf E={}"
 
                     print(template.format(plat_tlow, twop_tlow,
                                           E_avg, plat_fit_avg))
@@ -244,13 +244,12 @@ def testEffEnergyTwopFit( effEnergy, twop, rangeEnd, pSq, L, particle,
 
                 # Check if the fits are good
             
-                relDiff = np.abs( plat_fit_avg - E_avg ) \
-                          / ( 0.5 * ( plat_fit_avg + E_avg ) )
+                diff = np.abs( plat_fit_avg - E_avg )
         
-                if 0.5 * plat_fit_err > relDiff:
+                if 0.5 * plat_fit_err > diff and E_err > diff:
 
-                    template = "plat tlow={}, twop tlow={}, " \
-                               + "plat={}, twop E={}"
+                    template = "plat tlow={}, 2sf effE tlow={}, " \
+                               + "plat={}, 2sf effE={}"
 
                     print(template.format(plat_tlow, twop_tlow,
                                           E_avg, plat_fit_avg))
@@ -294,7 +293,7 @@ def effEnergyTwopFit( effEnergy, twop, rangeEnd, pSq, L, tsf,
 
         if rangeEnd - 15 > 15:
 
-            plat_t_low_range = range( 7, rangeEnd - 15 )
+            plat_t_low_range = range( 8, rangeEnd - 15 )
 
         else:
 
@@ -414,19 +413,19 @@ def effEnergyTwopFit( effEnergy, twop, rangeEnd, pSq, L, tsf,
                     plat_fit_err = fncs.calcError( plat_fit, binNum )
 
                     E_avg = np.average( E )
+                    E_err = fncs.calcError( E, binNum )
 
                     # Check if the fits are good
             
-                    relDiff = np.abs( plat_fit_avg - E_avg ) \
-                              / ( 0.5 * ( plat_fit_avg + E_avg ) )
+                    diff = np.abs( plat_fit_avg - E_avg )
         
-                    #print(plat_t_low,twop_t_low,plat_fit_avg,E_avg,relDiff,plat_fit_err)
+                    #print(plat_t_low,twop_t_low,plat_fit_avg,E_avg,diff,plat_fit_err)
 
-                    if 0.5 * plat_fit_err > relDiff:
+                    if 0.5 * plat_fit_err > diff and E_err > diff:
                         
                         goodFit = True
 
-                    # End if relDiff < dm/2
+                    # End if diff < dm/2
                 # End if first process
 
                 goodFit = comm.bcast( goodFit, root=0 )
@@ -503,11 +502,16 @@ def twoStateFit_twop( twop, rangeStart, rangeEnd, E_guess, T,
     c1 = [ 0.0, 10**-2 ]
     E0 = [ 0.0, E_guess + 0.2 ]
     E1 = [ E_guess + 0.2, 2.0 ]
-
+    
     fitParams = np.array( [ c0, c1, E0, E1 ] )
 
     tsink = np.arange( rangeStart, rangeEnd + 1 )
-    twop_err = fncs.calcError( twop_to_fit, binNum )
+    #twop_err = fncs.calcError( twop_to_fit, binNum )
+
+    # Calculate inverse of the covariant matrix
+
+    twop_err = np.linalg.inv( np.cov( twop_to_fit, rowvar=False ) 
+                              * ( binNum - 1 ) )
 
     if rank == 0:
 
@@ -624,7 +628,12 @@ def twoStateFit_effEnergy( effEnergy, rangeStart, rangeEnd, E_guess, T,
     fitParams = np.array( [ c, E0, E1 ] )
 
     t_to_fit = np.arange( rangeStart, rangeEnd + 1 )
-    effEnergy_err = fncs.calcError( effEnergy_to_fit, binNum )
+    #effEnergy_err = fncs.calcError( effEnergy_to_fit, binNum )
+
+    # Calculate inverse of the covariant matrix
+
+    effEnergy_err = np.linalg.inv( np.cov( effEnergy_to_fit, rowvar=False ) 
+                                   * ( binNum - 1 ) )
 
     if rank == 0:
 
@@ -784,9 +793,12 @@ def twoStateFit_threep( threep, ti_to_fit, tsink, E0, E1, T,
     #a00 = -10.0 ** -5
     #a01 = -10.0 ** -4
     #a11 = -10.0 ** -4
-    a00 = [ -10 ** -2, 10 ** 2 ]
-    a01 = [ -10 ** -2, 10 ** 2 ]
-    a11 = [ -10 ** -2, 10 ** 2 ]
+    #a00 = [ -10 ** -2, 10 ** 2 ]
+    #a01 = [ -10 ** -2, 10 ** 2 ]
+    #a11 = [ -10 ** -2, 10 ** 2 ]
+    a00 = [ -10 ** -2, 0.0 ]
+    a01 = [ -10 ** -2, 0.0 ]
+    a11 = [ -10 ** -2, 0.0 ]
 
     fitParams = np.array( [ a00, a01, a11 ] )
 
@@ -953,13 +965,25 @@ def twoStateFit_threep( threep, ti_to_fit, tsink, E0, E1, T,
     return fit, chiSq
 
 
-def twoStateCostFunction_twop( fitParams, tsink, T, twop, twop_err ):
+def twoStateCostFunction_twop( fitParams, tsink, T, twop, sigma ):
 
-    return np.sum( twoStateErrorFunction_twop( fitParams, 
-                                               tsink, 
-                                               T, twop, 
-                                               twop_err ) ** 2 )
+    if sigma.ndim == 1: # sigma is standard deviations
+
+        return np.sum( twoStateErrorFunction_twop( fitParams, 
+                                                   tsink, 
+                                                   T, twop, 
+                                                   sigma ) ** 2 )
     
+    elif sigma.ndim == 2: # sigma is inverse covariant matrix
+
+        r = twoStateResidual_twop( fitParams, tsink, T, twop )
+
+        return r.T @ sigma @ r
+
+    else: # Unsupported
+
+        return
+
     
 # Calculate the difference between two-point function values of the data 
 # and calculated from the two-state fit divided by the jackknife errors
@@ -984,13 +1008,35 @@ def twoStateErrorFunction_twop( fitParams, tsink, T, twop, twop_err ):
     return twopErr
     
 
-def twoStateCostFunction_effEnergy( fitParams, tsink, T, 
-                                    effEnergy, effEnergy_err ):
+def twoStateResidual_twop( fitParams, tsink, T, twop ):
 
-    return np.sum( twoStateErrorFunction_effEnergy( fitParams, 
-                                               tsink, 
-                                               T, effEnergy, 
-                                               effEnergy_err ) ** 2 )
+    c0 = fitParams[ 0 ]
+    c1 = fitParams[ 1 ]
+    E0 = fitParams[ 2 ]
+    E1 = fitParams[ 3 ]
+
+    return np.array( twoStateTwop( tsink, T, c0, c1, E0, E1 ) - twop )
+    
+
+def twoStateCostFunction_effEnergy( fitParams, tsink, T, 
+                                    effEnergy, sigma ):
+
+    if sigma.ndim == 1: # sigma is standard deviations
+
+        return np.sum( twoStateErrorFunction_effEnergy( fitParams, 
+                                                        tsink, 
+                                                        T, effEnergy, 
+                                                        sigma ) ** 2 )
+
+    elif sigma.ndim == 2: # sigma is inverse covariant matrix
+
+        r = twoStateResidual_effEnergy( fitParams, tsink, T, effEnergy )
+
+        return r.T @ sigma @ r
+
+    else: # Unsupported
+
+        return
     
 
 def twoStateErrorFunction_effEnergy( fitParams, tsink, T,
@@ -1004,6 +1050,16 @@ def twoStateErrorFunction_effEnergy( fitParams, tsink, T,
                           - effEnergy ) / effEnergy_err )
     
     return twopErr
+    
+
+def twoStateResidual_effEnergy( fitParams, tsink, T, effEnergy ):
+
+    c = fitParams[ 0 ]
+    E0 = fitParams[ 1 ]
+    E1 = fitParams[ 2 ]
+
+    return np.array( twoStateEffEnergy( tsink, T, c, E0, E1 ) 
+                     - effEnergy )
     
 
 def twoStateCostFunction_threep( fitParams, ti, tsink, T, 
