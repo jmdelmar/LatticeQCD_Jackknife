@@ -92,18 +92,18 @@ def lqcdjk_mpi_confs_info( mpi_confs_info ):
     # Number of configurations on each process and offset 
     # for gatherv functions
 
-    confNum = np.zeros( procNum, dtype=int )
+    configNum_loc_list = np.zeros( procNum, dtype=int )
     confOffset = np.zeros( procNum, dtype=int )
     offsetSum = 0
 
     for r in range( procNum ):
 
-        confNum[ r ] = len( iconf[ r ] )
+        configNum_loc_list[ r ] = len( iconf[ r ] )
         confOffset[ r ] = offsetSum
 
-        offsetSum += confNum[ r ]
+        offsetSum += configNum_loc_list[ r ]
         
-    mpi_confs_info[ 'confNum' ] = confNum
+    mpi_confs_info[ 'configNum_loc_list' ] = configNum_loc_list
     mpi_confs_info[ 'confOffset' ] = confOffset
 
     # Number of bins on each process and offset for gatherv functions
@@ -136,6 +136,8 @@ def mpiPrintErr( message, mpi_info ):
         print( message, file=stderr )
         
         stderr.flush()
+
+    mpi_info[ 'comm' ].Barrier()
 
     mpi_info[ 'comm' ].Abort()
 
