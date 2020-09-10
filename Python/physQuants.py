@@ -306,16 +306,16 @@ def calcMellin_twopFit( threep, tsink, mEff, momSq, L, \
     c0_cp = np.repeat( c0, T ).reshape( threep.shape )
     E0_cp = np.repeat( E0, T ).reshape( threep.shape )
 
-    if moment == 1:
+    if moment == 1 or moment == "avgX":
 
         preFactor = np.repeat( avgXKineFactor( mEff, momSq, L ), \
                                T ).reshape( threep.shape )
 
-    elif moment == 2:
+    elif moment == 2 or moment == "avgX2":
 
         preFactor = -1.0
 
-    elif moment == 3:
+    elif moment == 3 or moment == "avgX3":
 
         preFactor = -1.0        
 
