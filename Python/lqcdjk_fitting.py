@@ -101,10 +101,10 @@ def fitPlateau_parallel( data, err, start, end, mpi_confs_info ):
     fit = np.zeros( binNum )
     chiSq = np.zeros( binNum )
 
-    comm.Gatherv( fit_loc, [ fit, recvCount, recvOffset, MPI.DOUBLE ], 
-                  root=0 )
-    comm.Gatherv( chiSq_loc, [ chiSq, recvCount, recvOffset, MPI.DOUBLE ], 
-                  root=0 )
+    comm.Allgatherv( fit_loc, 
+                     [ fit, recvCount, recvOffset, MPI.DOUBLE ] )
+    comm.Allgatherv( chiSq_loc, 
+                     [ chiSq, recvCount, recvOffset, MPI.DOUBLE ] )
 
     chiSq = chiSq / dof
 
@@ -291,13 +291,13 @@ def effEnergyTwopFit( effEnergy, twop, rangeEnd, pSq, L, tsf,
 
     else:
 
-        if rangeEnd - 15 > 15:
+        if pSq == 0:
 
-            plat_t_low_range = range( 8, rangeEnd - 15 )
+            plat_t_low_range = range( 11, 21 )            
 
         else:
 
-            plat_t_low_range = range( 7, rangeEnd - 5 )            
+            plat_t_low_range = range( 8, 21 )            
 
     if "tsf_t_low_range" in kwargs \
        and None not in kwargs[ "tsf_t_low_range" ]:
@@ -571,16 +571,14 @@ def twoStateFit_twop( twop, rangeStart, rangeEnd, E_guess, T,
     fit = np.zeros( ( binNum, ) + fit_loc.shape[ 1: ] )
     chiSq = np.zeros( ( binNum, ) + chiSq_loc.shape[ 1: ] )
 
-    comm.Gatherv( fit_loc, [ fit, 
-                             recvCount * np.prod( fit.shape[ 1: ] ),
-                             recvOffset * np.prod( fit.shape[ 1: ] ),
-                             MPI.DOUBLE ], 
-                  root=0 )
-    comm.Gatherv( chiSq_loc, [ chiSq, 
-                               recvCount * np.prod( chiSq.shape[ 1: ] ),
-                               recvOffset * np.prod( chiSq.shape[ 1: ] ),
-                               MPI.DOUBLE ], 
-                  root=0 )
+    comm.Allgatherv( fit_loc, [ fit, 
+                                recvCount * np.prod( fit.shape[ 1: ] ),
+                                recvOffset * np.prod( fit.shape[ 1: ] ),
+                                MPI.DOUBLE ] )
+    comm.Allgatherv( chiSq_loc, [ chiSq, 
+                                  recvCount * np.prod( chiSq.shape[ 1: ] ),
+                                  recvOffset * np.prod( chiSq.shape[ 1: ] ),
+                                  MPI.DOUBLE ] )
 
     chiSq = np.array( chiSq ) / dof
 
@@ -692,16 +690,16 @@ def twoStateFit_effEnergy( effEnergy, rangeStart, rangeEnd, E_guess, T,
     fit = np.zeros( ( binNum, ) + fit_loc.shape[ 1: ] )
     chiSq = np.zeros( ( binNum, ) + chiSq_loc.shape[ 1: ] )
 
-    comm.Gatherv( fit_loc, [ fit, 
-                             recvCount * np.prod( fit.shape[ 1: ] ),
-                             recvOffset * np.prod( fit.shape[ 1: ] ),
-                             MPI.DOUBLE ], 
-                  root=0 )
-    comm.Gatherv( chiSq_loc, [ chiSq, 
-                               recvCount * np.prod( chiSq.shape[ 1: ] ),
-                               recvOffset * np.prod( chiSq.shape[ 1: ] ),
-                               MPI.DOUBLE ], 
-                  root=0 )
+    comm.Allgatherv( fit_loc, 
+                     [ fit, 
+                       recvCount * np.prod( fit.shape[ 1: ] ),
+                       recvOffset * np.prod( fit.shape[ 1: ] ),
+                       MPI.DOUBLE ] )
+    comm.Allgatherv( chiSq_loc, 
+                     [ chiSq, 
+                       recvCount * np.prod( chiSq.shape[ 1: ] ),
+                       recvOffset * np.prod( chiSq.shape[ 1: ] ),
+                       MPI.DOUBLE ] )
 
     chiSq = chiSq / dof
 
@@ -949,17 +947,17 @@ def twoStateFit_threep( threep, ti_to_fit, tsink, E0, E1, T,
     fit = np.zeros( ( binNum, ) + fit_loc.shape[ 1: ] )
     chiSq = np.zeros( ( binNum, ) + chiSq_loc.shape[ 1: ] )
 
-    comm.Gatherv( fit_loc, [ fit, 
-                             recvCount * np.prod( fit.shape[ 1: ] ),
-                             recvOffset * np.prod( fit.shape[ 1: ] ),
-                             MPI.DOUBLE ], 
-                  root=0 )
-    comm.Gatherv( chiSq_loc, [ chiSq, 
-                               recvCount * np.prod( chiSq.shape[ 1: ] ),
-                               recvOffset * np.prod( chiSq.shape[ 1: ] ),
-                               MPI.DOUBLE ], 
-                  root=0 )
-
+    comm.Allgatherv( fit_loc, 
+                     [ fit, 
+                       recvCount * np.prod( fit.shape[ 1: ] ),
+                       recvOffset * np.prod( fit.shape[ 1: ] ),
+                       MPI.DOUBLE ] )
+    comm.Allgatherv( chiSq_loc, 
+                     [ chiSq, 
+                       recvCount * np.prod( chiSq.shape[ 1: ] ),
+                       recvOffset * np.prod( chiSq.shape[ 1: ] ),
+                       MPI.DOUBLE ] )
+    
     chiSq = np.array( chiSq ) / dof
     
     return fit, chiSq
@@ -1446,7 +1444,7 @@ def calcThreepTwoStateCurve( a00, a01, a11, E0, E1, T, tsink, \
 def calcAvgXTwoStateCurve_const_ts( a00, a01, a11, c0, c1, \
                                     E0, E1, mEff, momSq, L, T, \
                                     ZvD1, tsink, ti_to_fit, \
-                                    neglect ):
+                                    neglect, moment ):
 
     # a00[ b ] 
     # a01[ b ] 
@@ -1472,6 +1470,17 @@ def calcAvgXTwoStateCurve_const_ts( a00, a01, a11, c0, c1, \
     ti = np.zeros( ( tsinkNum, 100 ) )
             
     for b in range( binNum ):
+
+        if moment == "avgX" or moment == 1:
+
+            preFactor = pq.avgXKineFactor( mEff[ b ], \
+                                           momSq, \
+                                           L ) \
+
+        else:
+
+            preFactor = -1.0
+
         for ts in range( tsinkNum ):
 
             ti[ ts ] = np.linspace( ti_to_fit[ ts ][ 0 ], \
@@ -1490,9 +1499,7 @@ def calcAvgXTwoStateCurve_const_ts( a00, a01, a11, c0, c1, \
             for t in range( len( ti[ ts ] ) ):
                 
                 curve[ b, ts, t ] = ZvD1 \
-                                    * pq.avgXKineFactor( mEff[ b ], \
-                                                         momSq, \
-                                                         L ) \
+                                    * preFactor \
                                     * twoStateThreep( ti[ ts, t ], \
                                                       tsink[ ts ], \
                                                       T, \
@@ -1520,7 +1527,7 @@ def calcAvgXTwoStateCurve_const_ts( a00, a01, a11, c0, c1, \
 
 def calcAvgXTwoStateCurve_const_ti( a00, a01, a11, c0, c1, \
                                     E0, E1, mEff, momSq, L, T, \
-                                    ZvD1, firstTs, lastTs ):
+                                    ZvD1, firstTs, lastTs, moment ):
 
     # a00[ b ] 
     # a01[ b ] 
@@ -1543,12 +1550,21 @@ def calcAvgXTwoStateCurve_const_ti( a00, a01, a11, c0, c1, \
     tsink = np.linspace( firstTs, lastTs, num=100 )
             
     for b in range( binNum ):
+        
+        if moment == "avgX" or moment == 1:
+
+            preFactor = pq.avgXKineFactor( mEff[ b ], \
+                                           momSq, \
+                                           L ) \
+
+        else:
+
+            preFactor = -1.0
+
         for ts in range( len( tsink ) ):
                 
             curve[ b, ts ] = ZvD1 \
-                             * pq.avgXKineFactor( mEff[ b ], \
-                                                  momSq, \
-                                                  L ) \
+                             * preFactor \
                              * twoStateThreep( tsink[ ts ] / 2, \
                                                tsink[ ts ], \
                                                T, \
