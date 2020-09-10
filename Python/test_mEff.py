@@ -14,7 +14,7 @@ np.set_printoptions(threshold=sys.maxsize)
 
 L = 32.0
 
-srcNum = 16
+srcNum = 32
 
 particle_list = [ "pion", "kaon", "nucleon" ]
 
@@ -297,10 +297,15 @@ if rank == 0:
             E0 = fitParams[ :, 2 ]
             E1 = fitParams[ :, 3 ]
             
-            curve, ts = fit.calcTwopTwoStateCurve( c0, c1, \
-                                                   E0, E1, T, \
+            curve, ts = fit.calcmEffTwoStateCurve( np.ones( binNum ), \
+                                                   c1/c0, E0, E1, T, \
                                                    rangeStart, \
                                                    rangeEnd )
+            
+            #curve, ts = fit.calcTwopTwoStateCurve( c0, c1, \
+            #                                       E0, E1, T, \
+            #                                       rangeStart, \
+            #                                       rangeEnd )
             
             curve_avg = np.average( curve, axis=0 )
             curve_err = fncs.calcError( curve, binNum )
