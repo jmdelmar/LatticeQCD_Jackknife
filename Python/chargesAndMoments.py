@@ -14,8 +14,6 @@ np.set_printoptions(threshold=sys.maxsize)
 
 L = 32.0
 
-particle_list = [ "pion", "kaon", "nucleon" ]
-
 particle_list = fncs.particleList()
 
 format_list = fncs.dataFormatList()
@@ -23,6 +21,7 @@ format_list = fncs.dataFormatList()
 mellin_list = fncs.mellinMomentList()
 GE_list = fncs.GEList()
 
+ratio_list = mellin_list + GE_list
 
 #########################
 # Parse input arguments #
@@ -193,6 +192,9 @@ assert particle in particle_list, \
     "Error: Particle not supported. " \
     + "Supported particles: " + ", ".join( particle_list )
 
+# Set flavor strings.
+# If pion, will not access strange.
+
 if whichRatio in GE_list:
 
     flav_str = [ "" ]
@@ -217,66 +219,11 @@ flavNum = len( flav_str )
 # and smear strings based on 
 # particle and p^2
 
-dataFormat_threep = "gpu" if momSq == 0 else "cpu"
+dataFormat_twop, dataFormat_threep, twop_boost_template \
+    = fncs.setDataFormat( particle, momSq )
 
-smear_str_template = "_gN{}a0p2"
-
-if particle == "pion":
-
-    dataFormat_twop = [ "gpu" ]
-
-    if momSq == 0:
-
-        dataFormat_twop = [ "gpu" ]
-
-        smear_str_list = [ "" ]
-
-    else:
-
-        dataFormat_twop = [ "cpu" ]
-
-        twop_boost_template = twop_template
-
-        smear_str_list = [ smear_str_template.format( 50 ) ]
-        smear_str_list_boost = smear_str_list
-
-elif particle == "kaon":
-
-    if momSq == 0:
-
-        dataFormat_twop = [ "gpu", "cpu", "cpu" ]
-
-        smear_str_list = [ "",
-                           smear_str_template.format( 40 ) 
-                           + smear_str_template.format( 50 ),
-                           smear_str_template.format( 50 ) 
-                           + smear_str_template.format( 40 ) ]        
-
-    else:
-
-        dataFormat_twop = [ "cpu", "cpu" ]
-
-        twop_boost_template = [ twop_template[ 1 ], twop_template[ 0 ] ]
-
-        smear_str_list = [ smear_str_template.format( 40 ) ]
-        smear_str_list_boost = [ smear_str_template.format( 40 ) 
-                                 + smear_str_template.format( 50 ),
-                                 smear_str_template.format( 40 ) ]        
-        
-else:
-
-    dataFormat_twop = [ "gpu" ]
-
-    smear_str_list = ""
-
-smearNum = len( smear_str_list )
-
-if momSq > 0:
-
-    smearNum_boost = len( smear_str_list_boost )
-
-# Set string for up and strange quark.
-# If pion, will not access strange.
+smear_str_list, smear_str_list_boost, smearNum, smearNum_boost \
+    = fncs.setSmearString( particle, momSq )
 
 if whichRatio == "avgX":
 
@@ -355,7 +302,9 @@ for ismr in range( smearNum ):
 
     if binNum_loc:
 
-        twop_jk_loc = fncs.jackknifeBinSubset( twop[ ismr ], binSize, binList_loc )
+        twop_jk_loc = fncs.jackknifeBinSubset( twop[ ismr ],
+                                               binSize,
+                                               binList_loc )
 
         # twop_fold[ b, t ]
 
@@ -368,9 +317,7 @@ for ismr in range( smearNum ):
     else:
 
         twop_jk_loc = np.array( [] )
-        
         twop_fold_loc = np.array( [] )
-    
         mEff_loc = np.array( [] )
 
     comm.Allgatherv( twop_fold_loc, 
@@ -402,8 +349,6 @@ for ismr in range( smearNum ):
 
         mEff_avg = np.average( mEff[ ismr ], axis=-2 )
         mEff_err = fncs.calcError( mEff[ ismr ], binNum, axis=-2 )
-
-
     
         avgOutputFilename = rw.makeFilename( output_template, 
                                              "mEff_avg_{}_psq{}" \
@@ -426,10 +371,7 @@ for ismr in range( smearNum ):
                                     checkFit=checkFit,
                                     fitType="twop",
                                     tsf_t_low_range=[tsf_fitStart] )
-        #tsf_t_low_range=range(1,4) )
     
-        fitType = "twop"
-
     except fit.lqcdjk_BadFitError as error: # Bad twop fit
     
         mpi_fncs.mpiPrint( error, mpi_confs_info )
@@ -450,13 +392,10 @@ for ismr in range( smearNum ):
             
         except fit.lqcdjk_BadFitError as error: # Bad effEnergy fit
 
-            mpi_fncs.mpiPrintErr( "ERROR (lqcdjk_fitting.mEffTwopFit):"
+            mpi_fncs.mpiPrintError( "ERROR (lqcdjk_fitting.mEffTwopFit):"
                                   + str( error ), mpi_confs_info )
 
         # End bad effEnergy fit
-
-        fitType = "effEnergy"
-
     # End bad twop fit
 
     fitParams = fitResults[ ismr ][ 0 ]
@@ -466,6 +405,8 @@ for ismr in range( smearNum ):
 
     rangeStart = fitResults[ ismr ][ 3 ]
     mEff_rangeStart = fitResults[ ismr ][ 4 ]
+
+    fitType = fitResults[ ismr ][ 5 ]
     
     if rank == 0 and ismr == 0:
 
@@ -705,7 +646,7 @@ for smr, ismr in smear_to_loop_over:
                 
             except fit.lqcdjk_BadFitError as error:
         
-                mpi_fncs.mpiPrintErr( "ERROR (lqcdjk_fitting.mEffTwopFit):"
+                mpi_fncs.mpiPrintError( "ERROR (lqcdjk_fitting.mEffTwopFit):"
                                       + str( error ), mpi_confs_info )
 
             # End bad mEff fit
