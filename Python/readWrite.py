@@ -59,7 +59,7 @@ def getFileNames( configDir, configList, fn_template ):
     for c in range( configNum ):
         
         # Get filenames in sub-directory which follow template
-        
+
         filename[c] = glob( configDir + "/" + configList[c] \
                             + "/" + fn_template )
 
@@ -198,7 +198,7 @@ def getDatasets( configDir, configList, fn_template, *keyword, **kwargs ):
         dsetname = [ [ kwargs[ "dsetname" ] \
                        for fn in range( len( filename[ c ] ) ) ] \
                      for c in range( configNum ) ]
-        
+
     else:
 
         dsetname = getDatasetNames( filename, *keyword )
@@ -211,6 +211,7 @@ def getDatasets( configDir, configList, fn_template, *keyword, **kwargs ):
         for fn in range( len( dsetname[c] ) ): 
             # Open file
             with h5py.File( filename[c][fn], "r" ) as dataFile:
+
                 # Loop over datasets
                 for ds in range( len( dsetname[c][fn] ) ):
 
@@ -371,7 +372,7 @@ def makeFilename( genTemplate, specTemplate, *args ):
     return genTemplate.replace( "*", specTemplate.format( *args ) )
 
 
-def readMomentaList( twopDir, twop_template, config, particle, \
+def readMomentaList( corrDir, corr_template, config, particle,
                      srcNum, momSq, dataFormat, mpi_info ):
 
     momList = []
@@ -397,7 +398,7 @@ def readMomentaList( twopDir, twop_template, config, particle, \
             pList = getDatasets( twopDir, [ config ], twop_template, 
                                  "Momenta_list" )[ :, 0, 0, ... ]
 
-            pSqList, pSqStart, pSqEnd = fncs.processMomList( pList )
+            pList, pSqList, pSqStart, pSqEnd, pSqWhere = fncs.processMomList( pList )
 
             ipSq = np.where( pSqList == momSq )[0][0]
             ipSqStart = pSqStart[ ipSq ]
@@ -407,7 +408,87 @@ def readMomentaList( twopDir, twop_template, config, particle, \
 
     return momList
 
-def readTwopFile_zeroQ( twopDir, configList, configNum, twop_template, \
+
+def readMomentaTransferList( corrDir, corrTemplate, configList,
+                             particle, srcNum, pSq, dataFormat, 
+                             momentumTransferListFilename, 
+                             mpi_info ):
+
+    if momentumTransferListFilename:
+
+        Q = readTxtFile( args.momentumTransferListFilename, dtype=int )
+
+        if dataFormat == "ASCII":
+        
+            Q = -1.0 * Q
+
+    else:
+
+        if dataFormat == "gpu":
+
+            mpi_fncs.mpiPrint( "No momentum list given, " \
+                               + "will read momentum " \
+                               + "from correlator files", 
+                               mpi_info )
+
+            Q = getDatasets( corrDir, configList, corrTemplate, \
+                             "Momenta_list" )[ :, 0, 0, ... ]
+
+        elif dataFormat == "cpu":
+
+            mpi_fncs.mpiPrint( "No momentum list given, " \
+                               + "will read momentum " \
+                               + "from three-point function files", 
+                               mpi_info )
+
+            filename = getFileNames( corrDir, configList, corrTemplate )
+
+            dsetname = getDatasetNames( filename, 
+                                        "ave{}".format( srcNum ),
+                                        "mvec" )
+
+            # Get first momentum transfer
+
+            Q = getDatasets( corrDir, configList, corrTemplate, 
+                             dsetname=[ dsetname[0][0][0] ] )[ 0, 0, 
+                                                               0, :, : ]
+
+            # Get the other momentum transfers
+
+            for ds in [ dsetname[ 0 ][ 0 ][ i ] \
+                for i in range( 1, len(dsetname[0][0] )) ]:
+
+                dset = getDatasets( corrDir, configList, corrTemplate, 
+                                    dsetname=[ds] )[ 0, 0, 0, :, : ]
+
+                Q = np.concatenate( ( Q, dset ), axis=0 )
+
+        elif dataFormat == "ASCII":
+
+            mpi_fncs.mpiPrintError( "ERROR: ASCII format requires a " \
+                                    + "momentum list to be given.", 
+                                    mpi_info )
+
+        else:
+
+            mpi_fncs.mpiPrintError( "ERROR (readWrite." \
+                                    + "readMomentaTransferList): " \
+                                    + "Data format {}".format( dataFormat ) \
+                                    + " not supported.", 
+                                    mpi_info )
+
+    Q = np.array( Q )
+
+    Q, Qsq, Qsq_start, Qsq_end, Qsq_where = fncs.processMomList( Q )
+
+    QNum = len( Q )
+
+    QsqNum = len( Qsq )
+
+    return Q, QNum, Qsq, QsqNum, Qsq_start, Qsq_end, Qsq_where
+
+
+def readTwopFile_zeroQ( twopDir, configList, configNum, twop_template,
                         srcNum, pSq, dataFormat, mpi_info ):
 
     comm = mpi_info[ 'comm' ]
@@ -429,7 +510,7 @@ def readTwopFile_zeroQ( twopDir, configList, configNum, twop_template, \
         pList = getDatasets( twopDir, configList, twop_template, 
                              "Momenta_list" )[ :, 0, 0, ... ]
 
-        pSqList, pSqStart, pSqEnd = fncs.processMomList( pList )
+        pList, pSqList, pSqStart, pSqEnd, pSqWhere = fncs.processMomList( pList )
 
         ipSq = np.where( pSqList == pSq )[0][0]
         ipSqStart = pSqStart[ ipSq ]
@@ -444,9 +525,13 @@ def readTwopFile_zeroQ( twopDir, configList, configNum, twop_template, \
 
     twop = np.zeros( ( configNum, ) + twop_loc.shape[ 1: ] )
     
-    comm.Allgatherv( twop_loc, [ twop, configNum_loc_list * np.prod( twop_loc.shape[ 1: ] ),
-                                 confOffset * np.prod( twop_loc.shape[ 1: ] ),
-                                 MPI.DOUBLE ] )
+    comm.Allgatherv( twop_loc,
+                     [ twop,
+                       configNum_loc_list \
+                       * np.prod( twop_loc.shape[ 1: ] ),
+                       confOffset \
+                       * np.prod( twop_loc.shape[ 1: ] ),
+                       MPI.DOUBLE ] )
 
     if pSq > 0:
 
@@ -465,28 +550,40 @@ def readTwopFile_zeroQ( twopDir, configList, configNum, twop_template, \
     return np.asarray( twop, order='c', dtype=float )
 
 
-def readTwopFile( twopDir, configList, twop_template, \
-                  Q, Qsq, Qsq_start, Qsq_end, \
-                  particle, srcNum, dataFormat ):
+def readTwopFile( twopDir, twop_template, configList, configNum, 
+                  Q, Qsq, Qsq_start, Qsq_end, particle, srcNum, pSq,
+                  dataFormat, mpi_info ):
+
+    comm = mpi_info[ 'comm' ]
+    configNum_loc_list = mpi_info[ 'configNum_loc_list' ]
+    confOffset = mpi_info[ 'confOffset' ]
 
     QNum = len( Q )
     QsqNum = len( Qsq )
+
+    t0 = time()
 
     if dataFormat == "cpu":
 
         template = "/twop_{0}/ave{}/msq{1:0>4}/arr"
 
+        # Get p^2=0 data to determine the size of time dimension
+
         dataset = [ template.format( particle, srcNum, 0 ) ]
 
+        # twop0[ b, t, q ]
+
         twop0 = getDatasets( twopDir, configList, twop_template, \
-                             dsetname=dataset )[:, 0, 0, ... ]
+                             dsetname=dataset )[:, 0, 0, ... ].real
 
-        twop0 = np.moveaxis( twop0, -1, -2 )
+        T = twop.shape[ -2 ]
 
-        twop = np.zeros( ( len( configList ), QNum, \
-                           twop0.shape[ -1 ] ) )
+        twop_loc = np.zeros( ( len( configList ),
+                               QNum, T ) )
 
-        twop[ :, 0, : ] = twop0[ :, 0, : ]
+        twop_loc[ :, 0, : ] = np.moveaxis( twop0, -1, -2 )
+
+        # Get p^2>0 data
 
         for iqsq in range( 1, QsqNum ):
 
@@ -495,11 +592,10 @@ def readTwopFile( twopDir, configList, twop_template, \
             twop_tmp = getDatasets( twopDir, \
                                     configList, \
                                     twop_template, \
-                                    dsetname=dataset )[:, 0, 0, ... ]
+                                    dsetname=dataset )[:, 0, 0, ... ].real
 
-            twop[ :, Qsq_start[ iqsq ]: \
-                  Qsq_end[ iqsq ] + 1, : ] = np.moveaxis( twop_tmp, \
-                                                          -1, -2 )
+            twop[ :, Qsq_start[ iqsq ] : Qsq_end[ iqsq ] + 1, : ] \
+                = np.moveaxis( twop_tmp, -1, -2 )
 
     elif dataFormat == "ASCII":
 
@@ -507,13 +603,14 @@ def readTwopFile( twopDir, configList, twop_template, \
         # 2nd output is not really configuration number because
         # files are not formatted like that.
 
-        T, dummy = detTimestepAndConfigNum( twopDir + \
-                                            twop_template.replace( "*", \
-                                                                   configList[0] ) )
+        T, dummy \
+            = detTimestepAndConfigNum(twopDir + \
+                                      twop_template.replace("*", \
+                                                            configList[0]))
 
         # Get 5th column of two-point files for each configuration
 
-        twop = getTxtData( twopDir, \
+        twop_loc = getTxtData( twopDir, \
                            configList, \
                            twop_template, \
                            dtype=float).reshape( len( configList ), \
@@ -522,16 +619,33 @@ def readTwopFile( twopDir, configList, twop_template, \
 
     else:
         
-        twop = getDatasets( twopDir, configList, \
+        twop_loc = getDatasets( twopDir, configList, \
                             twop_template, \
                             "twop" )[ :, 0, 0, :, :, 0 ]
 
-        # twop[ c, t, Q ] 
-        # -> twop[ c, Q, t ]
+        # twop_loc[ c, t, Q ]
+        # -> twop_loc[ c, Q, t ]
 
-        twop = np.moveaxis( twop, -1, -2 )
-        
-    return np.asarray( twop, order='c', dtype=float )
+        twop_loc = np.moveaxis( twop_loc, -1, -2 )
+
+    mpi_fncs.mpiPrint( "Read two-point functions from files " \
+                       + "in {:.3} seconds".format( time() - t0 ), 
+                       mpi_info )
+
+    twop_loc = np.asarray( twop_loc, order='c', dtype=float )
+
+    # Gather two-point functions
+
+    twop = np.zeros( ( configNum, ) + twop_loc.shape[ 1: ] )
+    
+    comm.Allgatherv( twop_loc, [ twop, 
+                                 configNum_loc_list \
+                                 * np.prod( twop_loc.shape[ 1: ] ),
+                                 confOffset \
+                                 * np.prod( twop_loc.shape[ 1: ] ),
+                                 MPI.DOUBLE ] )
+
+    return twop
 
 
 def getMellinMomentThreep( threepDir, configList, configNum, threep_tokens, \
@@ -692,7 +806,7 @@ def getMellinMomentThreep( threepDir, configList, configNum, threep_tokens, \
         error = "Error (readWrite.getMelinMomentThreep): moment " + moment \
                 + " not supported."
 
-        mpi_fncs.mpiPrintErr( error, mpi_info )
+        mpi_fncs.mpiPrintError( error, mpi_info )
 
     threep = np.zeros( ( 1 if particle == "pion" else 2, configNum, T ), \
                        order='c', dtype=float )
@@ -754,13 +868,13 @@ def readMellinThreepFile( threepDir, configList, threep_tokens, srcNum,
 
                 error = "Error (readWrite.readMellinThreepFile): " \
                         + "GPU format not supported for nucleon."
-                mpi_fncs.mpiPrintErr( error, mpi_info )
+                mpi_fncs.mpiPrintError( error, mpi_info )
 
         else:
 
             error = "Error (readWrite.readMellinThreepFile): " \
                     + "moments of order >1 not supported for nucleon."
-            mpi_fncs.mpiPrintErr( error, mpi_info )
+            mpi_fncs.mpiPrintError( error, mpi_info )
 
     else: # Particle is meson
 
@@ -794,7 +908,7 @@ def readMellinThreepFile( threepDir, configList, threep_tokens, srcNum,
                 
                 error = "Error (readWrite.readMellinThreepFile): " \
                         + "moments of order >3 not supported."
-                mpi_fncs.mpiPrintErr( error, mpi_info )
+                mpi_fncs.mpiPrintError( error, mpi_info )
                 
 
         elif dataFormat == "gpu":
@@ -811,7 +925,7 @@ def readMellinThreepFile( threepDir, configList, threep_tokens, srcNum,
                 error = "Error (readWrite.readMellinThreepFile): " \
                         + "moments of order >1 not supported for " \
                         + dataFormat + " data format."
-                mpi_fncs.mpiPrintErr( error, mpi_info )
+                mpi_fncs.mpiPrintError( error, mpi_info )
     
     threeps = np.pad( threeps, ( ( 0, 0 ), ( 0, 0 ), \
                                  ( 0, T - threeps.shape[ -1 ] ) ), \
@@ -905,7 +1019,7 @@ def readMesonAvgXFile_cpu( threepDir, threep_template, configList, \
         
         error = "Error (readwrite.readMesonAvgXFile_cpu): Particle " \
                 + particle + " not supported."
-        mpi_fncs.mpiPrintErr( error, mpi_info )
+        mpi_fncs.mpiPrintError( error, mpi_info )
 
 
 def readMesonAvgXFile_gpu( threepDir, threep_template, configList, \
@@ -1008,7 +1122,7 @@ def readMesonAvgXFile_gpu( threepDir, threep_template, configList, \
         error = "Error (readWrite.readMesonsAvgXFile_gpu): Particle " \
                 + particle + " not supported."
         
-        mpi_fncs.mpiPrintErr( error, mpi_info )
+        mpi_fncs.mpiPrintError( error, mpi_info )
 
 
 def readNucleonAvgXFile_cpu( threepDir, threep_template, configList, \
@@ -1179,7 +1293,7 @@ def readMesonAvgX2File_cpu( threepDir, threep_template, configList, \
 
     else: 
 
-        mpi_fncs.mpiPrintErr( "Error (readWrite.readMesonAvgX2File_cpu): " \
+        mpi_fncs.mpiPrintError( "Error (readWrite.readMesonAvgX2File_cpu): " \
                               + "Particle " + particle + " not supported.", \
                               mpi_info )
 
@@ -1236,7 +1350,7 @@ def readMesonAvgX3File_cpu( threepDir, threep_template, configList, \
 
     else: 
 
-        mpi_fncs.mpiPrintErr( "Error (readAvgX2File): Particle " \
+        mpi_fncs.mpiPrintError( "Error (readAvgX2File): Particle " \
                               + particle + " not supported.", mpi_info )
 
 
@@ -1349,7 +1463,7 @@ def readAvgXFile( threepDir, configList, threep_tokens, srcNum, \
 
             error = "Error (readWrite.readAvgXFile): GPU format not supported for nucleon."
             
-            mpi_fncs.mpiPrintErr( error, mpi_info )
+            mpi_fncs.mpiPrintError( error, mpi_info )
 
     else: # Particle is meson
 
@@ -1589,7 +1703,7 @@ def readAvgX2File( threepDir, configList, threep_tokens, srcNum, \
 
         error = "Error (readWrite.readAvgX2File): GPU format not supported"
 
-        mpi_fncs.mpiPrintErr( error, mpi_info )
+        mpi_fncs.mpiPrintError( error, mpi_info )
 
     if particle == "nucleon":
         """
@@ -1683,7 +1797,7 @@ def readAvgX2File( threepDir, configList, threep_tokens, srcNum, \
 
             exit()
         """
-        mpi_fncs.mpiPrintErr( "Error (readWrite.readAvgX2File): " \
+        mpi_fncs.mpiPrintError( "Error (readWrite.readAvgX2File): " \
                                 + "Nucleon not supported", mpi_info )
     else: # Particle is meson
         
@@ -1792,7 +1906,7 @@ def readAvgX2File( threepDir, configList, threep_tokens, srcNum, \
 
                 exit()                
             """
-            mpi_fncs.mpiPrintErr( "Error (readWrite.readAvgX2File): " \
+            mpi_fncs.mpiPrintError( "Error (readWrite.readAvgX2File): " \
                                     + "GPU format not supported, yet.", \
                                     mpi_info )
 
@@ -1868,7 +1982,7 @@ def readAvgX2File( threepDir, configList, threep_tokens, srcNum, \
 
             else: 
 
-                mpi_fncs.mpiPrintErr( "Error (readAvgX2File): Particle " \
+                mpi_fncs.mpiPrintError( "Error (readAvgX2File): Particle " \
                     + particle + " not supported.", mpi_info )
 
     mpi_fncs.mpiPrint( "Read three-point functions from HDF5 files " \
@@ -1912,7 +2026,7 @@ def readAvgX3File( threepDir, configList, threep_tokens, srcNum,
 
         error = "Error (readWrite.readAvgX2File): GPU format not supported"
 
-        mpi_fncs.mpiPrintErr( error, mpi_info )
+        mpi_fncs.mpiPrintError( error, mpi_info )
 
     if particle == "nucleon":
         """
@@ -2006,7 +2120,7 @@ def readAvgX3File( threepDir, configList, threep_tokens, srcNum,
 
             exit()
         """
-        mpi_fncs.mpiPrintErr( "Error (readWrite.readAvgX2File): " \
+        mpi_fncs.mpiPrintError( "Error (readWrite.readAvgX2File): " \
                                 + "Nucleon not supported, yet.", mpi_info )
     else: # Particle is meson
         
@@ -2115,7 +2229,7 @@ def readAvgX3File( threepDir, configList, threep_tokens, srcNum,
 
                 exit()                
             """
-            mpi_fncs.mpiPrintErr( "Error (readWrite.readAvgX2File): " \
+            mpi_fncs.mpiPrintError( "Error (readWrite.readAvgX2File): " \
                                     + "GPU format not supported, yet.", \
                                     mpi_info )
 
@@ -2151,7 +2265,7 @@ def readAvgX3File( threepDir, configList, threep_tokens, srcNum,
 
             else: 
 
-                mpi_fncs.mpiPrintErr( "Error (readAvgX2File): Particle " \
+                mpi_fncs.mpiPrintError( "Error (readAvgX2File): Particle " \
                     + particle + " not supported.", mpi_info )
 
     mpi_fncs.mpiPrint( "Read three-point functions from HDF5 files " \
@@ -2176,11 +2290,11 @@ def readEMFile( threepDir, configList, configNum, threep_tokens, srcNum,
     configNum_loc_list = mpi_info[ 'configNum_loc_list' ]
     confOffset = mpi_info[ 'confOffset' ]
 
-    # Set filename template
-
-    threep_template = threep_tokens[0]
-
     if dataFormat == "gpu":            
+
+        # Set filename template
+
+        threep_template = threep_tokens[0]
 
         if insType == "local":
 
@@ -2211,6 +2325,8 @@ def readEMFile( threepDir, configList, configNum, threep_tokens, srcNum,
                                                     0, iins, 0 ]
                 
     elif dataFormat == "cpu":
+
+        # Set filename template
 
         threep_template = threep_tokens[0] + str(ts) \
                           + threep_tokens[1] \
@@ -2289,22 +2405,72 @@ def readEMFile( threepDir, configList, configNum, threep_tokens, srcNum,
 
         threep_s_loc =np.asarray( np.pad( threep_s_loc, 
                                           ( ( 0, 0 ),
-                                            ( 0, T - threep_s_loc.shape[ -1 ] ) ),
+                                            ( 0, T-threep_s_loc.shape[-1] ) ),
                                           'constant',
                                           constant_values=( 0.0, 0.0 ) ),
                                    dtype=float, order='c' )
 
         comm.Allgatherv( threep_s_loc, 
                          [ threep[ 1 ], 
-                           configNum_loc_list * np.prod( threep_s_loc.shape[ 1: ] ),
-                           confOffset * np.prod( threep_s_loc.shape[ 1: ] ),
+                           configNum_loc_list \
+                           * np.prod( threep_s_loc.shape[ 1: ] ),
+                           confOffset \
+                           * np.prod( threep_s_loc.shape[ 1: ] ),
                            MPI.DOUBLE ] )
 
     return threep
 
-def readEMFF_cpu( threepDir, configList, threep_template, srcNum, \
-                  Qsq, ts, proj, \
-                  particle, **kwargs ):
+
+def readFormFactorFile( threepDir, threep_tokens, formFactor,
+                        srcNum, QsqList, QNum, ts, proj, p, T,
+                        particle, dataFormat,
+                        mpi_info ):
+
+    t0 = time()
+
+    if formFactor == "GE_GM":
+
+        threep = readEMFormFactorFile( threepDir, threep_tokens, srcNum,
+                                       QsqList, QNum, ts, proj, p, particle,
+                                       T, dataFormat, mpi_info )
+
+    elif formFactor == "A20_A22":
+
+        mpi_fncs.mpiPrintError( "Error(readFormFactorFile): form factor " \
+                           + formFactor + " not supported, yet."
+                           , mpi_info )
+
+    else:
+
+        mpi_fncs.mpiPrintError( "Error(readFormFactorFile): form factor " \
+                           + formFactor + " not supported."
+                           , mpi_info )
+
+    mpi_fncs.mpiPrint( "Read three-point functions from files " \
+                       + "for tsink {} in {:.4}".format( ts,
+                                                         time()
+                                                         - t0 ) \
+                       + " seconds.", mpi_info )
+
+    if particle == "nucleon":
+
+        # Calculate isovector and isoscalar
+
+        threep_tmp = np.copy( threep_loc )
+
+        threep[ 0 ] = 0.5 * ( threep_tmp[ 0 ] \
+                              - threep_tmp[ 1 ] )
+        threep[ 1 ] = 0.5 * ( threep_tmp[ 0 ] \
+                              + threep_tmp[ 1 ] )
+
+    return threep
+
+
+def readEMFF_cpu( threepDir, threep_template, srcNum,
+                  Qsq, ts, proj, particle, flav, T,
+                  **kwargs ):
+
+    configList = mpi_info[ 'configList' ]
 
     QsqNum = len( Qsq )
 
@@ -2332,7 +2498,7 @@ def readEMFF_cpu( threepDir, configList, threep_template, srcNum, \
                                                                   proj, \
                                                                   ts, \
                                                                   flav, \
-                                                                  c, Qsq )
+                                                                  c, qsq )
 
             else:
 
@@ -2341,41 +2507,70 @@ def readEMFF_cpu( threepDir, configList, threep_template, srcNum, \
                 dsetname[ iqsq * QsqNum + ic ] = template.format( srcNum, \
                                                                   ts, \
                                                                   flav, \
-                                                                  c, Qsq )
+                                                                  c, qsq )
 
         # End loop over insertion current
     # End loop over Qsq
 
     # Read three-point files
-    # threep[ conf, Qsq*curr, t ]
+    # threep[ conf, Q*curr, t ]
 
-    threep = getDatasets( threepDir, \
-                          configList, \
-                          threep_template, \
-                          dsetname=dsetname )[:,0,:,:,0]
+    threep = getDatasets( threepDir,
+                          configList,
+                          threep_template,
+                          dsetname=dsetname )[:,0,:,:]
 
     # Reshape threep[ conf, Qsq*curr, t ] 
-    # -> threep[ conf, Qsq, curr, t ]
-    
-    threep = threep.reshape( threep.shape[ 0 ], QsqNum, \
+    # -> threep[ conf, Q, curr, t ]
+
+    threep = threep.reshape( threep.shape[ 0 ], QsqNum,
                              insertionNum, threep.shape[ -1 ] )
                         
     return threep
 
     
-def readEMFF_gpu( threepDir, configList, threep_tokens, \
-                  QsqList, ts, proj, momBoost, particle, \
-                  dataFormat, **kwargs ):
+def readEMFF_gpu( threepDir, threep_template,
+                  QNum, ts, flav, dataFormat, T, 
+                  mpi_info, **kwargs ):
 
-    return
+    configList = mpi_info[ 'configList_loc' ]
+    configNum = len( configList )
 
-def readEMFF_ASCII( threepDir, configList, threep_template, \
-                    QNum, insertionNum, **kwargs ):
+    dset_keywords = [ "tsink_{}".format( ts ),
+                      "noether" ]
+
+    # threep_tmp[ conf, t, Q, curr, re/im ]
+    threep_tmp = getDatasets( threepDir, configList,
+                              threep_template,
+                              *dset_keywords )[ :, 0, 0, :, :, :, : ]
+
+    # Change current order from x, y, z, t -> t, x, y, z
+    # and make complex
+    # threep[ conf, t, Q, curr ]
+
+    threep = np.zeros( threep_tmp.shape[ :-1 ], dtype=complex )
+
+    threep[ ..., 0 ] = threep_tmp[ ..., 3, 0 ] \
+                       + 1j * threep_tmp[ ..., 3, 1 ]
+
+    threep[ ..., 1: ] = threep_tmp[ ..., :3, 0 ] \
+                        + 1j *threep_tmp[ ..., :3, 1 ]
+
+    # threep[ conf, t, Q, curr ] -> threep[ conf, Q, curr, t ]
+    threep = np.moveaxis( threep, 1, 3 )
+
+    return threep
+
+
+def readEMFF_ASCII( threepDir, threep_template,
+                    QNum, insertionNum, T, mpi_info, **kwargs ):
+
+    configList = mpi_info[ 'configList' ]
 
     # threep[ conf, QNum*t*curr ]
     
-    threep = getTxtData( threepDir, configList, \
-                            threep_template, dtype=float )[ ..., 4:6 ]
+    threep = getTxtData( threepDir, configList,
+                         threep_template, dtype=float )[ ..., 4:6 ]
 
     if "comm" in kwargs:
 
@@ -2403,20 +2598,30 @@ def readEMFF_ASCII( threepDir, configList, threep_template, \
     return threep
 
 
-def readEMFormFactorFile( threepDir, configList, threep_tokens, srcNum, \
-                          Qsq, QNum, ts, proj, momBoost, particle, dataFormat, \
-                          **kwargs ):
+def readEMFormFactorFile( threepDir, threep_tokens, srcNum,
+                          Qsq, QNum, ts, projector, p, particle, T,
+                          dataFormat, mpi_info, **kwargs ):
+
+    comm = mpi_info[ 'comm' ]
+    configNum = mpi_info[ "configNum" ]
+    configNum_loc = mpi_info[ "configNum_loc" ]
+    configNum_loc_list = mpi_info[ 'configNum_loc_list' ]
+    confOffset = mpi_info[ 'confOffset' ]
+
+    projectorNum = len( projector )
 
     flavor, flavorNum = fncs.setFlavorStrings( particle, dataFormat )
 
-    projNum = len( proj )
+    currNum = fncs.setCurrentNumber( "GE_GM", mpi_info )
 
-    threep = fncs.initEmptyList( np.zeros( ( flavorNum, projNum ) ), 2 )
+    threep_loc = np.zeros( ( configNum_loc, flavorNum,
+                             projectorNum, QNum, currNum, T ),
+                           dtype=complex )
 
     # Loop over flavor
     for flav, iflav in zip( flavor, range( flavorNum ) ):
-        # Loop over projection
-        for p, ip in zip( proj, range( projNum ) ):
+        # Loop over projector
+        for proj, iproj in zip( projector, range( projectorNum ) ):
 
             # Set filename template
     
@@ -2424,53 +2629,113 @@ def readEMFormFactorFile( threepDir, configList, threep_tokens, srcNum, \
                 
                 template = "{0}{1}{2}{3:+}_{4:+}_{5:+}.{6}.h5"
     
-                threep_template = template.format( threep_tokens[0], \
-                                                   ts, \
-                                                   threep_tokens[1], \
-                                                   momBoost[0], \
-                                                   momBoost[1], \
-                                                   momBoost[2], \
+                threep_template = template.format( threep_tokens[0],
+                                                   ts,
+                                                   threep_tokens[1],
+                                                   p[0], p[1], p[2],
                                                    flav )
 
-                threep[ iflav ][ ip ] = readEMFF_cpu( threepDir, \
-                                                      configList, \
-                                                      threep_template, srcNum, \
-                                                      Qsq, ts, p, particle, \
-                                                      **kwargs )
-
+                threep_loc[ :, iflav, iproj ] = readEMFF_cpu( threepDir,
+                                                           threep_template,
+                                                           srcNum, Qsq, ts, proj,
+                                                           particle, flav, T,
+                                                           **kwargs )
 
             elif dataFormat == "gpu":
 
-                    template = "{0}{1:+}{2:+}{3:+}{4}"
+                template = "{0}{1}{2}"
 
-                    threep_template = template.format( threep_tokens[0], \
-                                                       momBoost[0], \
-                                                       momBoost[1], \
-                                                       momBoost[2], \
-                                                       threep_tokens[1], **kwargs )
+                threep_template = template.format( threep_tokens[0],
+                                                   particle,
+                                                   threep_tokens[1] )
+
+                # threep_tmp[ conf, Q, curr, t ]
+
+                threep_tmp = readEMFF_gpu( threepDir,
+                                           threep_template,
+                                           QNum, ts, flav,
+                                           dataFormat, T,
+                                           mpi_info,
+                                           **kwargs )
+
+                threep_loc[ :, iflav, iproj, ..., :threep_tmp.shape[ -1 ] ] \
+                    = threep_tmp
 
             elif dataFormat == "ASCII":
 
                 template = "{0}{1}{2}{3}{4}{5}"
 
-                threep_template = template.format( threep_tokens[0], p, \
-                                                   threep_tokens[1], ts, \
-                                                   threep_tokens[2], \
+                threep_template = template.format( threep_tokens[0], proj,
+                                                   threep_tokens[1], ts,
+                                                   threep_tokens[2],
                                                    flav )
 
-                threep[ iflav ][ ip ] = readEMFF_ASCII( threepDir, \
-                                                        configList, \
-                                                        threep_template, \
-                                                        QNum, 4, **kwargs )
-                """
-                if "comm" in kwargs:
+                threep_loc[ :, iflav, iproj ] = readEMFF_ASCII( threepDir,
+                                                             threep_template,
+                                                             QNum, 4, **kwargs )
 
-                    print( "FLAG {} {}".format( flav, p), kwargs["comm"].Get_rank() )
-                """
-        # End loop over projection
+        # End loop over projector
     # End loop over flavor
 
-    return np.array( threep )
+    # Get the projector and insertion combinations we want
+    # threep_loc[ flav, proj, conf, Q, curr, t ]
+    # -> threep_loc[ flav, conf, Q, ratio, t ]
+
+    if particle == "nucleon":
+
+        # threep_loc[ flav, proj, conf, Q, curr, t ]
+        # -> threep_loc[ flav, conf, Q, ratio, t ]
+
+        # ratio   Projector Insertion
+        # 0       P0 gt
+        # 1       P0 gx
+        # 2       P0 gy
+        # 3       P0 gz
+        # 4       P4 gy
+        # 5       P4 gz
+        # 6       P5 gx
+        # 7       P5 gz
+        # 8       P6 gx
+        # 9       P6 gy
+
+        threep_loc = np.stack ( [ threep_loc[ :, 0, :, :, 0, : ].real,
+                                  threep_loc[ :, 0, :, :, 1, : ].imag,
+                                  threep_loc[ :, 0, :, :, 2, : ].imag,
+                                  threep_loc[ :, 0, :, :, 3, : ].imag,
+                                  threep_loc[ :, 1, :, :, 2, : ].real,
+                                  threep_loc[ :, 1, :, :, 3, : ].real,
+                                  threep_loc[ :, 2, :, :, 1, : ].real,
+                                  threep_loc[ :, 2, :, :, 3, : ].real,
+                                  threep_loc[ :, 3, :, :, 1, : ].real,
+                                  threep_loc[ :, 3, :, :, 2, : ].real ],
+                                axis=3 )
+        
+    else:
+
+        # ratio   Insertion
+        # 0       gt
+        # 1       gx
+        # 2       gy
+        # 3       gz
+
+        threep_loc = np.stack ( [ threep_loc[ :, 0, :, :, 0, : ].real,
+                                  threep_loc[ :, 0, :, :, 1, : ].imag,
+                                  threep_loc[ :, 0, :, :, 2, : ].imag,
+                                  threep_loc[ :, 0, :, :, 3, : ].imag ],
+                                axis=3 )
+
+    threep = np.zeros( ( configNum, ) \
+                       + threep_loc.shape[ 1: ] )
+
+    comm.Allgatherv( threep_loc,
+                     [ threep,
+                       configNum_loc_list \
+                       * np.prod( threep_loc.shape[ 1: ] ),
+                       confOffset \
+                       * np.prod( threep_loc.shape[ 1: ] ),
+                       MPI.DOUBLE ] )
+
+    return threep
 
 
 ########################
@@ -2562,7 +2827,7 @@ def readNthDataCol( filename, N ):
 
     return data[ ..., N ]
 
-
+"""
 # Reads and ASCII file of (most often) form factor data 
 # with three columns where the data of interest is in 
 # the last column. Lines should repeat over d2, then d1, 
@@ -2588,7 +2853,7 @@ def readFormFactorFile( filename, d0, d1, d2 ):
     # Return data in the last column
 
     return data[ ..., -1 ]
-
+"""
 
 ########################################
 # Determine values from file functions #
@@ -2864,34 +3129,44 @@ def writeAvgDataFile_wX( filename, x, y, error ):
         "Error (writeAvgDataFile_wX): Error array's length and " \
         + "shape does not match data array's" 
 
-    assert y.shape == x.shape and len( y ) == len( x ), \
+    assert len( y ) == len( x ), \
         "Error (writeAvgDataFile_wX): x array's length and " \
         + "shape does not match data array's" 
 
     with open( filename, "w" ) as output:
 
-        if x.dtype == int:
+        if x.ndim == 2:
 
             for ix, iy, ierr in zip( x, y, error ):
 
-                output.write( "{:<20d}{:<20.10f}{:.10f}\n".format( ix, \
-                                                                      iy, \
-                                                                      ierr) )
+                x_str = " ".join( "{:>2}".format( xx ) for xx in ix )
+
+                output.write( "{:<10}{:<20.10f}{:.10f}\n".format( x_str,
+                                                                iy,
+                                                                ierr) )
+            
+        elif x.dtype == int:
+            
+            for ix, iy, ierr in zip( x, y, error ):
+
+                output.write( "{:<20d}{:<20.10f}{:.10f}\n".format( ix,
+                                                                   iy,
+                                                                   ierr) )
 
         elif x.dtype == '<U6':
 
             for ix, iy, ierr in zip( x, y, error ):
 
-                output.write( "{:<20}{:<20.10f}{:.10f}\n".format( ix, \
-                                                                  iy, \
+                output.write( "{:<20}{:<20.10f}{:.10f}\n".format( ix,
+                                                                  iy,
                                                                   ierr) )            
 
         else: # Default: treat x as float
 
             for ix, iy, ierr in zip( x, y, error ):
 
-                output.write( "{:<20.10f}{:<20.10f}{:.10f}\n".format( ix, \
-                                                                      iy, \
+                output.write( "{:<20.10f}{:<20.10f}{:.10f}\n".format( ix,
+                                                                      iy,
                                                                       ierr) )
 
         
@@ -2979,7 +3254,7 @@ def writeAvgFormFactorFile( filename, Qsq, data, error ):
             for t in range( data.shape[ 1 ] ):
 
                 output.write( str( t ).ljust(5) 
-                              + str( Qsq[ q ] ).ljust(5) 
+                              + str( Qsq[ q ] ).ljust(10) 
                               + str( data[ q, t ] ).ljust(20) 
                               + str( error[ q, t ] ) + "\n" )
 
