@@ -2,16 +2,27 @@ import numpy as np
 import lqcdjk_fitting as fit
 import mpi_functions as mpi_fncs
 
+# E = sqrt( m^2 + Q^2 )
+
 def energy( mEff, Qsq, L ):
 
     return np.sqrt( mEff ** 2 + ( 2.0 * np.pi / L ) ** 2 * Qsq )
 
 
-def KK( mEff, Qsq, L ):
+# KK = sqrt( 2E ( E + m ) )
+
+def KK_nucleon( mEff, Qsq, L ):
 
     return np.sqrt( 2.0 * energy( mEff, Qsq, L ) \
                     * ( energy( mEff, Qsq, L ) \
                         + mEff ) )
+
+
+# KK = C_1^-1 = 2EE'
+
+def KK_meson( mEff, Qsq, L ):
+
+    return 2.0 * np.sqrt( energy( mEff, Qsq, L ) * mEff )
 
 
 def twopFit( c0, E0, t ):
@@ -21,7 +32,7 @@ def twopFit( c0, E0, t ):
     #return c0 * np.exp( -E0 * t ) + c1 * np.exp( -E1 * t )
 
 
-def kineFactor_GE_GM( ratio_err, mEff, Q, L ):
+def kineFactor_GE_GM( ratio_err, particle, mEff, Q, L ):
 
     # ratio_err[ Q, r ]
     # mEff[ b ]
@@ -46,49 +57,83 @@ def kineFactor_GE_GM( ratio_err, mEff, Q, L ):
 
             Qsq = np.dot( Q[ q ], Q[ q ] )
 
-            kineFactor[ b, q ] = [ [ ( energy( mEff[ b ], \
-                                               Qsq, L ) \
-                                       + mEff[ b ] ), 0 ], \
-                                   [ -2.0 * np.pi / L * Q[ q, 0 ], 0 ], \
-                                   [ -2.0 * np.pi / L * Q[ q, 1 ], 0 ], \
-                                   [ -2.0 * np.pi / L * Q[ q, 2 ], 0 ], \
-                                   [ 0, -2.0 * np.pi / L * Q[ q, 2 ] ], \
-                                   [ 0, 2.0 * np.pi / L * Q[ q, 1 ] ], \
-                                   [ 0, 2.0 * np.pi / L * Q[ q, 2 ] ], \
-                                   [ 0, -2.0 * np.pi / L * Q[ q, 0 ] ], \
-                                   [ 0, -2.0 * np.pi / L * Q[ q, 1 ] ], \
-                                   [ 0, 2.0 * np.pi / L * Q[ q, 0 ] ] ] \
-                / np.repeat( ratio_err[ q ], 2).reshape( 10 ,2 ) \
-                / KK( mEff[ b ], Qsq, L )
+            if particle == "nucleon":
+
+                kineFactor[ b, q ] = [ [ ( energy( mEff[ b ],
+                                                   Qsq, L ) \
+                                           + mEff[ b ] ), 0 ],
+                                       [ -2.0 * np.pi / L * Q[ q, 0 ], 0 ],
+                                       [ -2.0 * np.pi / L * Q[ q, 1 ], 0 ],
+                                       [ -2.0 * np.pi / L * Q[ q, 2 ], 0 ],
+                                       [ 0, -2.0 * np.pi / L * Q[ q, 2 ] ],
+                                       [ 0, 2.0 * np.pi / L * Q[ q, 1 ] ],
+                                       [ 0, 2.0 * np.pi / L * Q[ q, 2 ] ],
+                                       [ 0, -2.0 * np.pi / L * Q[ q, 0 ] ],
+                                       [ 0, -2.0 * np.pi / L * Q[ q, 1 ] ],
+                                       [ 0, 2.0 * np.pi / L * Q[ q, 0 ] ] ] \
+                    / np.repeat( ratio_err[ q ], 2).reshape( ratioNum, 2 ) \
+                    / KK_nucleon( mEff[ b ], Qsq, L )
+                
+            else:
+
+                # CJL: Should 2nd-4th elements have negative sign?
+
+                kineFactor[ b, q ] = [ [ ( energy( mEff[ b ],
+                                                   Qsq, L ) \
+                                           + mEff[ b ] ), 0 ],
+                                       [ 2.0 * np.pi / L * Q[ q, 0 ], 0 ],
+                                       [ 2.0 * np.pi / L * Q[ q, 1 ], 0 ],
+                                       [ 2.0 * np.pi / L * Q[ q, 2 ], 0 ] ] \
+                    / np.repeat( ratio_err[ q ], 2).reshape( ratioNum, 2 ) \
+                    / KK_meson( mEff[ b ], Qsq, L )
+                    
+        # End loop over Q
+    # End loop over bins
 
     return kineFactor
 
 
 def calc_gE_gM( decomp, ratio, ratio_err, Qsq_start, Qsq_end ):
 
+    # decomp[ b, Q, ratio, [ GE, GM ] ]
+    # ratio_fit[ b, Q, ratio ]
+    # ratio_fit_err[ Q, ratio ]
+    # Qsq_start
+    # Qsq_end
+
     binNum = decomp.shape[ 0 ]
 
+    #gE = np.zeros( ( 4, binNum ) )
     gE = np.zeros( ( binNum ) )
     gM = np.zeros( ( binNum ) )
 
     for b in range( binNum ):
+        #for i in range(4):
 
-        gE[ b ] = 2.0 * np.sum( decomp[ b, ..., 0 ] \
-                                * ratio[ b, \
-                                         Qsq_start \
-                                         : Qsq_end + 1 ] \
-                                / ratio_err[ Qsq_start \
-                                             : Qsq_end \
-                                             + 1 ] )
+        #gE[ i,b ] = np.sum( decomp[ b, :, i, 0 ] \
+            #                    * ratio[ b, \
+            #                             Qsq_start \
+            #                             : Qsq_end + 1, i ] \
+            #                    / ratio_err[ Qsq_start \
+            #                                     : Qsq_end \
+            #                                     + 1, i ] )
+        
+        gE[ b ] = np.sum( decomp[ b, ..., 0 ] \
+                          * ratio[ b, \
+                                   Qsq_start \
+                                   : Qsq_end + 1 ] \
+                          / ratio_err[ Qsq_start \
+                                       : Qsq_end \
+                                       + 1 ] )
 
-        gM[ b ] = 2.0 * np.sum( decomp[ b, ..., 1 ] \
-                                * ratio[ b, \
-                                         Qsq_start \
-                                         : Qsq_end + 1 ] \
-                                / ratio_err[ Qsq_start \
-                                             : Qsq_end \
-                                             + 1 ] )
-    
+        gM[ b ] = np.sum( decomp[ b, ..., 1 ] \
+                          * ratio[ b, \
+                                   Qsq_start \
+                                   : Qsq_end + 1 ] \
+                          / ratio_err[ Qsq_start \
+                                       : Qsq_end \
+                                       + 1 ] )
+        
     return gE, gM
 
 
@@ -514,6 +559,69 @@ def calcRatio_Q( threep, twop, tsink ):
 
     return ratio
 
+
+def calcRatio_Q_twopFit( threep, c0, E_ground, tsink, Qsq, L,
+                         Qsq_where, mpi_info ):
+    
+    # threep[ ..., Q, :, t ]
+    # c0[ ..., Qsq ]
+    # E0[ ..., Qsq ]
+
+    QNum = threep.shape[ -3 ]
+    ratioNum = threep.shape[ -2 ]
+    T = threep.shape[ -1 ]
+    
+    if QNum != len( Qsq_where ):
+
+        mpi_fncs.mpiPrintError( "Error (physQuants.calcRatio_Q_twopFit): " \
+                                + "length of threep Q dimension {} ".format( QNum ) \
+                                + "does not match length of " \
+                                + "Qsq_where {}.".format( len( Qsq_where ) ),
+                                mpi_info )
+
+    ratio = np.zeros( threep.shape )
+
+    # Calculate twop from fit parameters
+    # twop[ ..., Q, t ]
+
+    twop = np.zeros( threep.shape )
+
+    for q in range( QNum ):
+        for t in range( T ):
+
+            twop_tmp = twopFit( c0[ ..., Qsq_where[ q ] ],
+                                energy( E_ground, Qsq[ Qsq_where[ q ] ], L ),
+                                t )
+            twop_tmp = np.repeat( twop_tmp,
+                                  ratioNum )
+
+            twop[ ..., q, :, t ] \
+                = twop_tmp.reshape( twop[ ..., q, :, t ].shape )
+
+        # End loop over t
+    # End loop ovet Q
+
+    for q in range( QNum ):
+        for t in range( T ):
+            
+            #CJL:HERE
+
+            ratio[..., q, :, t] \
+                = threep[ ..., q, :, t ] \
+                / twop[ ..., 0, :, tsink ] \
+                * np.sqrt( twop[ ..., q, :, tsink - t ] \
+                           * twop[ ..., 0, :, t ] \
+                           * twop[ ..., 0, :, tsink ] \
+                           / ( twop[ ..., 0, :, tsink - t ] \
+                               * twop[ ..., q, :, t ] \
+                               * twop[ ..., q, :, tsink ] ) )
+            
+        # End loop over t
+    # End loop ovet Q
+            
+    return ratio
+
+
 # Calculate the electromagnetic form factor.
 
 # threep:
@@ -526,8 +634,10 @@ def calcEMFF( threep, twop, Qsq, mEff, tsink, latticeDim ):
 
         energy = np.sqrt( mEff ** 2 + ( 2 * np.pi / latticeDim ) ** 2 * Qsq[ q ] )
         
-        factor = 4.0 * np.sqrt( energy * mEff ) / ( energy + mEff )
-
+        #factor = 1.0
+        factor = 2 * energy / ( energy + mEff )
+        #factor = 4.0 * np.sqrt( energy * mEff ) / ( energy + mEff )
+        
         for t in range( threep.shape[ 2 ] ):
 
             emff[ q, :, t ] = factor * threep[ q, :, t ] / twop[ 0, :, tsink ] \
