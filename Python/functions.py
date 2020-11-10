@@ -14,6 +14,19 @@ def dataFormatList():
 
     return [ "cpu", "gpu", "ASCII" ]
 
+def mellinMomentList():
+
+    return [ "avgX", "avgX2", "avgX3" ]
+
+def GEList():
+
+    return [ "GE0_local", "GE0_noether" ]
+
+def formFactorList():
+
+    return [ "GE_GM", "A20_A22" ]
+
+
 # Calculates the jackknife error from the standard deviation.
 # Can be given any keyword arguments accepted by numpy.std(),
 # otherwise, calculates the error along the first axis.
@@ -37,6 +50,103 @@ def calcError( vals, binNum, **kwargs ):
         return np.std( vals, axis=0 ) \
             * float( binNum - 1 ) \
             * float( binNum ) ** -0.5
+
+
+# Set data format for twop and threep files 
+# based on particle and p^2
+
+def setDataFormat( particle, pSq ):
+
+    dataFormat_threep = "gpu" if pSq == 0 else "cpu"
+
+    if particle == "pion":
+
+        if pSq == 0:
+            
+            dataFormat_twop = [ "gpu" ]
+
+            twop_boost_template = None
+
+        else:
+
+            dataFormat_twop = [ "cpu" ]
+
+            twop_boost_template = twop_template
+
+    elif particle == "kaon":
+
+        if pSq == 0:
+
+            dataFormat_twop = [ "gpu", "cpu", "cpu" ]
+            
+            twop_boost_template = None
+
+        else:
+
+            dataFormat_twop = [ "cpu", "cpu" ]
+
+            twop_boost_template = [ twop_template[ 1 ], twop_template[ 0 ] ]
+
+    else:
+
+        dataFormat_twop = [ "gpu" ]
+
+        twop_boost_template = None
+
+    return dataFormat_twop, dataFormat_threep, twop_boost_template
+
+
+# Set smear strings based based on particle and p^2
+
+def setSmearString( particle, pSq ):
+
+    smear_str_template = "_gN{}a0p2"
+
+    if particle == "pion":
+
+        if pSq == 0:
+            
+            smear_str_list = [ "" ]
+            smear_str_list_boost = None
+
+        else:
+
+            smear_str_list = [ smear_str_template.format( 50 ) ]
+            smear_str_list_boost = smear_str_list
+
+    elif particle == "kaon":
+
+        if pSq == 0:
+
+            smear_str_list = [ "",
+                               smear_str_template.format( 40 ) 
+                               + smear_str_template.format( 50 ),
+                               smear_str_template.format( 50 ) 
+                               + smear_str_template.format( 40 ) ]        
+            smear_str_list_boost = None
+
+        else:
+
+            smear_str_list = [ smear_str_template.format( 40 ) ]
+            smear_str_list_boost = [ smear_str_template.format( 40 ) 
+                                     + smear_str_template.format( 50 ),
+                                     smear_str_template.format( 40 ) ]        
+            
+    else:
+
+        smear_str_list = ""
+
+    smearNum = len( smear_str_list )
+
+    if pSq > 0:
+
+        smearNum_boost = len( smear_str_list_boost )
+
+    else:
+
+        smearNum_boost = None
+
+    return smear_str_list, smear_str_list_boost, smearNum, smearNum_boost
 
 
 # Return either "+" or "-" as a string, depending on the sign
@@ -261,45 +371,46 @@ def getConfigList( configListFilename, configDir ):
 
 # momLists: Momentum lists. Should either identicle.
 
-def processMomList( momLists ):
+def processMomList( QLists ):
 
-    if momLists.ndim > 2:
+    if QLists.ndim > 2:
 
-        if len( momLists ) > 1:
+        if len( QLists ) > 1:
 
             # Check that momenta lists are the same across configurations
 
-            momList_0 = momLists[ 0 ].flat
+            Q_0 = QLists[ 0 ].flat
 
-            for ml in momLists[ 1: ]:
+            for ml in QLists[ 1: ]:
 
                 for i in range( ml.size ):
 
-                    assert ml.flat[ i ] == momList_0[ i ], \
+                    assert ml.flat[ i ] == Q_0[ i ], \
                         "Momenta lists do not match."
 
-        momList = momLists[ 0 ]
+        Q = QLists[ 0 ]
 
     else:
 
-        momList = momLists
+        Q = QLists
 
-    # Get indices where each Q^2 begins and ends
+    # List of indices where each Q^2 begins and ends
 
     Qsq_start = []
 
     Qsq_end = []
 
+    # List of indices where Q^2 value is in Q
+
+    Qsq_where = []
+
     Qsq = np.round( ( np.apply_along_axis( np.linalg.norm, 1, \
-                                           np.array( momList ) ) ) ** 2 )
+                                           np.array( Q ) ) ) ** 2 )
 
-    q_last = Qsq[ 0 ]
+    q_last = -1
+    iq_where = -1
 
-    Qsq_start.append( 0 )
-
-    Qsq_end.append( 0 )
-
-    for q in Qsq[ 1: ]:
+    for q in Qsq:
 
         if q != q_last:
 
@@ -307,23 +418,33 @@ def processMomList( momLists ):
 
             Qsq_start.append( np.where( Qsq == q )[0][0] )
 
-            Qsq_end.append ( np.where( Qsq == q )[0][-1] )
+            Qsq_end.append( np.where( Qsq == q )[0][-1] )
 
             q_last = q
+
+            iq_where += 1
+            
+        # End if q > q_last
+
+        Qsq_where.append( iq_where )
+
+    # End loop over Q^2
 
     # Remove duplicate Q^2's
 
     Qsq = sorted( list( set( Qsq ) ) )
 
-    return np.array( Qsq, dtype=int ), \
+    return np.array( Q, dtype=int ), \
+        np.array( Qsq, dtype=int ), \
         np.array( Qsq_start ), \
-        np.array( Qsq_end )
+        np.array( Qsq_end ), \
+        np.array( Qsq_where )
 
 
 # Averages over equal Q^2 for numpy array whose last dimension is Q and 
 # returns averaged data as a numpy array whose first dimension is Q^2
 
-# data: Data to be averaged
+# data: Data to be averaged with Q in the second to last dimension
 # Qsq_start: List of the starting index for each Q^2 to be averaged over
 # Qsq_end: List of the ending index for each Q^2 to be averaged over
 
@@ -335,14 +456,16 @@ def averageOverQsq( data, Qsq_start, Qsq_end ):
         + "Qsq_start and Qsq_end have different lengths " \
         + QsqNum + " and " + len( Qsq_end ) + "."
 
-    avg = initEmptyList( QsqNum, 1 )
+    avg = np.zeros( data.shape[ :-2 ] + ( QsqNum, data.shape[ -1 ] ) )
 
     for q in range( QsqNum ):
 
-        avg[ q ] = np.average( data[ ..., start[ q ] : end[ q ] + 1 ], \
-                               axis=-1 )
-            
-    return np.array( avg )
+        avg[ ..., q, : ] \
+            = np.average( data[ ...,
+                                Qsq_start[ q ] : Qsq_end[ q ] + 1, : ],
+                          axis=-2 )
+
+    return avg
 
 
 # Checks that there are the correct number of source files, that the 
@@ -439,6 +562,25 @@ def setFlavorStrings( particle, dataFormat ):
     return flavor, flavorNum
 
 
+def setCurrentNumber( formFactor, mpi_info ):
+
+    if formFactor == "GE_GM":
+
+        return 4
+
+    elif formFactor == "A20_A22":
+
+        # CJL: I'll update this later
+        return -1
+        
+    else:
+
+        mpi_fncs.mpiPrintError( "Error (functions.setCurrentNumber): " \
+                           + "form factor " \
+                           + "{} not supported.".format( formFactor ),
+                           mpi_info )
+
+
 # Average over configurations, excluding one bin.
 
 # vals: Values to be averaged
@@ -449,22 +591,22 @@ def jackknifeBin( vals, binSize, ibin, **kwargs ):
 
     if "comm" in kwargs:
 
-        mpi_fncs.mpiPrint(binSize,kwargs["comm"].Get_rank())
-        mpi_fncs.mpiPrint(ibin,kwargs["comm"].Get_rank())
-        mpi_fncs.mpiPrint(vals.shape,kwargs["comm"].Get_rank())
-        mpi_fncs.mpiPrint(vals,kwargs["comm"].Get_rank())
+        mpi_fncs.mpiPrint(binSize,kwargs["comm"])
+        mpi_fncs.mpiPrint(ibin,kwargs["comm"])
+        mpi_fncs.mpiPrint(vals.shape,kwargs["comm"])
+        mpi_fncs.mpiPrint(vals,kwargs["comm"])
         mpi_fncs.mpiPrint(vals[ : ibin * binSize, \
                                 ... ], \
-                          kwargs["comm"].Get_rank())
+                          kwargs["comm"])
         mpi_fncs.mpiPrint(vals[ ( ibin + 1 ) * binSize :, \
                                 ... ], \
-                          kwargs["comm"].Get_rank())
+                          kwargs["comm"])
         mpi_fncs.mpiPrint(np.average( np.vstack( ( vals[ : ibin * binSize, \
                                           ... ], \
                                     vals[ ( ibin + 1 ) * binSize :, \
                                           ... ] ) ), \
                                       axis=0 ), \
-                          kwargs["comm"].Get_rank() )
+                          kwargs["comm"] )
 
     return np.average( np.vstack( ( vals[ : ibin * binSize, \
                                           ... ], \
@@ -476,7 +618,7 @@ def jackknifeBin( vals, binSize, ibin, **kwargs ):
 # Perform jackknife averaging over a subset of bins. 
 # Used so that multiple subsets can be averaged in parallel.
 
-# vals: Values to be averaged
+# vals: Values to be averaged with configurations in first dimension
 # binSize: Size of bin to be excluded
 # bin_glob: Global indices for subset of bins
 
@@ -486,29 +628,35 @@ def jackknifeBinSubset( vals, binSize, bin_glob, **kwargs ):
         + str( len( vals ) ) + " not evenly divided by bin size " \
         + str( binSize ) + " (functions.jackknifeBinSubset).\n"
 
-    # Local number of bins in subset
+    if any( bin_glob ):
 
-    binNum_loc = len( bin_glob )
+        # Local number of bins in subset
 
-    vals_jk = initEmptyList( binNum_loc, 1 )
+        binNum_loc = len( bin_glob )
+        
+        vals_jk = np.zeros( ( binNum_loc, ) + vals.shape[ 1: ] )
 
-    for b in range( binNum_loc ):
+        for b in range( binNum_loc ):
 
-        vals_jk[ b ] = jackknifeBin( vals, binSize, \
-                                     bin_glob[ b ], \
-                                     **kwargs)
+            vals_jk[ b ] = jackknifeBin( vals, binSize, \
+                                         bin_glob[ b ], \
+                                         **kwargs)
 
-    return np.array( vals_jk )
+    else:
+
+        vals_jk = np.array( [] )
+
+    return vals_jk
 
 
 # Perform jackknife averaging over all bins.        
 
-# vals: Values to be averaged
+# vals: Values to be averaged with configurations in first dimension
 # binSize: Size of bin to be excluded
 
 def jackknife( vals, binSize ):
 
-    configNum = len( vals )
+    configNum = vals.shape[ 0 ]
 
     assert configNum % binSize == 0, "Number of configurations " \
         + str( configNum ) + " not evenly divided by bin size " \
@@ -516,10 +664,10 @@ def jackknife( vals, binSize ):
 
     binNum = configNum // binSize
 
-    vals_jk = initEmptyList( binNum, 1 )
+    vals_jk = np.zeros( ( binNum, ) + vals.shape[ 1: ] )
 
     for b in range( binNum ):
         
         vals_jk[ b ] = jackknifeBin( vals, binSize, b )
 
-    return np.array( vals_jk )
+    return vals_jk
