@@ -69,6 +69,8 @@ def lqcdjk_mpi_confs_info( mpi_confs_info ):
     configList_loc = [ configList[ ic ] for ic in iconf[ rank ] ]
     mpi_confs_info[ 'configList_loc' ] = configList_loc
 
+    mpi_confs_info[ 'configNum_loc' ] = len( configList_loc )
+
     # Global index of first conf of bins for each process
     binStart = np.array( [ np.array( [ cl for cl in iconf[ r ]
                                        if cl % binSize == 0 ], 
@@ -129,7 +131,7 @@ def mpiPrint( message, mpi_info ):
 # message: Message to be printed
 # rank: Rank of process. Prints if rank is 0
 
-def mpiPrintErr( message, mpi_info ):
+def mpiPrintError( message, mpi_info ):
 
     if mpi_info[ 'comm' ].Get_rank() == 0:
 
