@@ -1046,7 +1046,7 @@ if rank == 0:
 ##################
 
 if tsf:
-# CJL:HERE
+
     mpi_fncs.mpiPrint( "Will perform the two-state fit", mpi_confs_info )
 
     # Loop over flavors
