@@ -10,7 +10,7 @@ import physQuants as pq
 import lqcdjk_fitting as fit
 from mpi4py import MPI
 
-lastQsqIndex = 15
+lastQsqIndex = 11
 
 np.set_printoptions(threshold=sys.maxsize)
 
@@ -221,6 +221,8 @@ dataFormat_twop, dataFormat_threep, twop_boost_template \
 smear_str_list, smear_str_list_boost, smearNum, smearNum_boost \
     = fncs.setSmearString( particle, momSq )
 
+# CJL: I'll need to change something for boosted frame to use right smear
+
 # Momentum transfer list
 
 Q, QNum, Qsq, QsqNum, Qsq_start, Qsq_end, Qsq_where \
@@ -228,14 +230,16 @@ Q, QNum, Qsq, QsqNum, Qsq_start, Qsq_end, Qsq_where \
 
 for smr, ismr in zip( smear_str_list, range( smearNum ) ):
 
+    twop_template_smr = twop_template[ ismr ].format( smr )
 
     Q[ ismr ], QNum[ ismr ], Qsq[ ismr ], QsqNum[ ismr ], \
     Qsq_start[ ismr ], Qsq_end[ ismr ], Qsq_where[ ismr ] \
-    = rw.readMomentaTransferList( twopDir[ ismr ], twop_template[ ismr ], 
-                                  [configList[ 0 ]], particle, 
-                                  srcNum, momSq, dataFormat_twop[ ismr ],
-                                  args.momentum_transfer_list, 
-                                  mpi_confs_info )
+    = rw.readMomentumTransferList( twopDir[ ismr ],
+                                   twop_template_smr,
+                                   [configList[ 0 ]], particle, 
+                                   srcNum, momSq, dataFormat_twop[ ismr ],
+                                   args.momentum_transfer_list, 
+                                   mpi_confs_info )
     
     Qsq[ ismr ] = Qsq[ ismr ][ :lastQsqIndex ]
     QsqNum[ ismr ] = len( Qsq[ ismr ] )
@@ -300,7 +304,7 @@ for smr, ismr in zip( smear_str_list, range( smearNum ) ):
     twop_template_smr = twop_template[ ismr ].format( smr )
 
     twop_Q[ ismr ] = rw.readTwopFile( twopDir[ ismr ],
-                                      twop_template[ ismr ],
+                                      twop_template_smr,
                                       configList_loc, 
                                       configNum, Q[ ismr ], Qsq[ ismr ],
                                       Qsq_start[ ismr ], Qsq_end[ ismr ], 
@@ -439,7 +443,7 @@ mEff_plat = np.zeros( ( smearNum, binNum ) )
 for ismr in range( smearNum ):
 
     # Calculate the plateau fit of the ground state effective mass
-    # to use in the diffusion relation
+    # to use in the dispersion relation
     
     mEff_plat[ ismr ], chiSq \
         = fit.fitPlateau_parallel( effEnergy[ :, ismr, 0, : ],
@@ -489,11 +493,11 @@ for ismr in range( smearNum ):
         # End bad twop fit
         """
         fitParams, chiSq \
-            = fit.twoStateFit_twop_diffusionRelation( twop[ :, ismr, iq, : ],
-                                                      tsf_fitStart, rangeEnd, 
-                                                      mEff_plat[ ismr ],
-                                                      Qsq[ ismr, iq ], L,
-                                                      mpi_confs_info )
+            = fit.twoStateFit_twop_dispersionRelation( twop[ :, ismr, iq, : ],
+                                                       tsf_fitStart, rangeEnd, 
+                                                       mEff_plat[ ismr ],
+                                                       Qsq[ ismr, iq ], L,
+                                                       mpi_confs_info )
 
         """
         fitParams_avg = np.average( fitParams, axis=0 )
@@ -696,7 +700,7 @@ for ts, its in zip( tsink, range( tsinkNum ) ) :
             Qsq_start_threep, \
             Qsq_end_threep, \
             Qsq_where_threep \
-            = rw.readMomentaTransferList( threepDir, threep_template, 
+            = rw.readMomentumTransferList( threepDir, threep_template, 
                                           [configList[ 0 ]], particle, 
                                           srcNum, momSq, dataFormat_threep,
                                           args.momentum_transfer_list, 
@@ -781,34 +785,38 @@ threep_jk = threep_jk[ :, :, :, :, :Qsq_end_threep[ -1 ] + 1, :, : ]
 
 if rank == 0:
 
-    threep_Q_test_avg = np.average( threep_jk[0,0,:,0,
-                                              Qsq_start_threep[iQsq_test]\
-                                              :Qsq_end_threep[iQsq_test]+1,0,:],
-                                    axis=0 )
-    threep_Q_test_err = fncs.calcError( threep_jk[0,0,:,0,
+    for flav, iflav in zip( flav_str, range(flavNum) ):
+
+        threep_Q_test_avg = np.average( threep_jk[0,0,:,iflav,
                                                   Qsq_start_threep[iQsq_test]\
-                                                  :Qsq_end_threep[iQsq_test]+1,0,:],
-                                        binNum )
+                                                  :Qsq_end_threep[iQsq_test]
+                                                  +1,0,:],
+                                        axis=0 )
+        threep_Q_test_err = fncs.calcError( threep_jk[0,0,:,iflav,
+                                                      Qsq_start_threep[iQsq_test]\
+                                                      :Qsq_end_threep[iQsq_test]+1,0,:],
+                                            binNum )
+        
+        filename_test_avg = rw.makeFilename( output_template,
+                                             "threep_test_avg_{}_{}_Qsq{}_"
+                                            + "{}configs_binSize{}",
+                                             particle, flav,
+                                             Qsq_threep[ iQsq_test ],
+                                             configNum, binSize )
+        
+        Q_test = Q_threep[Qsq_start_threep[iQsq_test] \
+                          : Qsq_end_threep[iQsq_test]+1]
+        
+        Q_str = [ [] for q in Q_test ]
 
-    filename_test_avg = rw.makeFilename( output_template,
-                                         "threep_test_avg_{}_Qsq{}_" \
-                                         + "{}configs_binSize{}",
-                                         particle, Qsq_threep[ iQsq_test ],
-                                         configNum, binSize )
+        for q, iq in zip( Q_test, range( len(Q_test) ) ):
+            
+            Q_str[ iq ] = " ".join( "{:>2}".format( qq ) for qq in q )
 
-    Q_test = Q_threep[Qsq_start_threep[iQsq_test] \
-                      : Qsq_end_threep[iQsq_test]+1]
-
-    Q_str = [ [] for q in Q_test ]
-
-    for q, iq in zip( Q_test, range( len(Q_test) ) ):
-
-        Q_str[ iq ] = " ".join( "{:>2}".format( qq ) for qq in q )
-
-    rw.writeAvgFormFactorFile( filename_test_avg,
-                               Q_str,
-                               threep_Q_test_avg,
-                               threep_Q_test_err )
+            rw.writeAvgFormFactorFile( filename_test_avg,
+                                       Q_str,
+                                       threep_Q_test_avg,
+                                       threep_Q_test_err )
 
 
 ####################
@@ -853,6 +861,8 @@ if rank == 0:
                                                 mpi_confs_info)
                 
                 # End if meson
+                
+                #print(Qsq_where_threep[np.where(np.isnan(ratio))[1][0]])
 
                 ratio_Q_test_avg = np.average( ratio[:,Qsq_start_threep[iQsq_test]\
                                                      :Qsq_end_threep[iQsq_test]+1,0,:],
@@ -862,9 +872,11 @@ if rank == 0:
                                                    binNum )
 
                 filename_test_avg = rw.makeFilename( output_template,
-                                                     "ratio_test_avg_{}_Qsq{}_" \
+                                                     "ratio_test_avg_{}_{}"
+                                                     + "_Qsq{}_"
                                                      + "{}configs_binSize{}",
-                                                     particle, Qsq_threep[ iQsq_test ],
+                                                     particle, flav_str[iflav],
+                                                     Qsq_threep[ iQsq_test ],
                                                      configNum, binSize )
 
                 Q_test = Q_threep[Qsq_start_threep[iQsq_test] \
@@ -882,9 +894,9 @@ if rank == 0:
                                            ratio_Q_test_err )
 
                 ratio_err = fncs.calcError( ratio, binNum )
-                
+
                 # ratio_fit[ b, Q, ratio ]
-             
+                
                 ratio_fit = fit.fitFormFactor( ratio,
                                                ratio_err,
                                                ts, 2 )
@@ -903,6 +915,7 @@ if rank == 0:
 
                     kineFactor = pq.kineFactor_GE_GM( ratio_fit_err,
                                                       particle,
+                                                      flav_str[ iflav ],
                                                       mEff_plat[ 0 ],
                                                       Q_threep, L )
                 
@@ -917,21 +930,105 @@ if rank == 0:
 
                 ratio_fit_curr_err = [ ratio_fit_err[ ..., 0 ],
                                        ratio_fit_err[ ..., 1: ] ]
-                
+
                 curr_str = [ "g0", "gi" ]
                 currNum_curr = [ 1, 3 ]
-                
+
                 for ic in range( 2 ):
                 """
                 gE = np.zeros( ( QsqNum, binNum ) )
                 gM = np.zeros( ( QsqNum, binNum ) )
-
+                
                 for qsq in range( QsqNum ):
+                    """
+                    kineFactor_Qsq \
+                        = kineFactor_curr[ic][:,
+                                              Qsq_start_threep[ qsq ]
+                                              :Qsq_end_threep[ qsq ] 
+                                              + 1 ].reshape(binNum,
+                                                            (Qsq_start_threep[qsq]
+                                                             - Qsq_end_threep[qsq]
+                                                             + 1 )
+                                                            * projNum
+                                                            * currNum_curr[ ic ],
+                                                            2 )
 
+                        if ic == 0:
+
+                            gE[ qsq ] \
+                                = np.average( ratio_fit_curr[ ic ][ :,
+                                                                    Qsq_start_threep[qsq] 
+                                                                    : Qsq_end_threep[qsq]
+                                                                    + 1 ]
+                                              / kineFactor_Qsq[ :, :, 0 ],
+                                              axis=-1 )
+                            #/ ratio_fit_curr_err[ ic ][ Qsq_start_threep[qsq] 
+                            #: Qsq_end_threep[qsq]
+                            #+ 1 ],
+
+                            gM[ qsq ] \
+                                = np.average( ratio_fit_curr[ ic ][ :,
+                                                                    Qsq_start_threep[qsq] 
+                                                                    : Qsq_end_threep[qsq]
+                                                                    + 1 ]
+                                              / kineFactor_Qsq[ :, :, 1 ]
+                                              / ratio_fit_curr_err[ ic ][ Qsq_start_threep[qsq] 
+                                                                          : Qsq_end_threep[qsq]
+                                                                          + 1 ],
+                                              axis=-1 )
+                    
+                        else:
+
+                            # Loop over Q for Q^2
+                            for iq in range(Qsq_start_threep[qsq],Qsq_end_threep[qsq]+1):
+                            
+                            #print(Q_threep[iq])
+                            #print(kineFactor[0,iq,:,0])
+
+                            if ic == 0:
+                                
+                                averageSum += ratio_fit[:,iq,0] \
+                                              / kineFactor[:,iq,0,0]                                        
+                        
+                                averageFactor += 1
+
+                            else:
+
+                                # Loop over ratios
+                                #for ir in range( currNum_curr[ ic ] ):
+                                for ir in range( 3 ):
+
+                                    if Q_threep[iq,ir] != 0:
+                            
+                                        averageSum += ratio_fit_curr[ic][:,iq,ir] \
+                                        / kineFactor[:,iq,ir+1,0]                                        
+                                        
+                                        averageFactor += 1
+                            
+                                        averageSum += ratio_fit[:,iq,ir+1] \
+                                                      / kineFactor[:,iq,ir+1,0]                                        
+                                
+                                        averageFactor += 1
+
+                                    # End if non-zero momentum
+                                # End loop over ratio
+                            # End loop over Q
+
+                            #print(Q_threep[Qsq_start_threep[qsq]:Qsq_end_threep[qsq]+1])
+                            #print(averageFactor)
+
+                            if averageFactor != 0:
+
+                                gE[ qsq] = averageSum / averageFactor
+                        
+                            else:
+
+                                gE[ qsq ] = 0.0
+                    """
                     ###############
                     # Perform SVD #
-                    ###############
-                    
+                    ############### 
+
                     kineFactor_Qsq \
                         = kineFactor[ :,
                                       Qsq_start_threep[ qsq ]
@@ -943,63 +1040,51 @@ if rank == 0:
                                                      * projNum
                                                      * currNum, 2 )
                     """
-                    kineFactor_Qsq \
-                    = kineFactor_curr[ic][:,
-                    Qsq_start_threep[ qsq ]
-                    :Qsq_end_threep[ qsq ] 
-                    + 1 ].reshape(binNum,
-                    (Qsq_start_threep[qsq]
-                    - Qsq_end_threep[qsq]
-                    + 1 )
-                    * projNum
-                    * currNum_curr[ ic ],
-                    2 )
+                            if ic == 0:
 
-                    if ic == 0:
+                                gE[ qsq ] \
+                                    = np.average( ratio_fit_curr[ ic ][ :,
+                                                                        Qsq_start_threep[qsq] 
+                                                                        : Qsq_end_threep[qsq]
+                                                                    + 1 ]
+                                                  / kineFactor_Qsq[ :, :, 0 ],
+                                                  axis=-1 )
+                                #/ ratio_fit_curr_err[ ic ][ Qsq_start_threep[qsq] 
+                            #: Qsq_end_threep[qsq]
+                            #+ 1 ],
 
-                    gE[ qsq ] \
-                    = np.average( ratio_fit_curr[ ic ][ :,
-                    Qsq_start_threep[qsq] 
-                    : Qsq_end_threep[qsq]
-                    + 1 ]
-                    / kineFactor_Qsq[ :, :, 0 ]
-                    / ratio_fit_curr_err[ ic ][ Qsq_start_threep[qsq] 
-                    : Qsq_end_threep[qsq]
-                    + 1 ],
-                    axis=-1 )
-
-                    gM[ qsq ] \
-                    = np.average( ratio_fit_curr[ ic ][ :,
-                    Qsq_start_threep[qsq] 
-                    : Qsq_end_threep[qsq]
-                    + 1 ]
-                    / kineFactor_Qsq[ :, :, 1 ]
-                    / ratio_fit_curr_err[ ic ][ Qsq_start_threep[qsq] 
-                    : Qsq_end_threep[qsq]
-                    + 1 ],
-                    axis=-1 )
+                            gM[ qsq ] \
+                                = np.average( ratio_fit_curr[ ic ][ :,
+                                                                    Qsq_start_threep[qsq] 
+                                                                    : Qsq_end_threep[qsq]
+                                                                    + 1 ]
+                                              / kineFactor_Qsq[ :, :, 1 ]
+                                              / ratio_fit_curr_err[ ic ][ Qsq_start_threep[qsq] 
+                                                                          : Qsq_end_threep[qsq]
+                                                                          + 1 ],
+                                              axis=-1 )
                     
-                    else:
+                            else:
                     
-                    kineFactor_Qsq \
-                    = kineFactor_curr[ic][:,
-                    Qsq_start_threep[ qsq ]
-                    :Qsq_end_threep[ qsq ] 
-                    + 1 ].reshape(binNum,
-                    (Qsq_start_threep[qsq]
-                    - Qsq_end_threep[qsq]
-                    + 1 )
-                    * projNum
-                    * currNum_curr[ ic ],
-                    2 )
-                    """                            
+                            kineFactor_Qsq \
+                                = kineFactor_curr[ic][:,
+                                                      Qsq_start_threep[ qsq ]
+                                                      :Qsq_end_threep[ qsq ] 
+                                                      + 1 ].reshape(binNum,
+                                                                    (Qsq_start_threep[qsq]
+                                                                     - Qsq_end_threep[qsq]
+                                                                     + 1 )
+                                                                    * projNum
+                                                                    * currNum_curr[ ic ],
+                                                                    2 )
+                    """
                     u, s, vT = np.linalg.svd( kineFactor_Qsq,
                                               full_matrices=False )
                             
                     ##############################
                     # Calculate ( v s^-1 u^T )^T #
                     ##############################
-
+                            
                     uT = np.transpose( u, ( 0, 2, 1 ) )
                     v = np.transpose( vT, ( 0, 2, 1 ) )
                     
@@ -1011,84 +1096,85 @@ if rank == 0:
 
                         smat[ :vT.shape[ -2 ], \
                               :vT.shape[ -2 ] ] = np.diag( s[ b ] )
-                    
+                                
                         smat_inv[ b ] = np.linalg.pinv( smat )
-
+                        
                     # End loop over bins
 
                     # decomp[ b, Q, ratio, [ GE, GM ] ]
-
+                        
                     decomp = np.transpose( v @ smat_inv @ uT,
                                            ( 0, 2, 1 ) )
-                        
+
                     decomp = decomp.reshape( binNum,
                                              Qsq_end_threep[ qsq ] \
                                              - Qsq_start_threep[ qsq ] \
                                              + 1,
                                              projNum * currNum, 2 )
                     """
-                    decomp = decomp.reshape( binNum,
-                    Qsq_end_threep[ qsq ] \
-                    - Qsq_start_threep[ qsq ] \
-                    + 1,
-                    projNum * currNum_curr[ ic ],
-                    2 )
-                    """
-                    gE[ qsq ], gM[ qsq ] \
-                        = pq.calc_gE_gM( decomp,
-                                         ratio_fit,
-                                         ratio_fit_err,
-                                         Qsq_start_threep[ qsq ],
-                                         Qsq_end_threep[ qsq ] )
-                    """
-                    gE[ qsq ], gM[ qsq ] \
-                    = pq.calc_gE_gM( decomp,
-                    ratio_fit_curr[ ic ],
-                    ratio_fit_curr_err[ ic ],
-                    Qsq_start_threep[ qsq ],
-                    Qsq_end_threep[ qsq ] )
-                    
-                    # End if ic != 0
-                    """
-                # End loop over Q^2
-                    
-                # Average over bins
+                            decomp = decomp.reshape( binNum,
+                                                     Qsq_end_threep[ qsq ] \
+                                                     - Qsq_start_threep[ qsq ] \
+                                                     + 1,
+                                                     projNum * currNum_curr[ ic ],
+                                                     2 )
 
+                            gE[ qsq ], gM[ qsq ] \
+                                = pq.calc_gE_gM( decomp,
+                                                 ratio_fit_curr[ ic ],
+                                                 ratio_fit_curr_err[ ic ],
+                                                 Qsq_start_threep[ qsq ],
+                                                 Qsq_end_threep[ qsq ] )
+
+                    """
+                    gE[ qsq ], gM[ qsq ] \
+                                = pq.calc_gE_gM( decomp,
+                                                 ratio_fit,
+                                                 ratio_fit_err,
+                                                 Qsq_start_threep[ qsq ],
+                                                 Qsq_end_threep[ qsq ] )
+
+                        # End if ic != 0
+                # End loop over Q^2
+                
+                # Average over bins
+                
                 gE_avg = np.average( gE, axis=-1 )
                 gE_err = fncs.calcError( gE, binNum, axis=-1 )
-
+                    
                 gM_avg = np.average( gM, axis=-1 )
                 gM_err = fncs.calcError( gM, binNum, axis=-1 )
                 
                 ################
                 # Write output #
                 ################
+                    
                 """
-                for i in range(4):
+                    for i in range(4):
                     
-                output_filename \
-                = rw.makeFilename( output_template,
-                "{}_{}_GE_tsink{}_g{}" \
-                + "_{}configs_binSize{}",
-                particle,
-                flav_str[iflav],
-                ts, i, configNum, binSize )
-                
-                rw.writeAvgDataFile_wX( output_filename, Qsq_GeV,
-                gE_avg[ i ], gE_err[ i ] )
+                    output_filename \
+                    = rw.makeFilename( output_template,
+                    "{}_{}_GE_tsink{}_g{}" \
+                    + "_{}configs_binSize{}",
+                    particle,
+                    flav_str[iflav],
+                    ts, i, configNum, binSize )
 
-                output_filename \
-                = rw.makeFilename( output_template,
-                "{}_{}_GE_{}_tsink{}" \
-                + "_{}configs_binSize{}",
-                particle,
-                flav_str[iflav],
-                curr_str[ ic ],
-                ts, configNum, binSize )
+                    rw.writeAvgDataFile_wX( output_filename, Qsq_GeV,
+                    gE_avg[ i ], gE_err[ i ] )
+                 
+                    output_filename \
+                        = rw.makeFilename( output_template,
+                                           "{}_{}_GE_{}_tsink{}" \
+                                           + "_{}configs_binSize{}",
+                                           particle,
+                                           flav_str[iflav],
+                                           curr_str[ ic ],
+                                           ts, configNum, binSize )
                     
-                rw.writeAvgDataFile_wX( output_filename, Qsq_GeV,
-                gE_avg, gE_err )
-                """                    
+                    rw.writeAvgDataFile_wX( output_filename, Qsq_GeV,
+                                            gE_avg, gE_err )
+                """
                 output_filename \
                     = rw.makeFilename( output_template,
                                        "{}_{}_GE_tsink{}" \
@@ -1096,12 +1182,12 @@ if rank == 0:
                                        particle,
                                        flav_str[iflav],
                                        ts, configNum, binSize )
-                    
+                
                 rw.writeAvgDataFile_wX( output_filename, Qsq_GeV,
                                         gE_avg, gE_err )
-
+                 
                 if particle == "nucleon":
-
+                        
                     output_filename \
                         = rw.makeFilename( output_template,
                                            "{}_{}_GM_tsink{}" \
@@ -1112,9 +1198,9 @@ if rank == 0:
                         
                     rw.writeAvgDataFile_wX( output_filename, Qsq_GeV,
                                             gM_avg, gM_err )
-                """
+                    
                 # End loop over current
-                """
+
             # End loop over flavor
         # End loop over p
     # End loop over tsink

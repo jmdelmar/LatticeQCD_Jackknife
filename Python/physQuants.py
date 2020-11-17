@@ -32,7 +32,7 @@ def twopFit( c0, E0, t ):
     #return c0 * np.exp( -E0 * t ) + c1 * np.exp( -E1 * t )
 
 
-def kineFactor_GE_GM( ratio_err, particle, mEff, Q, L ):
+def kineFactor_GE_GM( ratio_err, particle, flavor, mEff, Q, L ):
 
     # ratio_err[ Q, r ]
     # mEff[ b ]
@@ -76,17 +76,30 @@ def kineFactor_GE_GM( ratio_err, particle, mEff, Q, L ):
                 
             else:
 
-                # CJL: Should 2nd-4th elements have negative sign?
+                if particle == "pion":
+
+                    chargeSign = 1.0
+
+                elif particle == "kaon" and flavor == "u":
+        
+                    chargeSign = 1.0
+
+                elif particle == "kaon" and flavor == "s":
+                
+                    chargeSign = -1.0
 
                 kineFactor[ b, q ] = [ [ ( energy( mEff[ b ],
                                                    Qsq, L ) \
                                            + mEff[ b ] ), 0 ],
-                                       [ 2.0 * np.pi / L * Q[ q, 0 ], 0 ],
-                                       [ 2.0 * np.pi / L * Q[ q, 1 ], 0 ],
-                                       [ 2.0 * np.pi / L * Q[ q, 2 ], 0 ] ] \
+                                       [ chargeSign * 2.0 * np.pi / L
+                                         * Q[ q, 0 ], 0 ],
+                                       [ chargeSign * 2.0 * np.pi / L
+                                         * Q[ q, 1 ], 0 ],
+                                       [ chargeSign * 2.0 * np.pi / L
+                                         * Q[ q, 2 ], 0 ] ] \
                     / np.repeat( ratio_err[ q ], 2).reshape( ratioNum, 2 ) \
                     / KK_meson( mEff[ b ], Qsq, L )
-                    
+                
         # End loop over Q
     # End loop over bins
 

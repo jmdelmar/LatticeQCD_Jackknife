@@ -55,7 +55,7 @@ def fitPlateau( data, err, start, end ):
                                         w=err[ start \
                                                : rangeEnd + 1 ] ** -1,
                                         full=True )
-        
+
     # End loop over bin
 
     chiSq = chiSq / dof
@@ -609,11 +609,11 @@ def twoStateFit_twop( twop, rangeStart, rangeEnd, E_guess, T,
     return fit, chiSq
 
 
-def twoStateFit_twop_diffusionRelation( twop,
-                                        rangeStart, rangeEnd,
-                                        E_ground,
-                                        pSq, L,
-                                        mpi_confs_info ):
+def twoStateFit_twop_dispersionRelation( twop,
+                                         rangeStart, rangeEnd,
+                                         E_ground,
+                                         pSq, L,
+                                         mpi_confs_info ):
 
     comm = mpi_confs_info[ 'comm' ]
     rank = mpi_confs_info[ 'rank' ]
@@ -645,11 +645,6 @@ def twoStateFit_twop_diffusionRelation( twop,
 
     # Find fit parameters of mean values to use as initial guess
 
-    #c0 = 10 ** -3
-    #c1 = 10 ** -3
-    #E0 = 0.1
-    #E1 = 1.0
-
     E0 = pq.energy( E_ground, pSq, L )
 
     tsink = np.arange( rangeStart, rangeEnd + 1 )
@@ -668,36 +663,47 @@ def twoStateFit_twop_diffusionRelation( twop,
 
         E0_avg = np.average( E0, axis=0 )
     
-        c0 = [ 0.0, 10**-2 ]
-        c1 = [ 0.0, 10**-2 ]
-        E1 = [ E0_avg + 0.2, 10.0 ]
+        c0 = 10 ** -3
+        c1 = 10 ** -3
+        E1 = E0_avg + 0.2
+
+        #c0 = [ 0.0, 10**-2 ]
+        #c1 = [ 0.0, 10**-2 ]
+        #E1 = [ E0_avg + 0.2, 10.0 ]
     
         fitParams = np.array( [ c0, c1, E1 ] )
 
         #leastSq_avg = least_squares( twoStateErrorFunction_twop, fitParams,
         #                             args = ( tsink, T, twop_avg, twop_err ),
         #                             method="lm" )
-        #leastSq_avg = minimize( twoStateCostFunction_twop, fitParams, \
-        #                        args = ( tsink, T, twop_avg, twop_err ), \
-        #                        method="BFGS" )
-        leastSq_avg = differential_evolution( twoStateCostFunction_twop_diffRel, 
-                                              fitParams,
-                                              ( E0_avg, tsink, T, 
-                                                twop_avg, 
-                                                twop_err ),
-                                              tol=0.01 )
+        #leastSq_avg = differential_evolution( twoStateCostFunction_twop_dispRel, 
+        #                                      fitParams,
+        #                                      ( E0_avg, tsink, T, 
+        #                                        twop_avg, 
+        #                                        twop_err ),
+        #                                      tol=0.01 )
         
-        #fitParams = leastSq_avg.x
-        fitParams = np.array( [ [ max( leastSq_avg.x[ 0 ] - 10**-4, 0.0 ), 
-                                  leastSq_avg.x[ 0 ] + 10**-4 ],
-                                [ max( leastSq_avg.x[ 1 ] - 10**-4, 0.0 ),
-                                  leastSq_avg.x[ 1 ] + 10**-4 ],
-                                [ max( leastSq_avg.x[ 2 ] - 0.1, 0.0 ),
-                                  leastSq_avg.x[ 2 ] + 0.1 ] ] )
-
+        #fitParams = np.array( [ [ max( leastSq_avg.x[ 0 ] - 10**-4, 0.0 ), 
+        #                          leastSq_avg.x[ 0 ] + 10**-4 ],
+        #                        [ max( leastSq_avg.x[ 1 ] - 10**-4, 0.0 ),
+        #                          leastSq_avg.x[ 1 ] + 10**-4 ],
+        #                        [ max( leastSq_avg.x[ 2 ] - 0.1, 0.0 ),
+        #                          leastSq_avg.x[ 2 ] + 0.1 ] ] )
+        
+        leastSq_avg = minimize( twoStateCostFunction_twop_dispRel, 
+                                fitParams,
+                                args = ( E0_avg, tsink, T, 
+                                         twop_avg, 
+                                         twop_err ),
+                                tol=0.01,
+                                method="BFGS" )
+        
+        fitParams = leastSq_avg.x
+        
     else:
 
-        fitParams = np.zeros( ( 3, 2 ) )
+        #fitParams = np.zeros( ( 3, 2 ) )
+        fitParams = np.zeros( 3 )
 
     comm.Bcast( fitParams, root=0 )
 
@@ -710,16 +716,19 @@ def twoStateFit_twop_diffusionRelation( twop,
         #                         args = ( tsink, T, twop_to_fit[ b, : ], \
         #                                  twop_err ), \
         #                         method="lm" )
-        #leastSq = minimize( twoStateCostFunction_twop, fitParams, \
-        #                    args = ( tsink, T, twop_to_fit[ b, : ], 
-        #                             twop_err ), \
-        #                    method="BFGS" )
-        leastSq = differential_evolution( twoStateCostFunction_twop_diffRel, 
-                                          fitParams,
-                                          ( E0[ b ], tsink, T, 
-                                            twop_to_fit[ b, : ], 
-                                            twop_err ),
-                                          tol=0.0001 )
+        #leastSq = differential_evolution( twoStateCostFunction_twop_dispRel, 
+        #                                  fitParams,
+        #                                  ( E0[ b ], tsink, T, 
+        #                                    twop_to_fit[ b, : ], 
+        #                                    twop_err ),
+        #                                  tol=0.0001 )
+        leastSq = minimize( twoStateCostFunction_twop_dispRel, 
+                            fitParams,
+                            args = ( E0[ b ], tsink, T, 
+                                     twop_to_fit[ b, : ], 
+                                     twop_err ),
+                            tol=0.0001,
+                            method="BFGS" )
 
         fit_loc[ ib ] = leastSq.x
         chiSq_loc[ ib ] = leastSq.fun
@@ -1142,11 +1151,11 @@ def twoStateCostFunction_twop( fitParams, tsink, T, twop, sigma ):
         return
 
     
-def twoStateCostFunction_twop_diffRel( fitParams, E0, tsink, T, twop, sigma ):
+def twoStateCostFunction_twop_dispRel( fitParams, E0, tsink, T, twop, sigma ):
 
     if sigma.ndim == 1: # sigma is standard deviations
 
-        return np.sum( twoStateErrorFunction_twop_diffRel( fitParams, 
+        return np.sum( twoStateErrorFunction_twop_dispRel( fitParams, 
                                                            E0,
                                                            tsink, 
                                                            T, twop, 
@@ -1154,7 +1163,7 @@ def twoStateCostFunction_twop_diffRel( fitParams, E0, tsink, T, twop, sigma ):
     
     elif sigma.ndim == 2: # sigma is inverse covariant matrix
 
-        r = twoStateResidual_twop_diffRel( fitParams, E0, tsink, T, twop )
+        r = twoStateResidual_twop_dispRel( fitParams, E0, tsink, T, twop )
 
         return r.T @ sigma @ r
 
@@ -1186,7 +1195,7 @@ def twoStateErrorFunction_twop( fitParams, tsink, T, twop, twop_err ):
     return twopErr
     
 
-def twoStateErrorFunction_twop_diffRel( fitParams, E0, tsink, T, twop, twop_err ):
+def twoStateErrorFunction_twop_dispRel( fitParams, E0, tsink, T, twop, twop_err ):
 
     c0 = fitParams[ 0 ]
     c1 = fitParams[ 1 ]
@@ -1208,7 +1217,7 @@ def twoStateResidual_twop( fitParams, tsink, T, twop ):
     return np.array( twoStateTwop( tsink, T, c0, c1, E0, E1 ) - twop )
     
 
-def twoStateResidual_twop_diffRel( fitParams, E0, tsink, T, twop ):
+def twoStateResidual_twop_dispRel( fitParams, E0, tsink, T, twop ):
 
     c0 = fitParams[ 0 ]
     c1 = fitParams[ 1 ]

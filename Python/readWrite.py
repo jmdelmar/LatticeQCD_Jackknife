@@ -409,7 +409,7 @@ def readMomentaList( corrDir, corr_template, config, particle,
     return momList
 
 
-def readMomentaTransferList( corrDir, corrTemplate, configList,
+def readMomentumTransferList( corrDir, corrTemplate, configList,
                              particle, srcNum, pSq, dataFormat, 
                              momentumTransferListFilename, 
                              mpi_info ):
@@ -472,7 +472,7 @@ def readMomentaTransferList( corrDir, corrTemplate, configList,
         else:
 
             mpi_fncs.mpiPrintError( "ERROR (readWrite." \
-                                    + "readMomentaTransferList): " \
+                                    + "readMomentumTransferList): " \
                                     + "Data format {}".format( dataFormat ) \
                                     + " not supported.", 
                                     mpi_info )
@@ -565,7 +565,7 @@ def readTwopFile( twopDir, twop_template, configList, configNum,
 
     if dataFormat == "cpu":
 
-        template = "/twop_{0}/ave{}/msq{1:0>4}/arr"
+        template = "/twop_{0}/ave{1}/msq{2:0>4}/arr"
 
         # Get p^2=0 data to determine the size of time dimension
 
@@ -573,28 +573,28 @@ def readTwopFile( twopDir, twop_template, configList, configNum,
 
         # twop0[ b, t, q ]
 
-        twop0 = getDatasets( twopDir, configList, twop_template, \
+        twop0 = getDatasets( twopDir, configList, twop_template,
                              dsetname=dataset )[:, 0, 0, ... ].real
-
-        T = twop.shape[ -2 ]
+        
+        T = twop0.shape[ -2 ]
 
         twop_loc = np.zeros( ( len( configList ),
                                QNum, T ) )
 
-        twop_loc[ :, 0, : ] = np.moveaxis( twop0, -1, -2 )
+        twop_loc[ :, 0, : ] = np.moveaxis( twop0, -1, -2 )[ :, 0, : ]
 
         # Get p^2>0 data
 
         for iqsq in range( 1, QsqNum ):
 
-            dataset = [ template.format( particle, Qsq[ iqsq ] ) ]
+            dataset = [ template.format( particle, srcNum, Qsq[ iqsq ] ) ]
 
-            twop_tmp = getDatasets( twopDir, \
-                                    configList, \
-                                    twop_template, \
+            twop_tmp = getDatasets( twopDir,
+                                    configList,
+                                    twop_template,
                                     dsetname=dataset )[:, 0, 0, ... ].real
 
-            twop[ :, Qsq_start[ iqsq ] : Qsq_end[ iqsq ] + 1, : ] \
+            twop_loc[ :, Qsq_start[ iqsq ] : Qsq_end[ iqsq ] + 1, : ] \
                 = np.moveaxis( twop_tmp, -1, -2 )
 
     elif dataFormat == "ASCII":
@@ -604,23 +604,23 @@ def readTwopFile( twopDir, twop_template, configList, configNum,
         # files are not formatted like that.
 
         T, dummy \
-            = detTimestepAndConfigNum(twopDir + \
+            = detTimestepAndConfigNum(twopDir +
                                       twop_template.replace("*", \
                                                             configList[0]))
 
         # Get 5th column of two-point files for each configuration
 
-        twop_loc = getTxtData( twopDir, \
-                           configList, \
-                           twop_template, \
-                           dtype=float).reshape( len( configList ), \
-                                                 QNum, T, 6 )[ ..., \
-                                                               4 ]
+        twop_loc = getTxtData( twopDir,
+                               configList,
+                               twop_template,
+                               dtype=float).reshape( len( configList ),
+                                                     QNum, T, 6 )[ ...,
+                                                                   4 ]
 
     else:
         
-        twop_loc = getDatasets( twopDir, configList, \
-                            twop_template, \
+        twop_loc = getDatasets( twopDir, configList,
+                            twop_template,
                             "twop" )[ :, 0, 0, :, :, 0 ]
 
         # twop_loc[ c, t, Q ]
@@ -628,7 +628,7 @@ def readTwopFile( twopDir, twop_template, configList, configNum,
 
         twop_loc = np.moveaxis( twop_loc, -1, -2 )
 
-    mpi_fncs.mpiPrint( "Read two-point functions from files " \
+    mpi_fncs.mpiPrint( "Read two-point functions from files "
                        + "in {:.3} seconds".format( time() - t0 ), 
                        mpi_info )
 
@@ -639,17 +639,17 @@ def readTwopFile( twopDir, twop_template, configList, configNum,
     twop = np.zeros( ( configNum, ) + twop_loc.shape[ 1: ] )
     
     comm.Allgatherv( twop_loc, [ twop, 
-                                 configNum_loc_list \
+                                 configNum_loc_list
                                  * np.prod( twop_loc.shape[ 1: ] ),
-                                 confOffset \
+                                 confOffset
                                  * np.prod( twop_loc.shape[ 1: ] ),
                                  MPI.DOUBLE ] )
 
     return twop
 
 
-def getMellinMomentThreep( threepDir, configList, configNum, threep_tokens, \
-                           srcNum, ts, p, particle, dataFormat, moment, \
+def getMellinMomentThreep( threepDir, configList, configNum, threep_tokens,
+                           srcNum, ts, p, particle, dataFormat, moment,
                            L, T, mpi_info, **kwargs ):
 
     # Get the relevant three-point functions 
@@ -2537,6 +2537,7 @@ def readEMFF_gpu( threepDir, threep_template,
     configNum = len( configList )
 
     dset_keywords = [ "tsink_{}".format( ts ),
+                      flav,
                       "noether" ]
 
     # threep_tmp[ conf, t, Q, curr, re/im ]
@@ -2603,8 +2604,8 @@ def readEMFormFactorFile( threepDir, threep_tokens, srcNum,
                           dataFormat, mpi_info, **kwargs ):
 
     comm = mpi_info[ 'comm' ]
-    configNum = mpi_info[ "configNum" ]
-    configNum_loc = mpi_info[ "configNum_loc" ]
+    configNum = mpi_info[ 'configNum' ]
+    configNum_loc = mpi_info[ 'configNum_loc' ]
     configNum_loc_list = mpi_info[ 'configNum_loc_list' ]
     confOffset = mpi_info[ 'confOffset' ]
 
@@ -2636,11 +2637,11 @@ def readEMFormFactorFile( threepDir, threep_tokens, srcNum,
                                                    flav )
 
                 threep_loc[ :, iflav, iproj ] = readEMFF_cpu( threepDir,
-                                                           threep_template,
-                                                           srcNum, Qsq, ts, proj,
-                                                           particle, flav, T,
-                                                           **kwargs )
-
+                                                              threep_template,
+                                                              srcNum, Qsq, ts, proj,
+                                                              particle, flav, T,
+                                                              **kwargs )
+                
             elif dataFormat == "gpu":
 
                 template = "{0}{1}{2}"
@@ -2683,8 +2684,8 @@ def readEMFormFactorFile( threepDir, threep_tokens, srcNum,
 
     if particle == "nucleon":
 
-        # threep_loc[ flav, proj, conf, Q, curr, t ]
-        # -> threep_loc[ flav, conf, Q, ratio, t ]
+        # threep_loc[ conf, flav, proj, Q, curr, t ]
+        # -> threep_loc[ conf, flav, Q, ratio, t ]
 
         # ratio   Projector Insertion
         # 0       P0 gt
@@ -2698,16 +2699,16 @@ def readEMFormFactorFile( threepDir, threep_tokens, srcNum,
         # 8       P6 gx
         # 9       P6 gy
 
-        threep_loc = np.stack ( [ threep_loc[ :, 0, :, :, 0, : ].real,
-                                  threep_loc[ :, 0, :, :, 1, : ].imag,
-                                  threep_loc[ :, 0, :, :, 2, : ].imag,
-                                  threep_loc[ :, 0, :, :, 3, : ].imag,
-                                  threep_loc[ :, 1, :, :, 2, : ].real,
-                                  threep_loc[ :, 1, :, :, 3, : ].real,
-                                  threep_loc[ :, 2, :, :, 1, : ].real,
-                                  threep_loc[ :, 2, :, :, 3, : ].real,
-                                  threep_loc[ :, 3, :, :, 1, : ].real,
-                                  threep_loc[ :, 3, :, :, 2, : ].real ],
+        threep_loc = np.stack ( [ threep_loc[ :, :, 0, :, 0, : ].real,
+                                  threep_loc[ :, :, 0, :, 1, : ].imag,
+                                  threep_loc[ :, :, 0, :, 2, : ].imag,
+                                  threep_loc[ :, :, 0, :, 3, : ].imag,
+                                  threep_loc[ :, :, 1, :, 2, : ].real,
+                                  threep_loc[ :, :, 1, :, 3, : ].real,
+                                  threep_loc[ :, :, 2, :, 1, : ].real,
+                                  threep_loc[ :, :, 2, :, 3, : ].real,
+                                  threep_loc[ :, :, 3, :, 1, : ].real,
+                                  threep_loc[ :, :, 3, :, 2, : ].real ],
                                 axis=3 )
         
     else:
@@ -2718,10 +2719,10 @@ def readEMFormFactorFile( threepDir, threep_tokens, srcNum,
         # 2       gy
         # 3       gz
 
-        threep_loc = np.stack ( [ threep_loc[ :, 0, :, :, 0, : ].real,
-                                  threep_loc[ :, 0, :, :, 1, : ].imag,
-                                  threep_loc[ :, 0, :, :, 2, : ].imag,
-                                  threep_loc[ :, 0, :, :, 3, : ].imag ],
+        threep_loc = np.stack ( [ threep_loc[ :, :, 0, :, 0, : ].real,
+                                  threep_loc[ :, :, 0, :, 1, : ].imag,
+                                  threep_loc[ :, :, 0, :, 2, : ].imag,
+                                  threep_loc[ :, :, 0, :, 3, : ].imag ],
                                 axis=3 )
 
     threep = np.zeros( ( configNum, ) \
