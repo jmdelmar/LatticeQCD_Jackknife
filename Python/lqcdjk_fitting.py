@@ -654,7 +654,7 @@ def twoStateFit_twop_dispersionRelation( twop,
 
     twop_err = np.linalg.inv( np.cov( twop_to_fit, rowvar=False ) 
                               * ( binNum - 1 ) )
-
+    """
     if rank == 0:
 
         # twop_avg[ts]
@@ -698,7 +698,7 @@ def twoStateFit_twop_dispersionRelation( twop,
                                 tol=0.01,
                                 method="BFGS" )
         
-        fitParams = leastSq_avg.x
+        fitParams = np.abs( leastSq_avg.x )
         
     else:
 
@@ -706,9 +706,17 @@ def twoStateFit_twop_dispersionRelation( twop,
         fitParams = np.zeros( 3 )
 
     comm.Bcast( fitParams, root=0 )
-
+    """
     # Find fit parameters for each bins
 
+    E0_avg = np.average( E0, axis=0 )
+    
+    c0 = 10 ** -3
+    c1 = 10 ** -3
+    E1 = E0_avg + 0.2
+    
+    fitParams = np.array( [ c0, c1, E1 ] )
+    
     # Loop over bins
     for b, ib in zip( binList_loc, range( binNum_loc ) ):
         
@@ -730,7 +738,7 @@ def twoStateFit_twop_dispersionRelation( twop,
                             tol=0.0001,
                             method="BFGS" )
 
-        fit_loc[ ib ] = leastSq.x
+        fit_loc[ ib ] = np.abs( leastSq.x )
         chiSq_loc[ ib ] = leastSq.fun
         #chiSq_loc[ ib ] = leastSq.cost
 
@@ -1223,7 +1231,9 @@ def twoStateResidual_twop_dispRel( fitParams, E0, tsink, T, twop ):
     c1 = fitParams[ 1 ]
     E1 = fitParams[ 2 ]
 
-    return np.array( twoStateTwop( tsink, T, c0, c1, E0, E1 ) - twop )
+    return np.array( twoStateTwop_forcePositive( tsink, T, c0,
+                                                 c1, E0, E1 )
+                     - twop )
     
 
 def twoStateCostFunction_effEnergy( fitParams, tsink, T, 
@@ -1383,6 +1393,14 @@ def twoStateTwop( tsink, T, c0, c1, E0, E1 ):
                  + np.exp( -E1 * ( T - tsink ) ) )
 
 
+def twoStateTwop_forcePositive( tsink, T, c0, c1, E0, E1 ):
+
+    return np.abs( c0 ) * ( np.exp( -np.abs( E0 ) * tsink ) \
+                  + np.exp( -np.abs( E0 ) * ( T - tsink ) ) ) \
+        + np.abs( c1 ) * ( np.exp( -np.abs( E1 ) * tsink ) \
+                 + np.exp( -np.abs( E1 ) * ( T - tsink ) ) )
+
+
 def twoStateEffEnergy( tsink, T, c, E0, E1 ):
 
     twop_halfT = twoStateTwop( T // 2, T, \
@@ -1505,25 +1523,27 @@ def oneStateTwop( tsink, T, G, E ):
 
 def fitFormFactor( vals, vals_err, tsink, plusMinus ):
 
-    # vals[ b, Q, ratio, t ]
-    # vals_err[ Q, ratio, t ]
+    # vals[ b, p, Q, ratio, t ]
+    # vals_err[ p, Q, ratio, t ]
 
-    fit = np.empty( vals.shape[ :-1 ] )
-    chiSq = np.empty( vals.shape[ :-1 ] )
+    fit = np.zeros( vals.shape[ :-1 ] )
+    chiSq = np.zeros( vals.shape[ :-1 ] )
 
     fitStart = tsink // 2 - plusMinus
     fitEnd = tsink // 2 + plusMinus
 
-    # Loop over Q
-    for iq in range( vals.shape[ 1 ] ):
-        # Loop over ratio
-        for ir in range( vals.shape[ 2 ] ):
+    # Loop over p_fin
+    for ip in range( vals.shape[ 1 ] ):
+        # Loop over Q
+        for iq in range( vals.shape[ 2 ] ):
+            # Loop over ratio
+            for ir in range( vals.shape[ 3 ] ):
 
-            fit[ :, iq, ir ], chiSq[ :, iq, ir ] \
-                = fitPlateau( vals[ :, iq, ir ], \
-                              vals_err[ iq, ir ], \
-                              fitStart, \
-                              fitEnd )
+                fit[ :, ip, iq, ir ], chiSq[ :, ip, iq, ir ] \
+                    = fitPlateau( vals[ :, ip, iq, ir ], \
+                                  vals_err[ ip, iq, ir ], \
+                                  fitStart, \
+                                  fitEnd )
 
     return fit
 

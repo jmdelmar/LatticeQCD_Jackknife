@@ -27,6 +27,11 @@ def formFactorList():
     return [ "GE_GM", "A20_A22" ]
 
 
+def zipXandIndex( x ):
+
+    return zip( x, range( len( x ) ) )
+
+
 # Calculates the jackknife error from the standard deviation.
 # Can be given any keyword arguments accepted by numpy.std(),
 # otherwise, calculates the error along the first axis.
@@ -65,13 +70,9 @@ def setDataFormat( particle, pSq ):
             
             dataFormat_twop = [ "gpu" ]
 
-            twop_boost_template = None
-
         else:
 
             dataFormat_twop = [ "cpu" ]
-
-            twop_boost_template = twop_template
 
     elif particle == "kaon":
 
@@ -79,21 +80,47 @@ def setDataFormat( particle, pSq ):
 
             dataFormat_twop = [ "gpu", "cpu", "cpu" ]
             
-            twop_boost_template = None
-
         else:
 
             dataFormat_twop = [ "cpu", "cpu" ]
-
-            twop_boost_template = [ twop_template[ 1 ], twop_template[ 0 ] ]
 
     else:
 
         dataFormat_twop = [ "gpu" ]
 
+    return dataFormat_twop, dataFormat_threep
+
+
+# Set template for booste twop files
+# based on particle and p^2
+
+def setTwopBoostTemplate( particle, pSq, twop_template ):
+
+    if particle == "pion":
+
+        if pSq == 0:
+            
+            twop_boost_template = None
+
+        else:
+
+            twop_boost_template = twop_template
+
+    elif particle == "kaon":
+
+        if pSq == 0:
+
+            twop_boost_template = None
+
+        else:
+
+            twop_boost_template = [ twop_template[ 1 ], twop_template[ 0 ] ]
+
+    else:
+
         twop_boost_template = None
 
-    return dataFormat_twop, dataFormat_threep, twop_boost_template
+    return twop_boost_template
 
 
 # Set smear strings based based on particle and p^2
@@ -106,18 +133,23 @@ def setSmearString( particle, pSq ):
 
         if pSq == 0:
             
+            # [ "" ]
             smear_str_list = [ "" ]
+            # None
             smear_str_list_boost = None
 
         else:
 
+            # [ gN50a0p2 ]
             smear_str_list = [ smear_str_template.format( 50 ) ]
+            # [ gN50a0p2 ]
             smear_str_list_boost = smear_str_list
 
     elif particle == "kaon":
 
         if pSq == 0:
 
+            # [ "", gN40a0p2_gN50a0p2, gN50a0p2_gN40a0p2 ]
             smear_str_list = [ "",
                                smear_str_template.format( 40 ) 
                                + smear_str_template.format( 50 ),
@@ -127,13 +159,16 @@ def setSmearString( particle, pSq ):
 
         else:
 
+            # [ gN40a0p2 ]
             smear_str_list = [ smear_str_template.format( 40 ) ]
+            # [ gN40a0p2_gN50a0p2, gN40a0p2 ]
             smear_str_list_boost = [ smear_str_template.format( 40 ) 
                                      + smear_str_template.format( 50 ),
                                      smear_str_template.format( 40 ) ]        
             
     else:
 
+        # ""
         smear_str_list = ""
 
     smearNum = len( smear_str_list )
@@ -628,7 +663,7 @@ def jackknifeBinSubset( vals, binSize, bin_glob, **kwargs ):
         + str( len( vals ) ) + " not evenly divided by bin size " \
         + str( binSize ) + " (functions.jackknifeBinSubset).\n"
 
-    if any( bin_glob ):
+    if bin_glob.size != 0:
 
         # Local number of bins in subset
 
