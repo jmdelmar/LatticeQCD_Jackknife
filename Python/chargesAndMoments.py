@@ -197,7 +197,13 @@ assert particle in particle_list, \
 
 if whichRatio in GE_list:
 
-    flav_str = [ "" ]
+    if particle == "pion":
+
+        flav_str = [ "" ]
+
+    elif particle == "kaon":
+
+        flav_str = [ "", "" ]
 
 elif whichRatio in mellin_list:
 
@@ -219,8 +225,11 @@ flavNum = len( flav_str )
 # and smear strings based on 
 # particle and p^2
 
-dataFormat_twop, dataFormat_threep, twop_boost_template \
+dataFormat_twop, dataFormat_threep \
     = fncs.setDataFormat( particle, momSq )
+
+twop_boost_template \
+    = fncs.setTwopBoostTemplate( particle, momSq, twop_template )
 
 smear_str_list, smear_str_list_boost, smearNum, smearNum_boost \
     = fncs.setSmearString( particle, momSq )
@@ -239,7 +248,8 @@ elif whichRatio == "avgX3":
 
 elif whichRatio == "GE0_local":
 
-    Z = 0.715
+    #Z = 0.715
+    Z = 1.0
 
 elif whichRatio == "GE0_noether":
 
@@ -873,13 +883,21 @@ for imom in range( momBoostNum ):
 
         elif whichRatio in GE_list:
 
+            if whichRatio == "GE0_local":
+
+                insType = "local"
+
+            elif whichRatio == "GE0_noether":
+
+                insType = "noether"
+
             threep_p = rw.readEMFile( threepDir, 
                                       configList_loc,
                                       configNum,
                                       threep_tokens, 
                                       srcNum, ts, momList[ imom ], 
                                       particle, dataFormat_threep, 
-                                      whichRatio, T, 
+                                      insType, T, 
                                       mpi_confs_info )
 
         # Loop over flavor
@@ -942,6 +960,14 @@ if rank == 0:
 
         # End loop over tsink
     # End loop over flavor
+
+    if whichRatio in GE_list and particle == "kaon":
+
+        ratio = np.array( [ 2. / 3. * ratio[ 0 ] - 1. / 3. * ratio[ 1 ] ] )
+
+        flavNum = 1
+
+    # End if kaon GE(0) 
 
     # Average over bins
     # ratio_avg[ flav, ts, t ]
