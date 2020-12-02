@@ -119,11 +119,11 @@ def lqcdjk_mpi_confs_info( mpi_confs_info ):
 # message: Message to be printed
 # rank: Rank of process. Prints if rank is 0
 
-def mpiPrint( message, mpi_info ):
+def mpiPrint( message, mpi_info, **kwargs ):
 
     if mpi_info[ 'rank' ] == 0:
 
-        print( message )
+        print( message, **kwargs )
 
 
 # Same as mpiPrint() but prints to stderr and aborts
