@@ -234,6 +234,8 @@ twop_boost_template \
 smear_str_list, smear_str_list_boost, smearNum, smearNum_boost \
     = fncs.setSmearString( particle, momSq )
 
+# Renormalization factor
+
 if whichRatio == "avgX":
 
     Z = 1.123
@@ -919,7 +921,10 @@ for imom in range( momBoostNum ):
     # End loop over tsink
 # End loop over momenta
 
+# threep_p_jk[ p, flav, ts, b, t ]
+
 # Average threep over momenta
+# threep_jk[ flav, ts, b, t ]
 
 threep_jk = np.average( threep_p_jk, axis=0 )
 
