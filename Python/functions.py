@@ -6,6 +6,7 @@ from os import listdir as ls
 from glob import glob
 import mpi_functions as mpi_fncs
 
+
 def particleList():
 
     return [ "nucleon", "pion", "kaon" ]
@@ -24,7 +25,7 @@ def GEList():
 
 def formFactorList():
 
-    return [ "GE_GM", "A20_A22" ]
+    return [ "GE_GM", "A20_B20" ]
 
 
 def zipXandIndex( x ):
@@ -597,16 +598,39 @@ def setFlavorStrings( particle, dataFormat ):
     return flavor, flavorNum
 
 
+def setRatioNumber( formFactor, particle, mpi_info ):
+
+    if formFactor == "GE_GM":
+
+        if particle == "nucleon":
+
+            return 10
+
+        else: # meson
+
+            return 4
+
+    elif formFactor == "A20_B20":
+
+        return 7
+        
+    else:
+
+        mpi_fncs.mpiPrintError( "Error (functions.setRatioNumber): " \
+                           + "form factor " \
+                           + "{} not supported.".format( formFactor ),
+                           mpi_info )
+
+
 def setCurrentNumber( formFactor, mpi_info ):
 
     if formFactor == "GE_GM":
 
         return 4
 
-    elif formFactor == "A20_A22":
+    elif formFactor == "A20_B20":
 
-        # CJL: I'll update this later
-        return -1
+        return 16
         
     else:
 
