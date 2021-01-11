@@ -135,10 +135,8 @@ def mpiPrintError( message, mpi_info ):
 
     if mpi_info[ 'comm' ].Get_rank() == 0:
 
-        print( message, file=stderr )
+        print( message, file=stderr, flush=True )
         
-        stderr.flush()
-
     mpi_info[ 'comm' ].Barrier()
 
     mpi_info[ 'comm' ].Abort()
