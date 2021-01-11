@@ -2537,7 +2537,7 @@ def readFormFactorFile_GE_GM( threepDir, threep_tokens, srcNum,
                                   "=noe:gy=" ,
                                   "=noe:gz=" ]
 
-                threep_loc[ :,iflav,iproj ] \
+                threep_loc[ :, iflav, iproj ] \
                     = getFormFactorThreep_cpu( threepDir,
                                                threep_template,
                                                srcNum,

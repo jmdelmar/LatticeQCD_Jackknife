@@ -22,32 +22,33 @@ def calcQsq( p_fin, q_list, mEff, L, mpi_info ):
 
     binNum = len( mEff )
     
-    # Qsq[ b, p, q ]
-
-    Qsq = np.zeros( ( binNum, len( p_fin ), len( q_list ) ) )
-
     Qsq_list = [ [] for b in mEff ]
     Qsq_where = [ [] for b in mEff ]
 
     for m, ib in fncs.zipXandIndex( mEff ):
+
+        # Qsq_p_q[ p, q ]
+
+        Qsq_p_q = np.zeros( ( len( p_fin ), len( q_list ) ) )
+
         for p, ip in fncs.zipXandIndex( p_fin ):
             for q, iq in fncs.zipXandIndex( q_list ):
 
                 p_ini = p - q
                 
-                Qsq[ ib, ip, iq ] \
+                Qsq_p_q[ ip, iq ] \
                     = ( 2. * np.pi / L ) ** 2 \
                     * np.dot( p - p_ini, p - p_ini ) \
                     - ( energy( m, np.dot( p, p ), L )
                         - energy( m, np.dot( p_ini, p_ini ), L ) ) ** 2
 
-        Qsq_list[ ib ] = np.sort( np.unique( Qsq[ ib ] ) )
+        Qsq_list[ ib ] = np.sort( np.unique( Qsq_p_q ) )
 
         Qsq_where[ ib ] = [ [] for qs in Qsq_list[ ib ] ]
 
         for qs, iqs in fncs.zipXandIndex( Qsq_list[ ib ] ):
 
-            Qsq_where[ ib ][ iqs ] = Qsq[ ib ] == qs
+            Qsq_where[ ib ][ iqs ] = Qsq_p_q == qs
 
     Qsq_list = np.array( Qsq_list )
     Qsq_where = np.array( Qsq_where )
@@ -74,7 +75,7 @@ def calcQsq( p_fin, q_list, mEff, L, mpi_info ):
 
     Qsq_where = Qsq_where[ 0 ]
 
-    return Qsq, Qsq_list, QsqNum, Qsq_where
+    return Qsq_list, QsqNum, Qsq_where
 
 
 # KK = sqrt( 2E ( E + m ) )
@@ -199,61 +200,10 @@ def kineFactor_GE_GM( ratio_err, particle, flavor, mEff, p_fin, Q, L,
                     pSq_ini = np.dot( p_ini, p_ini )
                     pSq_fin = np.dot( p, p )
 
-                    chargeSign = -1.0 if particle == "kaon" \
-                                 and flavor == "s" else 1.0
-                    """
-                    if mpi_info[ 'rank' ] == 1 and b == 0:
+                    #chargeSign = -1.0 if particle == "kaon" \
+                    #             and flavor == "s" else 1.0
+                    chargeSign = 1.0
 
-                        print("p_f=({},{},{}), Q=({},{},{}), p_i=({},{},{}, p_f+p_i=({},{},{}))".format( p[ 0 ],
-                                                                                                         p[ 1 ],
-                                                                                                         p[ 2 ],
-                                                                                                         q[ 0 ],
-                                                                                                         q[ 1 ],
-                                                                                                         q[ 2 ],
-                                                                                                         p_ini[ 0 ],
-                                                                                                         p_ini[ 1 ],
-                                                                                                         p_ini[ 2 ],
-                                                                                                         p[0]+p_ini[0],
-                                                                                                         p[1]+p_ini[1],
-                                                                                                         p[2]+p_ini[2]
-                                                                                                     ) )
-
-                        print( energy( mEff[ b ],
-                                       pSq_ini,
-                                       L )
-                               + energy( mEff[ b ],
-                                         pSq_fin,
-                                         L ) )
-
-                        print( chargeSign * 2.0 * np.pi / L
-                               * ( p_ini[ 0 ] + p[ 0 ] ) )
-                        print( chargeSign * 2.0 * np.pi / L
-                               * ( p_ini[ 1 ] + p[ 1 ] ) )
-                        print( chargeSign * 2.0 * np.pi / L
-                               * ( p_ini[ 2 ] + p[ 2 ] ) )
-                        print( KK_meson( mEff[ b ], pSq_ini, pSq_fin, L ) )
-                        print(np.repeat( ratio_err[ ip, iq ],
-                                         2).reshape( ratioNum, 2 ) )
-                        print([ [ energy( mEff[ b ],
-                                          pSq_ini,
-                                          L )
-                                  + energy( mEff[ b ],
-                                            pSq_fin,
-                                            L ),
-                                  0 ], 
-                                [ chargeSign * 2.0 * np.pi / L
-                                  * ( p_ini[ 0 ] + p[ 0 ] ),
-                                  0 ],
-                                [ chargeSign * 2.0 * np.pi / L
-                                  * ( p_ini[ 1 ] + p[ 1 ] ),
-                                  0 ],
-                                [ chargeSign * 2.0 * np.pi / L
-                                  * ( p_ini[ 2 ] + p[ 2 ] ),
-                                  0 ] ] \
-                              / np.repeat( ratio_err[ ip, iq ],
-                                           2).reshape( ratioNum, 2 ) \
-                              / KK_meson( mEff[ b ], pSq_ini, pSq_fin, L ) )
-                    """
                     kineFactor[ b, ip, iq ] \
                         = [ [ energy( mEff[ b ],
                                       pSq_ini,
@@ -422,7 +372,7 @@ def kineFactor_A20_B20( ratio_err, particle, flavor, mEff, p_fin, Q, L,
 
 
 def calcFormFactors_SVD( kineFactor_loc, ratio, ratio_err, Qsq_where,
-                         mpi_info ):
+                         chargeSign, mpi_info ):
 
     # kineFactor_loc[ b_loc, p, q, ratio, [ F1, F2 ] ]
     # ratio[ b, p, q, ratio ]
@@ -468,133 +418,248 @@ def calcFormFactors_SVD( kineFactor_loc, ratio, ratio_err, Qsq_where,
     # F_loc[ b_loc, qs, [ F1, F2 ] ]
 
     F_loc = np.zeros( ( binNum_loc, QsqNum, 2 ), dtype=float )
+    #F_loc = np.zeros( ( binNum_loc, QsqNum, 4, 2 ), dtype=float )
     
     Qsq_good = np.full( QsqNum, False, dtype=bool )
-    """                
-    # Calculate F1 and F2 for Q^2=0 (only needed for testing
-    # when there is only one element for Q^2=0)
+    #Qsq_good = np.full( ( QsqNum, 4 ), False, dtype=bool )
+
+    curr_str = [ "g0", "gx", "gy", "gz" ]
+
+    if True:
+    #for ic in range( 4 ):
+        """
+        #mpi_fncs.mpiPrint(curr_str[ic],mpi_info)
+
+        # Calculate F1 and F2 for Q^2=0 (only needed for testing
+        # when there is only one element for Q^2=0)
     
-    sum_axes = tuple( range( 1,
-    ratio_fit_loc[ :,
-    Qsq_where[ 0 ],
-    ic ].ndim ) )
-    
-    for f in range( 2 ):
-    
-    F_loc[ :, 0, f ] \
-    = np.average( ratio_fit_loc[ :,
-    Qsq_where[ 0 ],
-    ic ]
-    / kineFactor_loc[ :,
-    Qsq_where[ 0 ],
-    ic, f ]
-    / ratio_fit_err_loc[ :,
-    Qsq_where[ 0 ],
-    ic ],
-    axis=sum_axes )
-            
-    Qsq_good[ 0 ] = True
-    """
-    for iqs in range( QsqNum ):
+        sum_axes = tuple( range( 1,
+                                 ratio_loc[ :,
+                                            Qsq_where[ 0 ],
+                                            ic ].ndim ) )
+        
+        for f in range( 2 ):
+
+            F_loc[ :, 0, ic, f ] \
+                = np.average( ratio_loc[ :,
+                                         Qsq_where[ 0 ],
+                                         ic ]
+                              / ratio_err_loc[ :,
+                                               Qsq_where[ 0 ],
+                                               ic ] ** 2
+                              / kineFactor_loc[ :,
+                                                Qsq_where[ 0 ],
+                                                ic, f ],
+                              axis=sum_axes )
+        
+        Qsq_good[ 0, ic ] = True
+        """
+        for iqs in range( QsqNum ):
         #for iqs in range( 1, QsqNum ):
-             
-        # kineFactor_Qsq[ b, Q^2[ qs ], r, [ F1, F2 ] ]
+         
+            # kineFactor_Qsq[ b, Q^2[ qs ], r, [ F1, F2 ] ]
 
-        kineFactor_Qsq \
-            = kineFactor[ :, Qsq_where[ iqs ], :, : ]
+            kineFactor_Qsq \
+                = kineFactor[ :, Qsq_where[ iqs ], :, : ]
 
-        # kineFactor_Qsq[ b, Q^2[ qs ], r ]
+            # ratio_Qsq[ b, Q^2[ qs ], r ]
 
-        ratio_Qsq = ratio[ :, Qsq_where[ iqs ], : ]
-        ratio_err_Qsq = ratio_err_glob[ :, Qsq_where[ iqs ], : ] 
+            ratio_Qsq = ratio[ :, Qsq_where[ iqs ], : ]
+            ratio_err_Qsq = ratio_err_glob[ :, Qsq_where[ iqs ], : ] 
 
-        # Number of combinations of p and q
-        # for this value of Q^2
+            # Number of combinations of p and q
+            # for this value of Q^2
 
-        QsqNum_Qsq = kineFactor_Qsq.shape[ 1 ]
-        """
-        # kineFactor_Qsq[ b, Q^2[ qs ], [ F1, F2 ] ]
+            QsqNum_Qsq = kineFactor_Qsq.shape[ 1 ]
+
+            """
+            # kineFactor_Qsq[ b, Q^2[ qs ], [ F1, F2 ] ]
         
-        kineFactor_Qsq = kineFactor[ :, Qsq_where[ iqs ], ic, : ]
+            kineFactor_Qsq = kineFactor[ :, Qsq_where[ iqs ], ic, : ]
 
-        # Number of combinations of p and q
-        # for this value of Q^2
+            # ratio_Qsq[ b, Q^2[ qs ] ]
 
-        QsqNum_Qsq = kineFactor_Qsq.shape[ 1 ]
+            ratio_Qsq = ratio[ :, Qsq_where[ iqs ], ic ]
+            ratio_err_Qsq = ratio_err_glob[ :, Qsq_where[ iqs ], ic ] 
+
+            # Number of combinations of p and q
+            # for this value of Q^2
+
+            QsqNum_Qsq = kineFactor_Qsq.shape[ 1 ]
         
-        ratio_Qsq = ratio[ :, Qsq_where[ iqs ], ic ]
-        ratio_err_Qsq = ratio_err[ :, Qsq_where[ iqs ], ic ] 
-        """
-        # Skip this Q^2 if there are any negative ratios
-        # or the ratio error > 0.3
+            #mpi_fncs.mpiPrint(kineFactor_Qsq.shape,mpi_info)
+            #mpi_fncs.mpiPrint(ratio_Qsq.shape,mpi_info)
+            #mpi_fncs.mpiPrint(ratio_err_Qsq.shape,mpi_info)
 
-        if np.any( ( np.sign( kineFactor_Qsq[ ..., 0 ] )
-                     != np.sign( ratio_Qsq ) )
-                   & ( ratio_err_Qsq > 0.3 ) ):
+            """
+            # kineFactor_Qsq[ b, Q^2[ qs ], r, [ F1, F2 ] ]
+            # -> kineFactor_Qsq[ b, Q^2[ qs ] * r, [ F1, F2 ] ]
 
-            continue
+            kineFactor_Qsq = kineFactor_Qsq.reshape( binNum,
+                                                     QsqNum_Qsq * ratioNum,
+                                                     2 )
 
-        # Change to local
-                
-        kineFactor_Qsq = kineFactor_loc[ :, Qsq_where[ iqs ], :, : ]
+            # ratio_Qsq[ b, Q^2[ qs ], r ]
+            # -> ratio_Qsq[ b, Q^2[ qs ] * r ]
 
-        ratio_Qsq = ratio_loc[ :, Qsq_where[ iqs ], : ]
-        ratio_err_Qsq = ratio_err_loc[ :, Qsq_where[ iqs ], : ]
+            ratio_Qsq = ratio_Qsq.reshape( binNum, QsqNum_Qsq * ratioNum )
+            ratio_err_Qsq \
+                = ratio_err_Qsq.reshape( binNum, QsqNum_Qsq * ratioNum )
 
-        # kineFactor_Qsq[ b_loc, Q^2[ qs ], r, [ F1, F2 ] ]
-        # -> kineFactor_Qsq[ b_loc, Q^2[ qs ] * r, [ F1, F2 ] ]
+            where_good = np.full( ( QsqNum_Qsq * ratioNum ), False,
+                                  dtype=bool )
+            #where_good = np.full( ( QsqNum_Qsq ), False, dtype=bool )
 
-        kineFactor_Qsq = kineFactor_Qsq.reshape( binNum_loc,
-                                                 QsqNum_Qsq * ratioNum,
-                                                 2 )
+            chargeSign_arr \
+            = np.array( ratio_Qsq.size
+                        * [ chargeSign ] ).reshape( ratio_Qsq.shape )
 
-        # ratio_Qsq[ b, Q^2[ qs ], r ]
-        # -> ratio_Qsq[ b, Q^2[ qs ] * r ]
+            #mpi_fncs.mpiPrint(kineFactor_Qsq[0],mpi_info)
+            #mpi_fncs.mpiPrint(ratio_Qsq[0],mpi_info)
+            #mpi_fncs.mpiPrint(ratio_err_Qsq[0],mpi_info)
 
-        ratio_Qsq = ratio_Qsq.reshape( binNum_loc, QsqNum_Qsq * ratioNum )
-        ratio_err_Qsq \
-            = ratio_err_Qsq.reshape( binNum_loc, QsqNum_Qsq * ratioNum )
-        """
-        kineFactor_Qsq = kineFactor_loc[ :, Qsq_where[ iqs ], ic, : ]
-        ratio_Qsq = ratio_loc[ :, Qsq_where[ iqs ], ic ]
-        ratio_err_Qsq = ratio_err_loc[ :, Qsq_where[ iqs ], ic ]
-        """
-        # Perform SVD
+            # Loop over Q^2 and ratio
+            #for iqr in range( QsqNum_Qsq * ratioNum ):
+            for iqr in range( QsqNum_Qsq ):
 
-        u, s, vT = np.linalg.svd( kineFactor_Qsq, full_matrices=False )
+                # Check that all bins meet requirements:
+                # K * R has right sign
+                # error/ratio is < 0.3
+                # 0.25 < |R| < 1.5
 
-        # Calculate ( v s^-1 u^T )^T
-                
-        uT = np.transpose( u, ( 0, 2, 1 ) )
-        v = np.transpose( vT, ( 0, 2, 1 ) )
+                #CJL:HERE
+
+                where_good[ iqr ] \
+                    = np.all( ( np.sign( kineFactor_Qsq[ :, iqr, 0 ]
+                                         * ratio_Qsq[ :, iqr ] )
+                                == np.sign( chargeSign_arr[ :, iqr ] ) )
+                              & ( ratio_err_Qsq[ :, iqr ]
+                                  / np.abs( ratio_Qsq[ :, iqr ] )
+                              < 0.2 )
+                              & ( np.abs( ratio_Qsq[ :, iqr ]
+                                          / ratio_err_Qsq[ :, iqr ] ** 2
+                                          / kineFactor_Qsq[ :, iqr, 0 ] )
+                                  < 1.5 )
+                              & ( np.abs( ratio_Qsq[ :, iqr ]
+                                          / ratio_err_Qsq[ :, iqr ] ** 2
+                                          / kineFactor_Qsq[ :, iqr, 0 ] )
+                                  > 0.25 ) )
+
+                                          
+            # End loop over Q^2 and ratio
             
-        smat = np.zeros( ( u.shape[-1], vT.shape[-2] ) )
-        smat_inv = np.zeros( ( binNum_loc, ) + np.transpose( smat ).shape )
-    
-        for b in range( binNum_loc ):
-                    
-            smat[ :vT.shape[ -2 ], :vT.shape[ -2 ] ] = np.diag( s[ b ] )
-                    
-            smat_inv[ b ] = np.linalg.pinv( smat )
-    
-        # End loop over bins
+            # Skip this Q^2 if there are no good elements
 
-        # decomp[ b_loc, Q^2[qs]*ratio, [ F1, F2 ] ]
-                    
-        decomp = np.transpose( v @ smat_inv @ uT, ( 0, 2, 1 ) )
+            if not np.any( where_good ):
+
+                continue
+
+            #mpi_fncs.mpiPrint(ratio_Qsq[0]/
+            #                  kineFactor_Qsq[0,:,0]/
+            #                  ratio_err_Qsq[0]**2,
+            #                  mpi_info)
+
+            # Change to local
+                
+            kineFactor_Qsq = kineFactor_loc[ :, Qsq_where[ iqs ], :, : ]
+
+            ratio_Qsq = ratio_loc[ :, Qsq_where[ iqs ], : ]
+            ratio_err_Qsq = ratio_err_loc[ :, Qsq_where[ iqs ], : ]
+            
+            # kineFactor_Qsq[ b_loc, Q^2[ qs ], r, [ F1, F2 ] ]
+            # -> kineFactor_Qsq[ b_loc, Q^2[ qs ] * r, [ F1, F2 ] ]
+
+            kineFactor_Qsq = kineFactor_Qsq.reshape( binNum_loc,
+                                                     QsqNum_Qsq * ratioNum,
+                                                     2 )
+
+            # ratio_Qsq[ b, Q^2[ qs ], r ]
+            # -> ratio_Qsq[ b, Q^2[ qs ] * r ]
+
+            ratio_Qsq = ratio_Qsq.reshape( binNum_loc,
+                                           QsqNum_Qsq * ratioNum )
+            ratio_err_Qsq \
+                = ratio_err_Qsq.reshape( binNum_loc, QsqNum_Qsq * ratioNum )
+
+            # Select good elements
+
+            kineFactor_Qsq = kineFactor_Qsq[ :, where_good, : ]
+            ratio_Qsq = ratio_Qsq[ :, where_good ]
+            ratio_err_Qsq = ratio_err_Qsq[ :, where_good ]
+            """
+            # Change to local
+                
+            kineFactor_Qsq = kineFactor_loc[ :, Qsq_where[ iqs ], ic, : ]
+
+            ratio_Qsq = ratio_loc[ :, Qsq_where[ iqs ], ic ]
+            ratio_err_Qsq = ratio_err_loc[ :, Qsq_where[ iqs ], ic ]
+            
+            # Select good elements
+
+            kineFactor_Qsq = kineFactor_Qsq[ :, where_good, : ]
+            ratio_Qsq = ratio_Qsq[ :, where_good ]
+            ratio_err_Qsq = ratio_err_Qsq[ :, where_good ]
+
+            #mpi_fncs.mpiPrint(kineFactor_Qsq.shape,mpi_info)
+            #mpi_fncs.mpiPrint(ratio_Qsq.shape,mpi_info)
+            #mpi_fncs.mpiPrint(ratio_err_Qsq.shape,mpi_info)
+            """
+            # Perform SVD
+
+            u, s, vT = np.linalg.svd( kineFactor_Qsq, full_matrices=False )
+
+            # Calculate ( v s^-1 u^T )^T
+                
+            uT = np.transpose( u, ( 0, 2, 1 ) )
+            v = np.transpose( vT, ( 0, 2, 1 ) )
+            
+            smat = np.zeros( ( u.shape[-1], vT.shape[-2] ) )
+            smat_inv = np.zeros( ( binNum_loc, )
+                                 + np.transpose( smat ).shape )
     
-        sum_axes = tuple( range( 1, ratio_Qsq.ndim ) )
+            for b in range( binNum_loc ):
+                    
+                smat[ :vT.shape[ -2 ], :vT.shape[ -2 ] ] = np.diag( s[ b ] )
+                    
+                smat_inv[ b ] = np.linalg.pinv( smat )
+    
+            # End loop over bins
+
+            # decomp[ b_loc, Q^2[qs]*ratio, [ F1, F2 ] ]
+                    
+            decomp = np.transpose( v @ smat_inv @ uT, ( 0, 2, 1 ) )
+
+            sum_axes = tuple( range( 1, ratio_Qsq.ndim ) )
  
-        for iff in range( 2 ):
-            F_loc[ :, iqs, iff ] = np.sum( decomp[ ..., iff ]
-                                           * ratio_Qsq
-                                           / ( ratio_err_Qsq ) ** 2,
-                                           axis=sum_axes )
+            #mpi_fncs.mpiPrint( np.average( decomp[ ..., 0 ]
+            #                               * ratio_Qsq
+            #                               / ratio_err_Qsq ** 2,
+            #                               axis=0 ),
+            #                   mpi_info )
             
-        Qsq_good[ iqs ] = True
+            for iff in range( 2 ):
 
-    # End loop over Q^2
-            
+                F_loc[ :, iqs, iff ] = np.sum( decomp[ ..., iff ]
+                                               * ratio_Qsq
+                                               / ratio_err_Qsq ** 2,
+                                               axis=sum_axes )
+
+                #F_loc[ :, iqs, ic, iff ] = np.sum( decomp[ ..., iff ]
+                #                                   * ratio_Qsq,
+                #                                   axis=sum_axes )
+                #/ ratio_err_Qsq ** 2
+
+                #F_loc[ :, iqs, ic, iff ] \
+                #    = np.average( ratio_Qsq
+                #                  / kineFactor_Qsq[ ..., 0 ],
+                #                  axis=sum_axes )
+
+            Qsq_good[ iqs ] = True
+            #Qsq_good[ iqs, ic ] = True
+
+        # End loop over Q^2
+    # End loop over current
+    
     return F_loc, Qsq_good
 
 
