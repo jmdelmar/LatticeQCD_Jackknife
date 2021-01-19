@@ -282,8 +282,8 @@ for qsqN in qSqNum:
 qNum = qNum[ 0 ]
 qSqNum = qSqNum[ 0 ]
 
-#q = np.array( q, dtype=int )
-q = -1 * np.array( q, dtype=int )
+q = np.array( q, dtype=int )
+#q = -1 * np.array( q, dtype=int )
 qSq = np.array( qSq )
 qSq_start = np.array( qSq_start )
 qSq_end = np.array( qSq_end )
@@ -641,7 +641,7 @@ if dataFormat_threep == "gpu":
         # End loop over final momenta
     # End loop over tsink
 
-    q_threep = -q_threep[ 0 ][ 0 ]
+    q_threep = q_threep[ 0 ][ 0 ]
 
 elif dataFormat_threep == "cpu":
 
@@ -686,10 +686,20 @@ qSq_where_threep = qSq_where_threep[ :qSq_end_threep[ -1 ] + 1 ]
 q_threep = q_threep[ :qSq_end_threep[ -1 ] + 1 ]
 qNum_threep = len( q_threep )
 
+# q needs sign change for rest frame strange part because
+# complex conjugate is taken after Fourier transform
+
+q_threep = np.array( [ q_threep, q_threep ] )
+
+if pSq_fin == 0:
+
+    q_threep[ 1 ] = -1 * q_threep[ 1 ]
+
 
 ##############################
 # Read three-point functions #
 ##############################
+
 
 # threep_jk[ ts, p, b, flav, q, proj*curr, t ]
 
@@ -747,9 +757,11 @@ for ts, its in fncs.zipXandIndex( tsink ):
 
 threep_jk_loc = np.moveaxis( threep_jk_loc, [ 1, 3 ], [ 3, 1 ] )
 
-# Change sign of up part of final momentum
+# Change sign of strange part of final momentum
+# because conjugate is taken after phase
 
-p_fin = [ -1 * p_fin, p_fin ]
+p_fin = [ p_fin, -1 * p_fin ]
+#p_fin = [ -1 * p_fin, p_fin ]
 
 
 ####################
@@ -767,7 +779,7 @@ for iflav in range( flavNum ):
     # Qsq_loc[ b_loc, qs ], QsqNum, Qsq_where[ flav, qsq, p, q ]
 
     Qsq_loc, QsqNum, Qsq_where[ iflav ] \
-        = pq.calcQsq( p_fin[ iflav ], q_threep,
+        = pq.calcQsq( p_fin[ iflav ], q_threep[ iflav ],
                       mEff_plat[ 0, binList_loc ],
                       L, mpi_confs_info )
 
@@ -827,7 +839,7 @@ for ts, its in zip( tsink, range( tsinkNum ) ):
                                                 mEff_plat[ ismr_flav[iflav],
                                                            binList_loc ],
                                                 ts, p_fin[ iflav ],
-                                                q_threep,
+                                                q_threep[ iflav ],
                                                 qSq[ ismr_flav[ iflav ] ],
                                                 L, mpi_confs_info)
             
@@ -870,7 +882,27 @@ for ts, its in zip( tsink, range( tsinkNum ) ):
         # ratio_fit_err[ p, q, ratio ]
 
         ratio_fit_err = fncs.calcError( ratio_fit, binNum )        
+        """
+        if rank == 0:
 
+            curr_str = [ "g0D0", "g0Dx", "g0Dy", "g0Dz",
+                         "gxDy", "gxDz", "gyDz" ]
+
+            for curr, icurr in fncs.zipXandIndex( curr_str ):
+
+                output_filename \
+                    = rw.makeFilename( output_template,
+                                       "ratio_fit_{}_{}_tsink{}_psq{}" \
+                                       + "_{}configs_binSize{}",
+                                       particle,
+                                       curr,
+                                       ts, pSq_fin,
+                                       configNum, binSize )            
+          
+                rw.writeDataFile_wX( output_filename,
+                                     q_threep[ 1:7 ], 
+                                     ratio_fit[ :, 0, 1:7, icurr ] )
+        """
 
         ###############################
         # Calculate kinematic factors #
@@ -884,22 +916,55 @@ for ts, its in zip( tsink, range( tsinkNum ) ):
                                         particle,
                                         flav_str[ iflav ],
                                         mEff_plat[ 0, binList_loc ],
-                                        p_fin[ iflav ], q_threep, L,
+                                        p_fin[ iflav ], q_threep[ iflav ], L,
                                         mpi_confs_info )
+        
+        # kineFactor[ b, p, q, r, [ F1, F2 ] ]
 
-        chargeSign = -1.0 if particle == "kaon" \
-                     and flav_str[ iflav ] == "s" else 1.0
+        kineFactor = np.zeros( ( binNum, ) + kineFactor_loc.shape[ 1: ] )
+    
+        comm.Allgatherv( kineFactor_loc,
+                         [ kineFactor,
+                           recvCount \
+                           * np.prod( kineFactor_loc.shape[ 1: ] ),
+                           recvOffset \
+                           * np.prod( kineFactor_loc.shape[ 1: ] ),
+                           MPI.DOUBLE ] )
+        """
+        if rank == 0:
 
-        #mpi_fncs.mpiPrint(flav_str[iflav],mpi_confs_info)
+            kineFactor_avg = np.average(kineFactor[:,0],axis=0)
+
+            output_filename \
+                = rw.makeFilename( output_template,
+                                   "kineFactor_A20_B20_{}_tsink{}_psq{}" \
+                                   + "_{}configs_binSize{}",
+                                   particle,
+                                   ts, pSq_fin,
+                                   configNum, binSize )            
+
+            rw.writeSVDOutputFile( output_filename,
+                                   kineFactor_avg,
+                                   q_threep )
+        """
+        if formFactor == "GE_GM":
+
+            ratioSign = -1.0 if particle == "kaon" \
+                         and flav_str[ iflav ] == "s" else 1.0
+
+        elif formFactor == "A20_B20":
+                     
+            ratioSign = 1.0
 
         # F_loc[ b_loc, qs, [ F1, F2 ] ]
 
-        F_loc, Qsq_good[ iflav ] \
-            = pq.calcFormFactors_SVD( kineFactor_loc,
-                                      ratio_fit,
+        F_loc, Qsq_good[ iflav ], \
+                     = pq.calcFormFactors_SVD( kineFactor_loc,
+                                               ratio_fit,
                                       ratio_fit_err,
                                       Qsq_where[ iflav ],
-                                      chargeSign,
+                                      formFactor,
+                                      ratioSign,
                                       mpi_confs_info )
         
         comm.Gatherv( F_loc,
@@ -911,12 +976,23 @@ for ts, its in zip( tsink, range( tsinkNum ) ):
                         MPI.DOUBLE ],
                       root=0 )
 
+        #decomp = np.zeros( ( binNum, ) + decomp_loc.shape[ 1: ],
+        #                   dtype=float, order='c' )
+    
+        #comm.Allgatherv( decomp_loc,
+        #                 [ decomp,
+        #                   recvCount \
+        #                   * np.prod( decomp_loc.shape[ 1: ] ),
+        #                   recvOffset \
+        #                   * np.prod( decomp_loc.shape[ 1: ] ),
+        #                   MPI.DOUBLE ] )
+
         if rank == 0:
             
             curr_str = [ "g0", "gx", "gy", "gz" ]
 
             if True:
-            #for ic in range( 4 ):
+                     #for ic in range( 4 ):
 
                 # Get results for good Q^2
                 # F[ b, qs_good, [ F1, F2 ] ]
@@ -935,7 +1011,21 @@ for ts, its in zip( tsink, range( tsinkNum ) ):
         
                 #F_cp = np.array( F_cp )
                 #Qsq_GeV = np.array( Qsq_GeV )
+                """
+                decomp_avg = np.average(decomp,axis=0)
 
+                output_filename \
+                    = rw.makeFilename( output_template,
+                                       "decomp_A20_B20_{}_tsink{}_psq{}" \
+                                       + "_{}configs_binSize{}",
+                                       particle,
+                                       ts, pSq_fin,
+                                       configNum, binSize )            
+
+                rw.writeSVDOutputFile( output_filename,
+                                       decomp_avg,
+                                       q_threep )
+                """
                 # Average over bins
 
                 F_avg = np.average( F_cp[ iflav ], axis=0 )

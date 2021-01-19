@@ -2617,14 +2617,14 @@ def readFormFactorFile_GE_GM( threepDir, threep_tokens, srcNum,
 
         # ratio   Insertion
         # 0       gt
-        # 1       igx
-        # 2       igy
-        # 3       igz
+        # 1       -igx
+        # 2       -igy
+        # 3       -igz
 
         threep_loc = np.stack ( [ threep_loc[ :, :, 0, :, 0, : ].real,
-                                  -threep_loc[ :, :, 0, :, 1, : ].imag,
-                                  -threep_loc[ :, :, 0, :, 2, : ].imag,
-                                  -threep_loc[ :, :, 0, :, 3, : ].imag ],
+                                  threep_loc[ :, :, 0, :, 1, : ].imag,
+                                  threep_loc[ :, :, 0, :, 2, : ].imag,
+                                  threep_loc[ :, :, 0, :, 3, : ].imag ],
                                 axis=3 )
 
     return threep_loc
@@ -2805,9 +2805,9 @@ def readFormFactorFile_A20_B20( threepDir, threep_tokens, srcNum,
 
     # ratio   Insertion
     # 0       {gtDt}
-    # 1       i{gtDx}
-    # 2       i{gtDy}
-    # 3       i{gtDz}
+    # 1       -i{gtDx}
+    # 2       -i{gtDy}
+    # 3       -i{gtDz}
     # 4       {gxDy}
     # 5       {gxDz}
     # 6       {gyDz}
@@ -2821,9 +2821,9 @@ def readFormFactorFile_A20_B20( threepDir, threep_tokens, srcNum,
 
     threep_loc = np.stack( [ ( threep_loc[ ..., 0, : ]
                              - 0.25 * trace ).real,
-                             -threep_loc[ ..., 1, : ].imag,
-                             -threep_loc[ ..., 2, : ].imag,
-                             -threep_loc[ ..., 3, : ].imag,
+                             threep_loc[ ..., 1, : ].imag,
+                             threep_loc[ ..., 2, : ].imag,
+                             threep_loc[ ..., 3, : ].imag,
                              threep_loc[ ..., 5, : ].real,
                              threep_loc[ ..., 6, : ].real,
                              threep_loc[ ..., 8, : ].real ],
@@ -3185,10 +3185,25 @@ def writeDataFile_wX( filename, x, data ):
 
         for d0 in range( len( data ) ):
 
-            for d1 in range( len( data[ d0 ] ) ):
+            if x.ndim == 2:
+
+                for d1 in range( len( data[ d0 ] ) ):
                 
-                output.write( "{:<5d}{:<20.15}\n".format( x[ d1 ],
-                                                          data[ d0, d1 ] ) )
+                    template = "{:<+5}{:<+5}{:<+5}{:<20.15}\n"
+
+                    output.write( template.format( x[ d1, 0 ],
+                                                   x[ d1, 1 ],
+                                                   x[ d1, 2 ],
+                                                   data[ d0, d1 ] ) )
+
+            else:
+            
+                for d1 in range( len( data[ d0 ] ) ):
+                
+                    template = "{:<5d}{:<20.15}\n"
+
+                    output.write( template.format( x[ d1 ],
+                                                   data[ d0, d1 ] ) )
 
     print( "Wrote " + filename )
 
@@ -3352,10 +3367,24 @@ def writeSVDOutputFile( filename, data, Qsq ):
 
             for r in range( data[ q ].shape[ 0 ] ):
 
-                output.write("{:<10}{:<10}{:<20.10}{:<.10}\n".format(r, \
-                                                                     Qsq[q], \
-                                                                     data[q][r,0], \
-                                                                     data[q][r,1]))
+                if Qsq.ndim > 1:
+
+                    template = "{:<10}{:<+5}{:<+5}{:<+5}{:<20.10}{:<.10}\n"
+
+                    output.write( template.format( r,
+                                                   Qsq[ q, 0 ],
+                                                   Qsq[ q, 1 ],
+                                                   Qsq[ q, 2 ],
+                                                   data[ q ][ r, 0 ],
+                                                   data[ q ][ r, 1 ] ) )
+
+                else:
+
+                    template = "{:<10}{:<10}{:<20.10}{:<.10}\n"
+
+                    output.write( template.format( r, Qsq[ q ],
+                                                   data[ q ][ r, 0 ],
+                                                   data[ q ][ r, 1 ] ) )
 
     print( "Wrote " + filename )
 
