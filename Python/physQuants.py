@@ -287,13 +287,6 @@ def kineFactor_A20_B20( ratio_err, particle, flavor, mEff, p_fin, Q, L,
         # Loop over p_fin
         for p, ip in fncs.zipXandIndex( p_fin ):
 
-            if p[ 0 ] !=0 and p[ 1 ] != 0 and p[ 2 ] != 0:
-
-                errorMessage = "Error (physQuants.kineFactor_A20_B20): " \
-                               + "function not supported for non-zero " \
-                               + "final momentum"
-                mpi_fncs.mpiPrintError( errorMessage, mpi_info )
-
             # Loop over Q
             for q, iq in fncs.zipXandIndex( Q ):
 
@@ -301,66 +294,93 @@ def kineFactor_A20_B20( ratio_err, particle, flavor, mEff, p_fin, Q, L,
                     
                 qSq = np.dot( q, q )
 
-                #pSq_ini = np.dot( p_ini, p_ini )
-                #pSq_fin = np.dot( p, p )
-
-                #chargeSign = -1.0 if particle == "kaon" \
-                    #             and flavor == "s" else 1.0
+                pSq_ini = np.dot( p_ini, p_ini )
+                pSq_fin = np.dot( p, p )
 
                 # CJL:HERE
 
                 kineFactor[ b, ip, iq ] \
-                    = [ [ - 1./4. * ( energy( mEff[ b ],
-                                              qSq, L )
-                                      + mEff[ b ] )
-                          * ( 2. * energy( mEff[ b ],
-                                           qSq, L )
-                              + mEff[ b ] ),
-                          -( energy( mEff[ b ],
-                                     qSq, L )
-                             - mEff[ b ] )
-                          * ( 2. * energy( mEff[ b ],
-                                           qSq, L )
-                              - mEff[ b ] ) ],
+                    = [ [ 1./4. * ( mEff[ b ] ** 2
+                                    - 2 * ( energy( mEff[ b ],
+                                                    pSq_fin, L )
+                                            + energy( mEff[ b ],
+                                                      pSq_ini, L ) ) ** 2
+                                    + energy( mEff[ b ],
+                                              pSq_fin, L )
+                                    * energy( mEff[ b ],
+                                              pSq_ini, L )
+                                    - p[ 0 ] * p_ini[ 0 ]
+                                    - p[ 1 ] * p_ini[ 1 ]
+                                    - p[ 2 ] * p_ini[ 2 ] ),
+                          mEff[ b ] ** 2
+                          - 2 * ( energy( mEff[ b ],
+                                          pSq_fin, L )
+                                  - energy( mEff[ b ],
+                                            pSq_ini, L ) ) ** 2
+                          - energy( mEff[ b ],
+                                    pSq_fin, L )
+                          * energy( mEff[ b ],
+                                    pSq_ini, L )
+                          + p[ 0 ] * p_ini[ 0 ]
+                          + p[ 1 ] * p_ini[ 1 ]
+                          + p[ 2 ] * p_ini[ 2 ] ],
                         [ 1./2. * ( energy( mEff[ b ],
-                                            qSq, L )
-                                    + mEff[ b ] )
-                          * 2. * np.pi / L * p_ini[ 0 ],
+                                            pSq_fin, L )
+                                    + energy( mEff[ b ],
+                                              pSq_ini, L ) )
+                          * 2. * np.pi / L
+                          * ( p[ 0 ] + p_ini[ 0 ] ),
                           2. * ( energy( mEff[ b ],
-                                         qSq, L )
-                                 - mEff[ b ] )
-                          * 2. * np.pi / L * p_ini[ 0 ] ],
+                                         pSq_fin, L )
+                                 - energy( mEff[ b ],
+                                           pSq_ini, L) )
+                          * 2. * np.pi / L
+                          * ( p[ 0 ] - p_ini[ 0 ] ) ],
                         [ 1./2. * ( energy( mEff[ b ],
-                                            qSq, L )
-                                    + mEff[ b ] )
-                          * 2. * np.pi / L * p_ini[ 1 ],
+                                            pSq_fin, L )
+                                    + energy( mEff[ b ],
+                                              pSq_ini, L ) )
+                          * 2. * np.pi / L
+                          * ( p[ 1 ] + p_ini[ 1 ] ),
                           2. * ( energy( mEff[ b ],
-                                         qSq, L )
-                                 - mEff[ b ] )
-                          * 2. * np.pi / L * p_ini[ 1 ] ],
+                                         pSq_fin, L )
+                                 - energy( mEff[ b ],
+                                           pSq_ini, L) )
+                          * 2. * np.pi / L
+                          * ( p[ 1 ] - p_ini[ 1 ] ) ],
                         [ 1./2. * ( energy( mEff[ b ],
-                                            qSq, L )
-                                    + mEff[ b ] )
-                          * 2. * np.pi / L * p_ini[ 2 ],
+                                            pSq_fin, L )
+                                    + energy( mEff[ b ],
+                                              pSq_ini, L ) )
+                          * 2. * np.pi / L
+                          * ( p[ 2 ] + p_ini[ 2 ] ),
                           2. * ( energy( mEff[ b ],
-                                         qSq, L )
-                                 - mEff[ b ] )
-                          * 2. * np.pi / L * p_ini[ 2 ] ],
+                                         pSq_fin, L )
+                                 - energy( mEff[ b ],
+                                           pSq_ini, L) )
+                          * 2. * np.pi / L
+                          * ( p[ 2 ] - p_ini[ 2 ] ) ],
                         [ 1./2. * ( 2. * np.pi / L ) ** 2
-                          * p_ini[ 0 ] * p_ini[ 1 ],
+                          * ( p[ 0 ] + p_ini[ 0 ] )
+                          * ( p[ 1 ] + p_ini[ 1 ] ),
                           2. * ( 2. * np.pi / L ) ** 2
-                          * p_ini[ 0 ] * p_ini[ 1 ] ],
+                          * ( p[ 0 ] - p_ini[ 0 ] )
+                          * ( p[ 1 ] - p_ini[ 1 ] ) ],
                         [ 1./2. * ( 2. * np.pi / L ) ** 2
-                          * p_ini[ 0 ] * p_ini[ 2 ],
+                          * ( p[ 0 ] + p_ini[ 0 ] )
+                          * ( p[ 2 ] + p_ini[ 2 ] ),
                           2. * ( 2. * np.pi / L ) ** 2
-                          * p_ini[ 0 ] * p_ini[ 2 ] ],
+                          * ( p[ 0 ] - p_ini[ 0 ] )
+                          * ( p[ 2 ] - p_ini[ 2 ] ) ],
                         [ 1./2. * ( 2. * np.pi / L ) ** 2
-                          * p_ini[ 1 ] * p_ini[ 2 ],
+                          * ( p[ 1 ] + p_ini[ 1 ] )
+                          * ( p[ 2 ] + p_ini[ 2 ] ),
                           2. * ( 2. * np.pi / L ) ** 2
-                          * p_ini[ 1 ] * p_ini[ 2 ] ] ] \
+                          * ( p[ 1 ] - p_ini[ 1 ] )
+                          * ( p[ 2 ] - p_ini[ 2 ] ) ] ] \
                     / np.repeat( ratio_err[ ip, iq ] ** 2,
                                  2).reshape( ratioNum, 2 ) \
-                    / KK_meson( mEff[ b ], 0, qSq, L )
+                    / KK_meson( mEff[ b ], pSq_ini, pSq_fin, L )
                 
             # End loop over Q
         # End loop over p_fin
@@ -549,14 +569,14 @@ def calcFormFactors_SVD( kineFactor_loc, ratio, ratio_err, Qsq_where,
                     where_good[ iqr ] \
                         = np.all( ratio_err_Qsq[ :, iqr ]
                                   / np.abs( ratio_Qsq[ :, iqr ] )
-                                  < 0.1 )
+                                  < 0.2 )
 
                 elif formFactor == "A20_B20":
 
                     where_good[ iqr ] \
                         = np.all( ratio_err_Qsq[ :, iqr ]
                                   / np.abs( ratio_Qsq[ :, iqr ] )
-                                  < 0.2 )
+                                  < 0.3 )
                     #where_good[ iqr ] = True
                     
             # End loop over Q^2 and ratio
