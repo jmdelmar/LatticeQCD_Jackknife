@@ -74,7 +74,7 @@ parser.add_argument( "-o", "--output_template", action='store',
 
 parser.add_argument( "-sn", "--source_number", action='store', type=int,
                      help="Number of sources correlators were averaged "
-                     + "over", default=16 )
+                     + "over", default=None )
 
 parser.add_argument( "-tsf", "--two_state_fit", action='store_true',
                      help="Performs the two-state fit if supplied" )
@@ -246,13 +246,12 @@ elif whichRatio == "avgX2":
 
 elif whichRatio == "avgX3":
 
-    Z = 1.0
+    Z = 1.668
 
 elif whichRatio == "GE0_local":
 
-    #Z = 0.715
-    Z = 1.0
-
+    Z = 0.715
+    
 elif whichRatio == "GE0_noether":
 
     Z = 1.0
@@ -921,8 +920,6 @@ for imom in range( momBoostNum ):
     # End loop over tsink
 # End loop over momenta
 
-# threep_p_jk[ p, flav, ts, b, t ]
-
 # Average threep over momenta
 # threep_jk[ flav, ts, b, t ]
 
@@ -945,6 +942,15 @@ if rank == 0:
         # Loop over tsink
         for ts, its in zip( tsink, range( tsinkNum ) ) :
 
+            #mpi_fncs.mpiPrint(threep_jk[iflav,its][0],
+            #                  mpi_confs_info)
+            #mpi_fncs.mpiPrint(np.average(c0[ismr_flav[iflav]],
+            #                             axis=0),
+            #                  mpi_confs_info)
+            #mpi_fncs.mpiPrint(np.average(E0[ismr_flav[iflav]],
+            #                             axis=0),
+            #                  mpi_confs_info)
+
             if whichRatio in mellin_list:
 
                 ratio[ iflav, its ] \
@@ -953,15 +959,16 @@ if rank == 0:
                                                  momSq, L, 
                                                  c0[ ismr_flav[ iflav ] ],
                                                  E0[ ismr_flav[ iflav ] ], 
-                                                 whichRatio )
-
+                                                 whichRatio,
+                                                 mpi_confs_info )
+                
             elif whichRatio in GE_list:
 
                 ratio[ iflav, its] \
                     = Z * pq.calcMatrixElemEM_twopFit( threep_jk[iflav, its],
                                                        ts, 
-                                                       c0[ ismr_flav[ iflav ] ], 
-                                                       E0[ ismr_flav[ iflav ] ] ) 
+                                                       c0[ismr_flav[iflav]], 
+                                                       E0[ismr_flav[iflav]] ) 
 
         # End loop over tsink
     # End loop over flavor
@@ -1020,15 +1027,24 @@ if rank == 0:
             fitEnd_plat = [ ts // 2 + 1, ts // 2 + 2,
                             ts // 2 + 3, ts // 2 + 4 ]
 
+            #mpi_fncs.mpiPrint(np.average(ratio[iflav,its],axis=0),
+            #                  mpi_confs_info)
+
             # Loop over fit ranges
             for irange in range( len( rangeStart_plat ) ):
 
                 ratio_fit, chiSq = fit.fitPlateau( ratio[ iflav, its ],
-                                                    ratio_err[iflav, its ],
-                                                    rangeStart_plat[ irange ],
-                                                    fitEnd_plat[ irange ] )
+                                                   ratio_err[iflav, its ],
+                                                   rangeStart_plat[ irange ],
+                                                   fitEnd_plat[ irange ] )
 
-                # Print fit per bin
+                #mpi_fncs.mpiPrint((rangeStart_plat[irange],
+                #                   fitEnd_plat[irange]),
+                #                  mpi_confs_info)
+                #mpi_fncs.mpiPrint(np.average(ratio_fit,axis=0),
+                #                  mpi_confs_info)
+
+                # Write fit per bin
 
                 ratio_fit_outFilename \
                     = rw.makeFilename( output_template,\
@@ -1072,9 +1088,11 @@ if rank == 0:
     # End loop over flavor
 # End first process
 
+
 ##################
 # Two-state Fit  #
 ##################
+
 
 if tsf:
 
@@ -1082,6 +1100,7 @@ if tsf:
 
     # Loop over flavors
     for iflav in range( flavNum ):
+
         # Loop over number of neglected three-point functions
         for neglect in 2,3:
 
@@ -1114,7 +1133,7 @@ if tsf:
                                                 ti_to_fit, tsink,
                                                 E0[ ismr_flav[ iflav ] ],
                                                 E1[ ismr_flav[ iflav ] ],
-                                                T, mpi_confs_info )
+                                                mpi_confs_info )
 
             if rank == 0:
 
@@ -1157,10 +1176,10 @@ if tsf:
                 chiSq_avg = np.average( chiSq, axis=0 )
                 chiSq_err = fncs.calcError( chiSq, binNum )
                 
-                tsf_threep_range_str = twopFit_str[ ismr_flav[ iflav ] ] + ".3n" \
-                                       + str( neglect )
+                tsf_threep_range_str = twopFit_str[ ismr_flav[ iflav ] ] \
+                                       + ".3n" + str( neglect )
 
-                # Print fit per bin
+                # Write fit per bin
 
                 ratioOutputFilename \
                     = rw.makeFilename( output_template,
@@ -1336,3 +1355,5 @@ if tsf:
         # End loop over number of neglected three-point functions
     # End loop over flavors
 # End two-state fit
+
+exit()
