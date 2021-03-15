@@ -386,13 +386,23 @@ def readMomentaList( corrDir, corr_template, config, particle,
 
     if dataFormat == "cpu":
 
-        momList = np.array ( getDatasets( corrDir, [ config ], \
-                                          corr_template, \
-                                          "ave{}".format( srcNum ), \
-                                          "msq{:0>4}".format( momSq ), \
-                                          "mvec" )[ 0, 0, 0, ... ].real, \
-                             dtype = int )
-    
+        if srcNum:
+
+            momList = np.array ( getDatasets( corrDir, [ config ], \
+                                              corr_template, \
+                                              "ave{}".format( srcNum ), \
+                                              "msq{:0>4}".format( momSq ), \
+                                              "mvec" )[ 0, 0, 0, ... ].real, \
+                                 dtype = int )
+
+        else:
+            
+            momList = np.array ( getDatasets( corrDir, [ config ], \
+                                              corr_template, \
+                                              "msq{:0>4}".format( momSq ), \
+                                              "mvec" )[ 0, 0, 0, ... ].real, \
+                                 dtype = int )
+
     else:
 
         if momSq == 0:
@@ -416,7 +426,7 @@ def readMomentaList( corrDir, corr_template, config, particle,
 
 
 def readMomentumTransferList( corrDir, corrTemplate, configList,
-                             particle, srcNum, pSq, dataFormat, 
+                             particle, srcNum, dataFormat, 
                              momentumTransferListFilename, 
                              mpi_info ):
 
@@ -505,11 +515,20 @@ def readTwopFile_zeroQ( twopDir, configList, configNum, twop_template,
 
     if dataFormat == "cpu":
 
-        twop_loc = getDatasets( twopDir, configList, \
-                                twop_template, \
-                                "ave{}".format( srcNum ), \
-                                "msq{:0>4}".format( pSq ), \
-                                "arr" )[ :, 0, 0, ... ].real
+        if srcNum:
+
+            twop_loc = getDatasets( twopDir, configList, \
+                                    twop_template, \
+                                    "ave{}".format( srcNum ), \
+                                    "msq{:0>4}".format( pSq ), \
+                                    "arr" )[ :, 0, 0, ... ].real
+
+        else:
+        
+            twop_loc = getDatasets( twopDir, configList, \
+                                    twop_template, \
+                                    "msq{:0>4}".format( pSq ), \
+                                    "arr" )[ :, 0, 0, ... ].real
         
     else:
         
@@ -557,7 +576,7 @@ def readTwopFile_zeroQ( twopDir, configList, configNum, twop_template,
 
 
 def readTwopFile( twopDir, twop_template, configList, configNum, 
-                  Q, Qsq, Qsq_start, Qsq_end, particle, srcNum, pSq,
+                  Q, Qsq, Qsq_start, Qsq_end, particle, srcNum,
                   dataFormat, mpi_info ):
 
     comm = mpi_info[ 'comm' ]
@@ -709,8 +728,6 @@ def getMellinMomentThreep( threepDir, configList, configNum, threep_tokens,
                               + threep_gyDy \
                               + threep_gzDz )
 
-        #mpi_fncs.mpiPrint(threep_loc[0],mpi_info)
-
         if particle == "kaon":
 
             threep_s_loc = threep_s_gtDt - \
@@ -740,22 +757,7 @@ def getMellinMomentThreep( threepDir, configList, configNum, threep_tokens,
             if p[ ip ] * p[ ( ip + 1 ) % 3 ] != 0:
 
                 nonzeroTerms += 1.0
-        """
-        if comm.Get_rank() == 0:
 
-            print(nonzeroTerms)
-            print(p[0],p[1])
-            print(threep_g0DxDy)
-            print(p[0]*p[1])
-
-            print(p[0],p[2])
-            print(threep_g0DxDz)
-            print(p[0]*p[2])
-
-            print(p[1],p[2])
-            print(threep_g0DyDz)
-            print(p[1]*p[2])
-        """
         threep_loc = 1.0 / nonzeroTerms * ( L / 2.0 / np.pi ) ** 2 \
                      * ( threep_g0DxDy \
                          * float( p[ 0 ] \
@@ -1208,7 +1210,7 @@ def readMesonAvgX2File_cpu( threepDir, threep_template, configList, \
     
     filename = threep_template + ".up.h5"
 
-    dsetname_pre = "/thrp/ave{}/dt{}/up/".format( srcNum, ts )
+    dsetname_pre = "/thrp/ave{}/P0/dt{}/up/".format( srcNum, ts )
 
     dsetname_post = "/msq0000/arr"
 
@@ -1224,7 +1226,7 @@ def readMesonAvgX2File_cpu( threepDir, threep_template, configList, \
 
     except lqcdjk_DataSetException as dataSetException:
 
-        dsetname_pre = "/thrp/ave{}/P0/dt{}/up/".format( srcNum, ts )
+        dsetname_pre = "/thrp/ave{}/dt{}/up/".format( srcNum, ts )
 
         threep_g0DxDy = getDatasets( threepDir, \
                                      configList, \
@@ -1306,45 +1308,68 @@ def readMesonAvgX3File_cpu( threepDir, threep_template, configList, \
     
     filename = threep_template + ".up.h5"
 
-    dsetname = "/thrp/ave{}/dt{}".format( srcNum, ts ) \
-               + "/up/der3:g0DxDyDz/msq0000/arr"
-
-    try:
-
-        threep = getDatasets( threepDir, \
-                              configList, \
-                              filename, \
-                              dsetname=[dsetname])[:,0,0,:,0].imag
-
-    except lqcdjk_DataSetException as dataSetException:
+    if srcNum:
 
         dsetname = "/thrp/ave{}/P0/dt{}".format( srcNum, ts ) \
                    + "/up/der3:g0DxDyDz/msq0000/arr"
 
-        threep = getDatasets( threepDir, \
-                              configList, \
-                              filename, \
-                              dsetname=[dsetname])[:,0,0,:,0].imag
+        try:
+
+            threep = getDatasets( threepDir, \
+                                  configList, \
+                                  filename, \
+                                  dsetname=[dsetname])[:,0,0,:,0].imag
+
+        except lqcdjk_DataSetException as dataSetException:
+
+            dsetname = "/thrp/ave{}/dt{}".format( srcNum, ts ) \
+                       + "/up/der3:g0DxDyDz/msq0000/arr"
+
+            threep = getDatasets( threepDir, \
+                                  configList, \
+                                  filename, \
+                                  dsetname=[dsetname])[:,0,0,:,0].imag
+
+    else:
+
+        threep = getDatasets( threepDir,
+                              configList,
+                              filename,
+                              "dt{}".format( ts ),
+                              "up", "der3:g0DxDyDz",
+                              "msq0000", "arr")[:,0,0,:,0].imag
+        
 
     if particle == "kaon":
             
         filename_s = threep_template + ".strange.h5"
 
-        if "P0" in dsetname:
+        if srcNum:
 
-            dsetname_s = "/thrp/ave{}/P0/dt{}".format( srcNum, ts ) \
-                         + "/strange/der3:g0DxDyDz/msq0000/arr"
+            if "P0" in dsetname:
+
+                dsetname_s = "/thrp/ave{}/P0/dt{}".format( srcNum, ts ) \
+                             + "/strange/der3:g0DxDyDz/msq0000/arr"
+
+            else:
+
+                dsetname_s = "/thrp/ave{}/dt{}".format( srcNum, ts ) \
+                             + "/strange/der3:g0DxDyDz/msq0000/arr"
+
+            threep_s = getDatasets( threepDir,
+                                    configList,
+                                    filename_s,
+                                    dsetname=[dsetname_s])[:,0,0,:,0].imag
 
         else:
 
-            dsetname_s = "/thrp/ave{}/dt{}".format( srcNum, ts ) \
-                         + "/strange/der3:g0DxDyDz/msq0000/arr"
-
-        threep_s = getDatasets( threepDir, \
-                                configList, \
-                                filename_s, \
-                                dsetname=[dsetname_s])[:,0,0,:,0].imag
-                
+            threep_s = getDatasets( threepDir,
+                                    configList,
+                                    filename_s,
+                                    "dt{}".format( ts ),
+                                    "strange", "der3:g0DxDyDz",
+                                    "msq0000", "arr")[:,0,0,:,0].imag
+            
         return np.array( [ threep, threep_s ] )
 
     elif particle == "pion":
@@ -2237,6 +2262,8 @@ def readFormFactorFile( threepDir, threep_tokens, formFactor,
 
     t0 = time()
 
+    # threep_loc[ conf, flav, Q, ratio, t ]
+
     if formFactor == "GE_GM":
 
         threep_loc = readFormFactorFile_GE_GM( threepDir, threep_tokens,
@@ -2244,6 +2271,22 @@ def readFormFactorFile( threepDir, threep_tokens, formFactor,
                                                Qsq_start, Qsq_end, QNum,
                                                ts, proj, p, particle,
                                                T, dataFormat, mpi_info )
+
+    elif formFactor == "BT10":
+
+        threep_loc = readFormFactorFile_BT10( threepDir, threep_tokens,
+                                              srcNum, QsqList,
+                                              Qsq_start, Qsq_end, QNum,
+                                              ts, p, particle, T,
+                                              dataFormat, mpi_info )
+
+    elif formFactor == "FS":
+
+        threep_loc = readFormFactorFile_FS( threepDir, threep_tokens,
+                                            srcNum, QsqList,
+                                            Qsq_start, Qsq_end, QNum,
+                                            ts, p, particle, T,
+                                            dataFormat, mpi_info )
 
     elif formFactor == "A20_B20":
 
@@ -2256,9 +2299,22 @@ def readFormFactorFile( threepDir, threep_tokens, formFactor,
 
     elif formFactor == "A30_B30":
 
-        mpi_fncs.mpiPrintError( "Error(readFormFactorFile): form factor " \
-                           + formFactor + " not supported, yet."
-                           , mpi_info )
+        threep_loc = readFormFactorFile_A30_B30( threepDir, threep_tokens,
+                                                 srcNum, QsqList,
+                                                 Qsq_start, Qsq_end,
+                                                 QNum, ts, p,
+                                                 particle, T, dataFormat,
+                                                 mpi_info )
+
+    elif formFactor == "A40_B40_C40":
+
+        threep_loc \
+            = readFormFactorFile_A40_B40_C40( threepDir, threep_tokens,
+                                              srcNum, QsqList,
+                                              Qsq_start, Qsq_end,
+                                              QNum, ts, p,
+                                              particle, T, dataFormat,
+                                              mpi_info )
 
     else:
 
@@ -2322,6 +2378,15 @@ def getFormFactorThreep_cpu( threepDir, threep_template,
                     
                 dsetname[ ic ] = template.format( srcNum,
                                                   proj,
+                                                  ts,
+                                                  flav,
+                                                  c, qsq )
+                
+            elif "der2" in c or "der3" in c:
+
+                template = "/thrp/ave{}/P0/dt{}/{}/{}/msq{:0>4}/arr"
+                    
+                dsetname[ ic ] = template.format( srcNum,
                                                   ts,
                                                   flav,
                                                   c, qsq )
@@ -2630,6 +2695,176 @@ def readFormFactorFile_GE_GM( threepDir, threep_tokens, srcNum,
     return threep_loc
 
 
+def readFormFactorFile_BT10( threepDir, threep_tokens, srcNum,
+                             Qsq, Qsq_start, Qsq_end, QNum,
+                             ts, p, particle, T,
+                             dataFormat, mpi_info, **kwargs ):
+
+    configNum_loc = mpi_info[ 'configNum_loc' ]
+
+    flavor, flavorNum = fncs.setFlavorStrings( particle, dataFormat )
+
+    currNum = 6
+
+    threep_loc = np.zeros( ( configNum_loc, flavorNum,
+                             QNum, currNum, T ),
+                           dtype=complex )
+
+    # Loop over flavor
+    for flav, iflav in zip( flavor, range( flavorNum ) ):
+
+        # Set filename template
+    
+        if dataFormat == "cpu":
+
+            template = "{0}{1}{2}{3:+}_{4:+}_{5:+}.{6}.h5"
+    
+            threep_template = template.format( threep_tokens[0],
+            ts,
+            threep_tokens[1],
+            p[0], p[1], p[2],
+            flav )
+
+            insertion_str = [ "=loc:g5sixy=",
+                              "=loc:g5sixz=",
+                              "=loc:g5siyz=",
+                              "=loc:g5si0x=",
+                              "=loc:g5si0y=",
+                              "=loc:g5si0z=" ]
+            
+            threep_loc[ :, iflav ] \
+                = getFormFactorThreep_cpu( threepDir,
+                                           threep_template,
+                                           srcNum,
+                                           insertion_str,
+                                           Qsq, Qsq_start,
+                                           Qsq_end, QNum,
+                                           ts, None,
+                                           particle,
+                                           flav, T,
+                                           mpi_info,
+                                           **kwargs )
+                
+        elif dataFormat == "gpu":
+
+            template = "{0}{1}{2}"
+            
+            threep_template = template.format( threep_tokens[0],
+                                               particle,
+                                               threep_tokens[1] )
+
+            # threep_tmp[ conf, Q, curr, t ]
+                
+            threep_loc[ :, iflav ] \
+                = readFF_BT10_gpu( threepDir,
+                                   threep_template,
+                                   QNum, ts,
+                                   flav, T,
+                                   mpi_info,
+                                   **kwargs )
+
+    # End loop over flavor
+
+    # Get the projector and insertion combinations we want
+    # threep_loc[ conf, flav, Q, ratio, t ]
+
+    # ratio   Insertion
+    # 0       -is_xy
+    # 1       -is_xz
+    # 2       -is_yz
+    # 3       s_tx
+    # 4       s_ty
+    # 5       s_tz
+
+    threep_loc = np.stack( [ threep_loc[ :, :, :, 0, : ].imag,
+                              threep_loc[ :, :, :, 1, : ].imag,
+                              threep_loc[ :, :, :, 2, : ].imag,
+                              threep_loc[ :, :, :, 3, : ].real,
+                              threep_loc[ :, :, :, 4, : ].real,
+                              threep_loc[ :, :, :, 5, : ].real ],
+                            axis=3 )
+
+    return threep_loc
+
+
+def readFormFactorFile_FS( threepDir, threep_tokens, srcNum,
+                           Qsq, Qsq_start, Qsq_end, QNum,
+                           ts, p, particle, T,
+                           dataFormat, mpi_info, **kwargs ):
+
+    configNum_loc = mpi_info[ 'configNum_loc' ]
+
+    flavor, flavorNum = fncs.setFlavorStrings( particle, dataFormat )
+
+    currNum = 1
+
+    threep_loc = np.zeros( ( configNum_loc, flavorNum,
+                             QNum, currNum, T ),
+                           dtype=complex )
+
+    # Loop over flavor
+    for flav, iflav in zip( flavor, range( flavorNum ) ):
+
+        # Set filename template
+    
+        if dataFormat == "cpu":
+
+            template = "{0}{1}{2}{3:+}_{4:+}_{5:+}.{6}.h5"
+    
+            threep_template = template.format( threep_tokens[0],
+                                               ts,
+                                               threep_tokens[1],
+                                               p[0], p[1], p[2],
+                                               flav )
+
+            insertion_str = [ "=loc:1=" ]
+
+            threep_loc[ :, iflav ] \
+                = getFormFactorThreep_cpu( threepDir,
+                                           threep_template,
+                                           srcNum,
+                                           insertion_str,
+                                           Qsq, Qsq_start,
+                                           Qsq_end, QNum,
+                                           ts, None,
+                                           particle,
+                                           flav, T,
+                                           mpi_info,
+                                           **kwargs )
+                
+        elif dataFormat == "gpu":
+
+            template = "{0}{1}{2}"
+            
+            threep_template = template.format( threep_tokens[0],
+                                               particle,
+                                               threep_tokens[1] )
+
+            # threep_tmp[ conf, Q, curr, t ]
+                
+            threep_loc[ :, iflav ] \
+                = readFF_FS_gpu( threepDir,
+                                 threep_template,
+                                 QNum, ts,
+                                 flav, T,
+                                 mpi_info,
+                                 **kwargs )
+
+    # End loop over flavor
+
+    # Get the projector and insertion combinations we want
+    # threep_loc[ conf, flav, Q, ratio, t ]
+
+    # ratio   Insertion
+    # 0       1
+        
+    threep_loc = np.asarray( threep_loc.real,
+                             dtype=float,
+                             order='c' )
+
+    return threep_loc
+
+
 def readFF_A20_B20_gpu( threepDir, threep_template,
                         QNum, tsink, flav, dataFormat, T, 
                         mpi_info, **kwargs ):
@@ -2714,6 +2949,73 @@ def readFF_A20_B20_gpu( threepDir, threep_template,
     return threep
 
 
+def readFF_BT10_gpu( threepDir, threep_template,
+                     QNum, tsink, flav, T, 
+                     mpi_info, **kwargs ):
+
+    configList = mpi_info[ 'configList_loc' ]
+    configNum = len( configList )
+
+    # threep_tmp[ conf, t, Q, sig, re/im ]
+
+    threep = np.zeros( ( configNum, T, QNum, 6, 2 ) )
+
+    dset_keywords = [ "tsink_{}".format( tsink ),
+                      "ultra_local",
+                      flav,
+                      "threep" ]
+        
+    # Get indices 10-15 of dataset which are s_xy, s_xz, s_yz,
+    # s_tx, s_ty, s_tz
+
+    threep[ :, :tsink+1, :, :, : ] \
+        = getDatasets( threepDir, configList,
+                       threep_template,
+                       *dset_keywords )[ :, 0, 0, :, :QNum, 10:16, : ]
+        
+    # threep[ conf, t, Q, curr ]
+
+    threep = threep[ ..., 0 ] + 1j * threep[ ..., 1 ]
+
+    # threep[ conf, t, Q, curr ] -> threep[ conf, Q, curr, t ]
+    threep = np.moveaxis( threep, 1, 3 )
+
+    return threep
+
+
+def readFF_FS_gpu( threepDir, threep_template,
+                   QNum, tsink, flav, T, 
+                   mpi_info, **kwargs ):
+
+    configList = mpi_info[ 'configList_loc' ]
+    configNum = len( configList )
+
+    # threep_tmp[ conf, t, Q, 1, re/im ]
+
+    threep = np.zeros( ( configNum, T, QNum, 1, 2 ) )
+
+    dset_keywords = [ "tsink_{}".format( tsink ),
+                      "ultra_local",
+                      flav,
+                      "threep" ]
+        
+    # Get index 0 of dataset which is 1
+
+    threep[ :, :tsink+1, :, 0, : ] \
+        = getDatasets( threepDir, configList,
+                       threep_template,
+                       *dset_keywords )[ :, 0, 0, :, :QNum, 0, : ]
+        
+    # threep[ conf, t, Q, curr ]
+
+    threep = threep[ ..., 0 ] + 1j * threep[ ..., 1 ]
+
+    # threep[ conf, t, Q, curr ] -> threep[ conf, Q, curr, t ]
+    threep = np.moveaxis( threep, 1, 3 )
+
+    return threep
+
+
 def readFormFactorFile_A20_B20( threepDir, threep_tokens, srcNum,
                                 Qsq, Qsq_start, Qsq_end, QNum,
                                 ts, p, particle, T,
@@ -2762,7 +3064,7 @@ def readFormFactorFile_A20_B20( threepDir, threep_tokens, srcNum,
                               "=der:gzDy:sym=",
                               "=der:gzDz:sym=" ]
             
-            threep_loc[ :,iflav ] \
+            threep_loc[ :, iflav ] \
                 = getFormFactorThreep_cpu( threepDir,
                                            threep_template,
                                            srcNum,
@@ -2819,6 +3121,7 @@ def readFormFactorFile_A20_B20( threepDir, threep_tokens, srcNum,
             + threep_loc[ ..., 7, : ] \
             + threep_loc[ ..., 9, : ] 
 
+
     threep_loc = np.stack( [ ( threep_loc[ ..., 0, : ]
                              - 0.25 * trace ).real,
                              threep_loc[ ..., 1, : ].imag,
@@ -2828,6 +3131,144 @@ def readFormFactorFile_A20_B20( threepDir, threep_tokens, srcNum,
                              threep_loc[ ..., 6, : ].real,
                              threep_loc[ ..., 8, : ].real ],
                            axis=3 ).astype( float )
+
+    return threep_loc
+
+
+def readFormFactorFile_A30_B30( threepDir, threep_tokens, srcNum,
+                                Qsq, Qsq_start, Qsq_end, QNum,
+                                ts, p, particle, T,
+                                dataFormat, mpi_info, **kwargs ):
+
+    if particle == "nucleon":
+
+        errorMessage = "Error (readWrite.readFormFactorFile_A30_B30): " \
+                       + "functions does not support nucleon"
+
+        mpi_fncs.mpiError( errorMessage, mpi_info )
+
+    # End nucleon
+
+    if dataFormat != "cpu":
+                
+        errorMessage = "Error (readWrite.readFormFactorFile_A30_B30): " \
+                       + "functions does not support {} data format"
+
+        mpi_fncs.mpiError( errorMessage.format( dataFormat ),
+                           mpi_info ) 
+
+    # End not cpu format
+
+    configNum_loc = mpi_info[ 'configNum_loc' ]
+
+    flavor, flavorNum = fncs.setFlavorStrings( particle, dataFormat )
+
+    # threep_loc[ flav, conf, Q, curr, t ]
+
+    threep_loc = np.zeros( ( configNum_loc, flavorNum,
+                             QNum, 3, T ),
+                           dtype=complex )
+
+    # Loop over flavor
+    for flav, iflav in zip( flavor, range( flavorNum ) ):
+
+        template = "{0}{1}{2}{3:+}_{4:+}_{5:+}.{6}.h5"
+    
+        threep_template = template.format( threep_tokens[0],
+                                           ts,
+                                           threep_tokens[1],
+                                           p[0], p[1], p[2],
+                                           flav )
+            
+        insertion_str = [ "der2:g0DxDy",
+                          "der2:g0DxDz",
+                          "der2:g0DyDz" ]
+            
+        threep_loc[ :,iflav ] \
+            = getFormFactorThreep_cpu( threepDir,
+                                       threep_template,
+                                       srcNum,
+                                       insertion_str,
+                                       Qsq, Qsq_start,
+                                       Qsq_end, QNum,
+                                       ts, None,
+                                       particle,
+                                       flav, T,
+                                       mpi_info,
+                                       **kwargs )
+                
+    # End loop over flavor
+
+    threep_loc = np.array( threep_loc.real,
+                           dtype=float, order='c' )
+
+    return threep_loc
+
+
+def readFormFactorFile_A40_B40_C40( threepDir, threep_tokens, srcNum,
+                                    Qsq, Qsq_start, Qsq_end, QNum,
+                                    ts, p, particle, T,
+                                    dataFormat, mpi_info, **kwargs ):
+    
+    if particle == "nucleon":
+
+        errorMessage = "Error (readWrite.readFormFactorFile_A40_B40_C40): " \
+                       + "functions does not support nucleon"
+
+        mpi_fncs.mpiError( errorMessage, mpi_info )
+
+    # End nucleon
+
+    if dataFormat != "cpu":
+                
+        errorMessage = "Error (readWrite.readFormFactorFile_A40_B40_C40): " \
+                       + "functions does not support {} data format"
+
+        mpi_fncs.mpiError( errorMessage.format( dataFormat ),
+                           mpi_info ) 
+
+    # End not cpu format
+
+    configNum_loc = mpi_info[ 'configNum_loc' ]
+
+    flavor, flavorNum = fncs.setFlavorStrings( particle, dataFormat )
+
+    # threep_loc[ flav, conf, Q, curr, t ]
+
+    threep_loc = np.zeros( ( configNum_loc, flavorNum,
+                             QNum, 1, T ),
+                           dtype=complex )
+
+    # Loop over flavor
+    for flav, iflav in zip( flavor, range( flavorNum ) ):
+
+        template = "{0}{1}{2}{3:+}_{4:+}_{5:+}.{6}.h5"
+    
+        threep_template = template.format( threep_tokens[0],
+                                           ts,
+                                           threep_tokens[1],
+                                           p[0], p[1], p[2],
+                                           flav )
+            
+        insertion_str = [ "der3:g0DxDyDz" ]
+            
+        threep_loc[ :,iflav ] \
+            = getFormFactorThreep_cpu( threepDir,
+                                       threep_template,
+                                       srcNum,
+                                       insertion_str,
+                                       Qsq, Qsq_start,
+                                       Qsq_end, QNum,
+                                       ts, None,
+                                       particle,
+                                       flav, T,
+                                       mpi_info,
+                                       **kwargs )
+                
+    # End loop over flavor
+
+    threep_loc = np.array( threep_loc.imag,
+                           dtype=float, order='c' )
 
     return threep_loc
 

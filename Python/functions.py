@@ -25,7 +25,8 @@ def GEList():
 
 def formFactorList():
 
-    return [ "GE_GM", "A20_B20" ]
+    return [ "GE_GM", "BT10", "FS",
+             "A20_B20", "A30_B30", "A40_B40_C40" ]
 
 
 def zipXandIndex( x ):
@@ -610,9 +611,25 @@ def setRatioNumber( formFactor, particle, mpi_info ):
 
             return 4
 
+    elif formFactor == "BT10":
+
+        return 6
+
+    elif formFactor == "FS":
+
+        return 1
+
     elif formFactor == "A20_B20":
 
         return 7
+        
+    elif formFactor == "A30_B30":
+
+        return 3
+        
+    elif formFactor == "A40_B40_C40":
+
+        return 1
         
     else:
 

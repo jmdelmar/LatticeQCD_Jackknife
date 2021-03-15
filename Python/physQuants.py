@@ -73,7 +73,9 @@ def calcQsq( p_fin, q_list, mEff, L, mpi_info ):
             mpi_fncs.mpiPrintError( error.format( ib ),
                                     mpi_info )
 
-    Qsq_where = Qsq_where[ 0 ]
+    if mpi_info[ 'binNum_loc' ]:
+
+        Qsq_where = Qsq_where[ 0 ]
 
     return Qsq_list, QsqNum, Qsq_where
 
@@ -111,9 +113,33 @@ def kineFactor( ratio_err, formFactor, particle, flavor,
                                        mEff, p_fin, Q, L,
                                        mpi_info )
 
+    elif formFactor == "BT10":
+
+        kineFactor = kineFactor_BT10( ratio_err, particle, flavor,
+                                      mEff, p_fin, Q, L,
+                                      mpi_info )
+
+    elif formFactor == "FS":
+
+        kineFactor = kineFactor_FS( ratio_err, particle, flavor,
+                                      mEff, p_fin, Q, L,
+                                      mpi_info )
+
     elif formFactor == "A20_B20":
 
         kineFactor = kineFactor_A20_B20( ratio_err, particle, flavor,
+                                         mEff, p_fin, Q, L,
+                                         mpi_info )
+
+    elif formFactor == "A30_B30":
+
+        kineFactor = kineFactor_A30_B30( ratio_err, particle, flavor,
+                                         mEff, p_fin, Q, L,
+                                         mpi_info )
+
+    elif formFactor == "A40_B40_C40":
+
+        kineFactor = kineFactor_A40_B40_C40( ratio_err, particle, flavor,
                                          mEff, p_fin, Q, L,
                                          mpi_info )
 
@@ -146,7 +172,7 @@ def kineFactor_GE_GM( ratio_err, particle, flavor, mEff, p_fin, Q, L,
 
         mpi_fncs.mpiPrintError( error_template.format( finalMomentaNum,
                                                   p_fin.shape[ 0 ] ),
-                           mpi_info )
+                                mpi_info )
 
     if Q.shape[ 0 ] != QNum:
 
@@ -158,7 +184,7 @@ def kineFactor_GE_GM( ratio_err, particle, flavor, mEff, p_fin, Q, L,
 
         mpi_fncs.mpiPrintError( error_template.format( QNum,
                                                   Q.shape[ 0 ] ),
-                           mpi_info )
+                                mpi_info )
 
     # kineFactor[ b, p, Q, ratio, [GE,GM] ]
 
@@ -191,7 +217,7 @@ def kineFactor_GE_GM( ratio_err, particle, flavor, mEff, p_fin, Q, L,
                             [ 0, 2.0 * np.pi / L * q[ 0 ] ] ] \
                         / np.repeat( ratio_err[ ip, iq ] ** 2,
                                      2).reshape( ratioNum, 2 ) \
-                        / KK_nucleon( mEff[ b ], Qsq, L )
+                        / KK_nucleon( mEff[ b ], 0, Qsq, L )
                     
                 else: # particle == "meson"
 
@@ -220,8 +246,196 @@ def kineFactor_GE_GM( ratio_err, particle, flavor, mEff, p_fin, Q, L,
                         / np.repeat( ratio_err[ ip, iq ] ** 2,
                                      2).reshape( ratioNum, 2 ) \
                         / KK_meson( mEff[ b ], pSq_ini, pSq_fin, L )
-                    
+                                            
                 # End if meson                                   
+            # End loop over Q
+        # End loop over p_fin
+    # End loop over bins
+
+    return kineFactor
+
+
+def kineFactor_BT10( ratio_err, particle, flavor, mEff, p_fin, Q, L,
+                     mpi_info ):
+
+    # ratio_err[ p, Q, r ]
+    # "particle"
+    # "flavor"
+    # mEff[ b ]
+    # p_fin[ p, pi ]
+    # momList[ Q, qi ]
+    # L
+
+    finalMomentaNum = ratio_err.shape[ 0 ]
+    QNum = ratio_err.shape[ 1 ]
+    ratioNum = ratio_err.shape[ -1 ]
+    binNum = len( mEff )
+
+    if particle == "nucleon":
+        
+        errorMessage = "Error (physQuants.kineFactor_A20_B20): " \
+                       + "function not supported for nucleon"
+        
+        mpi_fncs.mpiPrintError( errorMessage,
+                                mpi_info )
+
+    if p_fin.shape[ 0 ] != finalMomentaNum:
+
+        error_template = "Error (kineFactor_A20_B20): " \
+                         + "final momentum dimension " \
+                         + "of ratio errors {} and " \
+                         + "number of final momenta {} " \
+                         + "do not match. "
+
+        mpi_fncs.mpiPrintError( error_template.format( finalMomentaNum,
+                                                       p_fin.shape[ 0 ] ),
+                                mpi_info )
+        
+    if Q.shape[ 0 ] != QNum:
+
+        error_template = "Error (kineFactor_A20_B20): " \
+                         + "momentum transfer dimension " \
+                         + "of ratio errors {} and " \
+                         + "number of momentum transfer {} " \
+                         + "do not match. "
+
+        mpi_fncs.mpiPrintError( error_template.format( QNum,
+                                                       Q.shape[ 0 ] ),
+                                mpi_info )
+
+    # kineFactor[ b, p, Q, ratio, [BT10,0] ]
+
+    kineFactor = np.zeros( ( binNum, finalMomentaNum,
+                             QNum, ratioNum, 2 ) )
+
+    # Loop over bins
+    for b in range( binNum ):
+        # Loop over p_fin
+        for p, ip in fncs.zipXandIndex( p_fin ):
+            
+            pSq_fin = np.dot( p, p )
+
+            # Loop over Q
+            for q, iq in fncs.zipXandIndex( Q ):
+
+                p_ini = p - q
+                    
+                qSq = np.dot( q, q )
+                pSq_ini = np.dot( p_ini, p_ini )
+
+                E_ini = energy( mEff[ b ], pSq_ini, L )
+                E_fin = energy( mEff[ b ], pSq_fin, L )
+
+                kineFactor[ b, ip, iq ] \
+                    = [ [ ( 2. * np.pi / L ) ** 2
+                          * ( p_ini[ 0 ] * p[ 1 ]
+                            - p_ini[ 1 ] * p[ 0 ] )
+                          / mEff[ b ],
+                          0 ],
+                        [ ( 2. * np.pi / L ) ** 2
+                          * ( p_ini[ 0 ] * p[ 2 ]
+                            - p_ini[ 2 ] * p[ 0 ] )
+                          / mEff[ b ],
+                          0 ],
+                        [ ( 2. * np.pi / L ) ** 2
+                          * ( p_ini[ 1 ] * p[ 2 ]
+                            - p_ini[ 2 ] * p[ 1 ] )
+                          / mEff[ b ],
+                          0 ],
+                        [ 2. * np.pi / L
+                          * ( E_fin * p_ini[ 0 ] - E_ini * p[ 0 ] )
+                          / mEff[ b ],
+                          0 ],
+                        [ 2. * np.pi / L
+                          * ( E_fin * p_ini[ 1 ] - E_ini * p[ 1 ] )
+                          / mEff[ b ],
+                          0 ],
+                        [ 2. * np.pi / L
+                          * ( E_fin * p_ini[ 2 ] - E_ini * p[ 2 ] )
+                          / mEff[ b ],
+                          0 ] ] \
+                    / np.repeat( ratio_err[ ip, iq ] ** 2,
+                                 2).reshape( ratioNum, 2 ) \
+                    / KK_meson( mEff[ b ], pSq_ini, pSq_fin, L )
+                
+            # End loop over Q
+        # End loop over p_fin
+    # End loop over bins
+
+    return kineFactor
+
+
+def kineFactor_FS( ratio_err, particle, flavor, mEff, p_fin, Q, L,
+                   mpi_info ):
+
+    # ratio_err[ p, Q, r ]
+    # "particle"
+    # "flavor"
+    # mEff[ b ]
+    # p_fin[ p, pi ]
+    # momList[ Q, qi ]
+    # L
+
+    finalMomentaNum = ratio_err.shape[ 0 ]
+    QNum = ratio_err.shape[ 1 ]
+    ratioNum = ratio_err.shape[ -1 ]
+    binNum = len( mEff )
+
+    if particle == "nucleon":
+        
+        errorMessage = "Error (physQuants.kineFactor_A20_B20): " \
+                       + "function not supported for nucleon"
+        
+        mpi_fncs.mpiPrintError( errorMessage,
+                                mpi_info )
+
+    if p_fin.shape[ 0 ] != finalMomentaNum:
+
+        error_template = "Error (kineFactor_A20_B20): " \
+                         + "final momentum dimension " \
+                         + "of ratio errors {} and " \
+                         + "number of final momenta {} " \
+                         + "do not match. "
+
+        mpi_fncs.mpiPrintError( error_template.format( finalMomentaNum,
+                                                       p_fin.shape[ 0 ] ),
+                                mpi_info )
+        
+    if Q.shape[ 0 ] != QNum:
+
+        error_template = "Error (kineFactor_A20_B20): " \
+                         + "momentum transfer dimension " \
+                         + "of ratio errors {} and " \
+                         + "number of momentum transfer {} " \
+                         + "do not match. "
+
+        mpi_fncs.mpiPrintError( error_template.format( QNum,
+                                                       Q.shape[ 0 ] ),
+                                mpi_info )
+
+    # kineFactor[ b, p, Q, ratio, [FS,0] ]
+
+    kineFactor = np.zeros( ( binNum, finalMomentaNum,
+                             QNum, ratioNum, 2 ) )
+
+    # Loop over bins
+    for b in range( binNum ):
+        # Loop over p_fin
+        for p, ip in fncs.zipXandIndex( p_fin ):
+            
+            pSq_fin = np.dot( p, p )
+
+            # Loop over Q
+            for q, iq in fncs.zipXandIndex( Q ):
+
+                pSq_ini = np.dot( p - q, p - q )
+
+                kineFactor[ b, ip, iq ] \
+                    = [ 1., 0. ] \
+                    / np.repeat( ratio_err[ ip, iq ] ** 2,
+                                 2).reshape( ratioNum, 2 ) \
+                    / KK_meson( mEff[ b ], pSq_ini, pSq_fin, L )
+                
             # End loop over Q
         # End loop over p_fin
     # End loop over bins
@@ -286,6 +500,8 @@ def kineFactor_A20_B20( ratio_err, particle, flavor, mEff, p_fin, Q, L,
     for b in range( binNum ):
         # Loop over p_fin
         for p, ip in fncs.zipXandIndex( p_fin ):
+            
+            pSq_fin = np.dot( p, p )
 
             # Loop over Q
             for q, iq in fncs.zipXandIndex( Q ):
@@ -293,73 +509,46 @@ def kineFactor_A20_B20( ratio_err, particle, flavor, mEff, p_fin, Q, L,
                 p_ini = p - q
                     
                 qSq = np.dot( q, q )
-
                 pSq_ini = np.dot( p_ini, p_ini )
-                pSq_fin = np.dot( p, p )
 
-                # CJL:HERE
+                E_ini = energy( mEff[ b ], pSq_ini, L )
+                E_fin = energy( mEff[ b ], pSq_fin, L )
+
+                #CJL:HERE
 
                 kineFactor[ b, ip, iq ] \
                     = [ [ 1./4. * ( mEff[ b ] ** 2
-                                    - 2 * ( energy( mEff[ b ],
-                                                    pSq_fin, L )
-                                            + energy( mEff[ b ],
-                                                      pSq_ini, L ) ) ** 2
-                                    + energy( mEff[ b ],
-                                              pSq_fin, L )
-                                    * energy( mEff[ b ],
-                                              pSq_ini, L )
-                                    - p[ 0 ] * p_ini[ 0 ]
-                                    - p[ 1 ] * p_ini[ 1 ]
-                                    - p[ 2 ] * p_ini[ 2 ] ),
-                          mEff[ b ] ** 2
-                          - 2 * ( energy( mEff[ b ],
-                                          pSq_fin, L )
-                                  - energy( mEff[ b ],
-                                            pSq_ini, L ) ) ** 2
-                          - energy( mEff[ b ],
-                                    pSq_fin, L )
-                          * energy( mEff[ b ],
-                                    pSq_ini, L )
-                          + p[ 0 ] * p_ini[ 0 ]
-                          + p[ 1 ] * p_ini[ 1 ]
-                          + p[ 2 ] * p_ini[ 2 ] ],
-                        [ 1./2. * ( energy( mEff[ b ],
-                                            pSq_fin, L )
-                                    + energy( mEff[ b ],
-                                              pSq_ini, L ) )
+                                    - 2. * ( E_fin + E_ini ) ** 2
+                                    + E_fin * E_ini
+                                    - ( 2. * np.pi / L ) ** 2
+                                    * ( p[ 0 ] * p_ini[ 0 ]
+                                        + p[ 1 ] * p_ini[ 1 ]
+                                        + p[ 2 ] * p_ini[ 2 ] ) ),
+                          -( mEff[ b ] ** 2
+                             - 2 * ( E_fin - E_ini ) ** 2
+                             - E_fin * E_ini
+                             + ( 2. * np.pi / L ) ** 2
+                             * ( p[ 0 ] * p_ini[ 0 ]
+                                 + p[ 1 ] * p_ini[ 1 ]
+                                 + p[ 2 ] * p_ini[ 2 ] ) ) ],
+                        [ 1./2. * ( E_fin + E_ini )
                           * 2. * np.pi / L
                           * ( p[ 0 ] + p_ini[ 0 ] ),
-                          2. * ( energy( mEff[ b ],
-                                         pSq_fin, L )
-                                 - energy( mEff[ b ],
-                                           pSq_ini, L) )
-                          * 2. * np.pi / L
-                          * ( p[ 0 ] - p_ini[ 0 ] ) ],
-                        [ 1./2. * ( energy( mEff[ b ],
-                                            pSq_fin, L )
-                                    + energy( mEff[ b ],
-                                              pSq_ini, L ) )
+                          2. * ( E_fin - E_ini )
+                             * 2. * np.pi / L
+                             * ( p[ 0 ] - p_ini[ 0 ] ) ],
+                        [ 1./2. * ( E_fin + E_ini )
                           * 2. * np.pi / L
                           * ( p[ 1 ] + p_ini[ 1 ] ),
-                          2. * ( energy( mEff[ b ],
-                                         pSq_fin, L )
-                                 - energy( mEff[ b ],
-                                           pSq_ini, L) )
+                          2. * ( E_fin - E_ini )
                           * 2. * np.pi / L
                           * ( p[ 1 ] - p_ini[ 1 ] ) ],
-                        [ 1./2. * ( energy( mEff[ b ],
-                                            pSq_fin, L )
-                                    + energy( mEff[ b ],
-                                              pSq_ini, L ) )
+                        [ 1./2. * ( E_fin + E_ini )
                           * 2. * np.pi / L
                           * ( p[ 2 ] + p_ini[ 2 ] ),
-                          2. * ( energy( mEff[ b ],
-                                         pSq_fin, L )
-                                 - energy( mEff[ b ],
-                                           pSq_ini, L) )
+                          2. * ( E_fin - E_ini )
                           * 2. * np.pi / L
-                          * ( p[ 2 ] - p_ini[ 2 ] ) ],
+                             * ( p[ 2 ] - p_ini[ 2 ] ) ],
                         [ 1./2. * ( 2. * np.pi / L ) ** 2
                           * ( p[ 0 ] + p_ini[ 0 ] )
                           * ( p[ 1 ] + p_ini[ 1 ] ),
@@ -389,8 +578,255 @@ def kineFactor_A20_B20( ratio_err, particle, flavor, mEff, p_fin, Q, L,
     return kineFactor
 
 
+def kineFactor_A30_B30( ratio_err, particle, flavor, mEff, p_fin, Q, L,
+                        mpi_info ):
+
+    # ratio_err[ p, Q, r ]
+    # "particle"
+    # "flavor"
+    # mEff[ b ]
+    # p_fin[ p, pi ]
+    # momList[ Q, qi ]
+    # L
+
+    finalMomentaNum = ratio_err.shape[ 0 ]
+    QNum = ratio_err.shape[ 1 ]
+    ratioNum = ratio_err.shape[ -1 ]
+    binNum = len( mEff )
+
+    if particle == "nucleon":
+        
+        errorMessage = "Error (physQuants.kineFactor_A30_B30): " \
+                       + "function not supported for nucleon"
+        
+        mpi_fncs.mpiPrintError( errorMessage,
+                                mpi_info )
+
+    if p_fin.shape[ 0 ] != finalMomentaNum:
+
+        error_template = "Error (kineFactor_A30_B30): " \
+                         + "final momentum dimension " \
+                         + "of ratio errors {} and " \
+                         + "number of final momenta {} " \
+                         + "do not match. "
+
+        mpi_fncs.mpiPrintError( error_template.format( finalMomentaNum,
+                                                       p_fin.shape[ 0 ] ),
+                                mpi_info )
+        
+    if Q.shape[ 0 ] != QNum:
+
+        error_template = "Error (kineFactor_A30_B30): " \
+                         + "momentum transfer dimension " \
+                         + "of ratio errors {} and " \
+                         + "number of momentum transfer {} " \
+                         + "do not match. "
+
+        mpi_fncs.mpiPrintError( error_template.format( QNum,
+                                                       Q.shape[ 0 ] ),
+                                mpi_info )
+
+    # kineFactor[ b, p, Q, ratio, [A30,B30] ]
+
+    kineFactor = np.zeros( ( binNum, finalMomentaNum,
+                             QNum, ratioNum, 2 ) )
+
+    # Loop over bins
+    for b in range( binNum ):
+        # Loop over p_fin
+        for p, ip in fncs.zipXandIndex( p_fin ):
+
+            # Loop over Q
+            for q, iq in fncs.zipXandIndex( Q ):
+
+                p_ini = p - q
+                    
+                qSq = np.dot( q, q )
+
+                pSq_ini = np.dot( p_ini, p_ini )
+                pSq_fin = np.dot( p, p )
+
+                E_ini = energy( mEff[ b ], pSq_ini, L )
+                E_fin = energy( mEff[ b ], pSq_fin, L )
+
+                kineFactor[ b, ip, iq ] \
+                    = [ [ 1./4. * ( E_fin + E_ini )
+                          * ( 2. * np.pi / L ) ** 2
+                          * ( p[ 0 ] + p_ini[ 0 ] )
+                          * ( p[ 1 ] + p_ini[ 1 ] ),
+                          1./3. * ( E_fin + E_ini )
+                          * ( 2. * np.pi / L ) ** 2
+                          * ( p[ 0 ] * p_ini[ 1 ] + p[ 1 ] * p_ini[ 0 ] )
+                          + ( 1./3. * E_ini - E_fin )
+                          * ( 2. * np.pi / L ) ** 2
+                          * p[ 0 ] * p[ 1 ]
+                          + ( 1./3. * E_fin - E_ini )
+                          * ( 2. * np.pi / L ) ** 2
+                          * p_ini[ 0 ] * p_ini[ 1 ] ],
+                        [ 1./4. * ( E_fin + E_ini )
+                          * ( 2. * np.pi / L ) ** 2
+                          * ( p[ 0 ] + p_ini[ 0 ] )
+                          * ( p[ 2 ] + p_ini[ 2 ] ),
+                          1./3. * ( E_fin + E_ini )
+                          * ( 2. * np.pi / L ) ** 2
+                          * ( p[ 0 ] * p_ini[ 2 ] + p[ 2 ] * p_ini[ 0 ] )
+                          + ( 1./3. * E_ini - E_fin )
+                          * ( 2. * np.pi / L ) ** 2
+                          * p[ 0 ] * p[ 2 ]
+                          + ( 1./3. * E_fin - E_ini )
+                          * ( 2. * np.pi / L ) ** 2
+                          * p_ini[ 0 ] * p_ini[ 2 ] ],
+                        [ 1./4. * ( E_fin + E_ini )
+                          * ( 2. * np.pi / L ) ** 2
+                          * ( p[ 1 ] + p_ini[ 1 ] )
+                          * ( p[ 2 ] + p_ini[ 2 ] ),
+                          1./3. * ( E_fin + E_ini )
+                          * ( 2. * np.pi / L ) ** 2
+                          * ( p[ 1 ] * p_ini[ 2 ] + p[ 2 ] * p_ini[ 1 ] )
+                          + ( 1./3. * E_ini - E_fin )
+                          * ( 2. * np.pi / L ) ** 2
+                          * p[ 1 ] * p[ 2 ]
+                          + ( 1./3. * E_fin - E_ini )
+                          * ( 2. * np.pi / L ) ** 2
+                          * p_ini[ 1 ] * p_ini[ 2 ] ] ] \
+                    / np.repeat( ratio_err[ ip, iq ] ** 2,
+                                 2).reshape( ratioNum, 2 ) \
+                    / KK_meson( mEff[ b ], pSq_ini, pSq_fin, L )
+            
+            # End loop over Q
+        # End loop over p_fin
+    # End loop over bins
+
+    return kineFactor
+
+
+def kineFactor_A40_B40_C40( ratio_err, particle, flavor,
+                            mEff, p_fin, Q, L,
+                            mpi_info ):
+
+    # ratio_err[ p, Q, r ]
+    # "particle"
+    # "flavor"
+    # mEff[ b ]
+    # p_fin[ p, pi ]
+    # momList[ Q, qi ]
+    # L
+
+    finalMomentaNum = ratio_err.shape[ 0 ]
+    QNum = ratio_err.shape[ 1 ]
+    ratioNum = ratio_err.shape[ -1 ]
+    binNum = len( mEff )
+
+    if particle == "nucleon":
+        
+        errorMessage = "Error (physQuants.kineFactor_A40_B40_C40): " \
+                       + "function not supported for nucleon"
+        
+        mpi_fncs.mpiPrintError( errorMessage,
+                                mpi_info )
+
+    if p_fin.shape[ 0 ] != finalMomentaNum:
+
+        error_template = "Error (kineFactor_A40_B40_C40): " \
+                         + "final momentum dimension " \
+                         + "of ratio errors {} and " \
+                         + "number of final momenta {} " \
+                         + "do not match. "
+
+        mpi_fncs.mpiPrintError( error_template.format( finalMomentaNum,
+                                                       p_fin.shape[ 0 ] ),
+                                mpi_info )
+        
+    if Q.shape[ 0 ] != QNum:
+
+        error_template = "Error (kineFactor_A40_B40_C40): " \
+                         + "momentum transfer dimension " \
+                         + "of ratio errors {} and " \
+                         + "number of momentum transfer {} " \
+                         + "do not match. "
+
+        mpi_fncs.mpiPrintError( error_template.format( QNum,
+                                                       Q.shape[ 0 ] ),
+                                mpi_info )
+
+    # kineFactor[ b, p, Q, ratio, [ A40, B40, C40 ] ]
+
+    kineFactor = np.zeros( ( binNum, finalMomentaNum,
+                             QNum, ratioNum, 3 ) )
+
+    # Loop over bins
+    for b in range( binNum ):
+        # Loop over p_fin
+        for p, ip in fncs.zipXandIndex( p_fin ):
+
+            # Loop over Q
+            for q, iq in fncs.zipXandIndex( Q ):
+
+                p_ini = p - q
+                    
+                qSq = np.dot( q, q )
+
+                pSq_ini = np.dot( p_ini, p_ini )
+                pSq_fin = np.dot( p, p )
+
+                E_ini = energy( mEff[ b ], pSq_ini, L )
+                E_fin = energy( mEff[ b ], pSq_fin, L )
+
+                kineFactor[ b, ip, iq ] \
+                    = [ [ -1./8. * ( E_fin + E_ini )
+                          * ( 2. * np.pi / L ) ** 3
+                          * ( p[ 0 ] + p_ini[ 0 ] )
+                          * ( p[ 1 ] + p_ini[ 1 ] )
+                          * ( p[ 2 ] + p_ini[ 2 ] ),
+                          E_fin * ( 2. * np.pi / L ) ** 3
+                          * ( 1./6. * p[ 2 ]
+                              * p_ini[ 0 ] * p_ini[ 2 ]
+                              + 1./6. * p[ 1 ]
+                              * p_ini[ 0 ] * p_ini[ 2 ]
+                              + 1./6. * p[ 0 ]
+                              * p_ini[ 1 ] * p_ini[ 2 ]
+                              - 1./2. * p[ 0 ]
+                              * p[ 1 ] * p[ 2 ] )
+                          + E_ini * ( 2. * np.pi / L ) ** 3
+                          * ( 1./6. * p[ 1 ] * p[ 2 ]
+                                    * p_ini[ 0 ]
+                                    + 1./6. * p[ 0 ] * p[ 2 ]
+                                    * p_ini[ 1 ]
+                                    + 1./6. * p[ 0 ] * p[ 1 ]
+                                    * p_ini[ 2 ]
+                                    - 1./2. * p_ini[ 0 ]
+                                    * p_ini[ 1 ] * p_ini[ 2 ] ),
+                          ( 2. * np.pi / L ) ** 3
+                          * ( ( 1./2. * E_ini - E_fin )
+                              * p[ 0 ] * p[ 1 ] * p[ 2 ]
+                              + ( E_ini - 1./2. * E_fin )
+                              * p_ini[ 0 ] * p_ini[ 1 ] * p_ini[ 2 ]
+                              + E_fin * ( 1./2. * p[ 1 ]
+                                          * p[ 2 ] * p_ini[ 0 ]
+                                          + 1./2. * p[ 0 ]
+                                          * p[ 2 ] * p_ini[ 1 ]
+                                          + 1./2. * p[ 0 ]
+                                          * p[ 1 ] * p_ini[ 2 ] )
+                              - E_ini * ( 1./2. * p[ 2 ]
+                                          * p_ini[ 0 ] * p_ini[ 1 ]
+                                          + 1./2. * p[ 0 ]
+                                          * p_ini[ 1 ] * p_ini[ 2 ]
+                                          + 1./2. * p[ 1 ]
+                                          * p_ini[ 0 ]
+                                          * p_ini[ 2 ] ) ) ] ] \
+                    / np.repeat( ratio_err[ ip, iq ] ** 2,
+                                 3 ).reshape( ratioNum, 3 ) \
+                    / KK_meson( mEff[ b ], pSq_ini, pSq_fin, L )
+            
+            # End loop over Q
+        # End loop over p_fin
+    # End loop over bins
+
+    return kineFactor
+
+
 def calcFormFactors_SVD( kineFactor_loc, ratio, ratio_err, Qsq_where,
-                         formFactor, ratioSign, mpi_info ):
+                         formFactor, ratioSign, pSq, mpi_info ):
 
     # kineFactor_loc[ b_loc, p, q, ratio, [ F1, F2 ] ]
     # ratio[ b, p, q, ratio ]
@@ -413,6 +849,8 @@ def calcFormFactors_SVD( kineFactor_loc, ratio, ratio_err, Qsq_where,
     ratioNum = kineFactor_loc.shape[ -2 ]
 
     ratio_loc = ratio[ binList_loc ]
+
+    formFactorNum = kineFactor_loc.shape[ -1 ]
 
     # kineFactor[ b, p, q, r, [ F1, F2 ] ]
 
@@ -437,7 +875,7 @@ def calcFormFactors_SVD( kineFactor_loc, ratio, ratio_err, Qsq_where,
 
     # F_loc[ b_loc, qs, [ F1, F2 ] ]
 
-    F_loc = np.zeros( ( binNum_loc, QsqNum, 2 ), dtype=float )
+    F_loc = np.zeros( ( binNum_loc, QsqNum, formFactorNum ), dtype=float )
     #F_loc = np.zeros( ( binNum_loc, QsqNum, 4, 2 ), dtype=float )
     
     Qsq_good = np.full( QsqNum, False, dtype=bool )
@@ -491,7 +929,6 @@ def calcFormFactors_SVD( kineFactor_loc, ratio, ratio_err, Qsq_where,
             # for this value of Q^2
 
             QsqNum_Qsq = kineFactor_Qsq.shape[ 1 ]
-
             """
             # kineFactor_Qsq[ b, Q^2[ qs ], [ F1, F2 ] ]
         
@@ -510,15 +947,17 @@ def calcFormFactors_SVD( kineFactor_loc, ratio, ratio_err, Qsq_where,
             #mpi_fncs.mpiPrint(kineFactor_Qsq.shape,mpi_info)
             #mpi_fncs.mpiPrint(ratio_Qsq.shape,mpi_info)
             #mpi_fncs.mpiPrint(ratio_err_Qsq.shape,mpi_info)
-
             """
             # kineFactor_Qsq[ b, Q^2[ qs ], r, [ F1, F2 ] ]
             # -> kineFactor_Qsq[ b, Q^2[ qs ] * r, [ F1, F2 ] ]
 
             kineFactor_Qsq = kineFactor_Qsq.reshape( binNum,
                                                      QsqNum_Qsq * ratioNum,
-                                                     2 )
+                                                     formFactorNum )
 
+            #mpi_fncs.mpiPrint(np.average(kineFactor_Qsq,axis=0),
+            #                  mpi_info)
+            
             # ratio_Qsq[ b, Q^2[ qs ], r ]
             # -> ratio_Qsq[ b, Q^2[ qs ] * r ]
 
@@ -531,8 +970,8 @@ def calcFormFactors_SVD( kineFactor_loc, ratio, ratio_err, Qsq_where,
             #where_good = np.full( ( QsqNum_Qsq ), False, dtype=bool )
 
             ratioSign_arr \
-            = np.array( ratio_Qsq.size
-                        * [ ratioSign ] ).reshape( ratio_Qsq.shape )
+                = np.array( ratio_Qsq.size
+                            * [ ratioSign ] ).reshape( ratio_Qsq.shape )
 
             #mpi_fncs.mpiPrint(kineFactor_Qsq[0],mpi_info)
             #mpi_fncs.mpiPrint(ratio_Qsq[0],mpi_info)
@@ -544,13 +983,25 @@ def calcFormFactors_SVD( kineFactor_loc, ratio, ratio_err, Qsq_where,
 
                 #CJL:HERE
 
-                if formFactor == "GE_GM":
-
+                if ( formFactor == "GE_GM" \
+                     or formFactor == "BT10" \
+                     or formFactor == "FS" ) \
+                    and pSq > 0:
+                        
                     # Check that all bins meet requirements:
                     # K * R has right sign
                     # error/ratio is < 0.3
                     # 0.25 < |R| < 1.5
                     
+                    #mpi_fncs.mpiPrint(ratio_err_Qsq[ 0, iqr ]
+                    #                  / np.abs( ratio_Qsq[ 0, iqr ] ),
+                    #                  mpi_info)
+
+                    where_good[ iqr ] \
+                            = np.all( ratio_err_Qsq[ :, iqr ]
+                                      / np.abs( ratio_Qsq[ :, iqr ] )
+                                      < 0.7 )
+
                     #where_good[ iqr ] \
                     #    = np.all( ( np.sign( kineFactor_Qsq[ :, iqr, 0 ]
                     #                         * ratio_Qsq[ :, iqr ] )
@@ -566,18 +1017,15 @@ def calcFormFactors_SVD( kineFactor_loc, ratio, ratio_err, Qsq_where,
                     #                          / ratio_err_Qsq[ :, iqr ] ** 2
                     #                          / kineFactor_Qsq[ :, iqr, 0 ] )
                     #                  > 0.25 ) )
-                    where_good[ iqr ] \
-                        = np.all( ratio_err_Qsq[ :, iqr ]
-                                  / np.abs( ratio_Qsq[ :, iqr ] )
-                                  < 0.2 )
 
-                elif formFactor == "A20_B20":
+                else:
 
-                    where_good[ iqr ] \
-                        = np.all( ratio_err_Qsq[ :, iqr ]
-                                  / np.abs( ratio_Qsq[ :, iqr ] )
-                                  < 0.3 )
-                    #where_good[ iqr ] = True
+                    #    where_good[ iqr ] \
+                        #        = np.all( ratio_err_Qsq[ :, iqr ]
+                    #                  / np.abs( ratio_Qsq[ :, iqr ] )
+                    #                  < 0.3 )
+                
+                    where_good[ iqr ] = True
                     
             # End loop over Q^2 and ratio
 
@@ -606,7 +1054,7 @@ def calcFormFactors_SVD( kineFactor_loc, ratio, ratio_err, Qsq_where,
 
             kineFactor_Qsq = kineFactor_Qsq.reshape( binNum_loc,
                                                      QsqNum_Qsq * ratioNum,
-                                                     2 )
+                                                     formFactorNum )
 
             # ratio_Qsq[ b, Q^2[ qs ], r ]
             # -> ratio_Qsq[ b, Q^2[ qs ] * r ]
@@ -673,19 +1121,17 @@ def calcFormFactors_SVD( kineFactor_loc, ratio, ratio_err, Qsq_where,
     
             # End loop over bins
 
-            # decomp[ b_loc, Q^2[qs]*ratio, [ F1, F2 ] ]
-                    
             #mpi_fncs.mpiPrint(v.shape,mpi_info)
             #mpi_fncs.mpiPrint(v[0],mpi_info)
             #mpi_fncs.mpiPrint(smat_inv.shape,mpi_info)
             #mpi_fncs.mpiPrint(smat_inv[0],mpi_info)
             #mpi_fncs.mpiPrint(uT.shape,mpi_info)
             #mpi_fncs.mpiPrint(uT[0],mpi_info)
+            # decomp[ b_loc, Q^2[qs]*ratio, [ F1, F2 ] ]
             
             decomp = np.transpose( v @ smat_inv @ uT, ( 0, 2, 1 ) )
 
             #mpi_fncs.mpiPrint(decomp.shape,mpi_info)
-            #mpi_fncs.mpiPrint(decomp[0],mpi_info)
 
             sum_axes = tuple( range( 1, ratio_Qsq.ndim ) )
  
@@ -695,45 +1141,49 @@ def calcFormFactors_SVD( kineFactor_loc, ratio, ratio_err, Qsq_where,
             #                               axis=0 ),
             #                   mpi_info )
             
-            for iff in range( 2 ):
+            #if iqs == 0:
+            #    mpi_fncs.mpiPrint(decomp[0,...,0],mpi_info)
+            #    mpi_fncs.mpiPrint(ratio_Qsq[0],mpi_info)
+
+            for iff in range( formFactorNum ):
 
                 #CJL:HERE
                 #mpi_fncs.mpiPrint( "kineFactor",mpi_info )
-                #mpi_fncs.mpiPrint( kineFactor_Qsq[ 0, ..., iff ].reshape(ratio_Qsq[0].size//7,7),
+                #mpi_fncs.mpiPrint( kineFactor_Qsq[ 0, ..., iff ].reshape(ratio_Qsq[0].size//1,1),
                 #                   mpi_info )
                 #mpi_fncs.mpiPrint( "decomp",mpi_info )
-                #mpi_fncs.mpiPrint( decomp[ 0, ..., iff ].reshape(ratio_Qsq[0].size//7,7),
+                #mpi_fncs.mpiPrint( decomp[ 0, ..., iff ].reshape(ratio_Qsq[0].size//1,1),
                 #                   mpi_info )
                 #mpi_fncs.mpiPrint( "ratio",mpi_info )
-                #mpi_fncs.mpiPrint( ratio_Qsq[0].reshape(ratio_Qsq[0].size//7,7),
+                #mpi_fncs.mpiPrint( ratio_Qsq[0].reshape(ratio_Qsq[0].size//1,1),
                 #                   mpi_info )
                 #mpi_fncs.mpiPrint( "decomp*ratio",mpi_info )
                 #mpi_fncs.mpiPrint( np.array( decomp[ 0, ..., iff ]
                 #                             * ratio_Qsq[0]
-                #                             / ratio_err_Qsq[0] ** 2 ).reshape(ratio_Qsq[0].size//7,7),
+                #                             / ratio_err_Qsq[0] ** 2 ).reshape(ratio_Qsq[0].size//1,1),
+                #                   mpi_info )
+                #mpi_fncs.mpiPrint( np.array( decomp[ 0, ..., iff ]
+                #                             * ratio_Qsq[0] ).reshape(ratio_Qsq[0].size//1,1),
                 #                   mpi_info )
                 #mpi_fncs.mpiPrint( decomp[ 0, ..., iff ]
-                #                            * ratio_Qsq[0]
-                #                            / ratio_err_Qsq[0] ** 2,
+                #                   * ratio_Qsq[0]
+                #                   / ratio_err_Qsq[0] ** 2,
                 #                   mpi_info )
                 #mpi_fncs.mpiPrint( np.sum( decomp[ 0, ..., iff ]
                 #                           * ratio_Qsq[0] 
                 #                           / ratio_err_Qsq[0] ** 2 ),
                 #                   mpi_info )
                 
-                F_loc[ :, iqs, iff ] = np.sum( decomp[ ..., iff ]
-                                               * ratio_Qsq
-                                               / ratio_err_Qsq ** 2,
-                                               axis=sum_axes )
+                F_loc[ :, iqs, iff ] \
+                    = np.sum( decomp[ ..., iff ]
+                              * ratio_Qsq
+                              / ratio_err_Qsq ** 2,
+                              axis=sum_axes )                
+                              
                 #F_loc[ :, iqs, ic, iff ] = np.sum( decomp[ ..., iff ]
                 #                                   * ratio_Qsq,
                 #                                   axis=sum_axes )
                 #/ ratio_err_Qsq ** 2
-
-                #F_loc[ :, iqs, ic, iff ] \
-                #    = np.average( ratio_Qsq
-                #                  / kineFactor_Qsq[ ..., 0 ],
-                #                  axis=sum_axes )
 
             Qsq_good[ iqs ] = True
             #Qsq_good[ iqs, ic ] = True
@@ -941,7 +1391,7 @@ def calcMatrixElemEM_twopFit( threep, tsink, c0, E0 ):
 
 
 def calcMellin_twopFit( threep, tsink, mEff, momSq, L, \
-                        c0, E0, moment ):
+                        c0, E0, moment, mpi_info ):
 
     # threep[ b, t ]
     # tsink
@@ -968,6 +1418,11 @@ def calcMellin_twopFit( threep, tsink, mEff, momSq, L, \
     elif moment == 3 or moment == "avgX3":
 
         preFactor = -1.0        
+
+    #mpi_fncs.mpiPrint(threep[0]/twopFit(c0_cp[0],E0_cp[0],tsink),
+    #                  mpi_info)
+    #mpi_fncs.mpiPrint(preFactor[0],
+    #                  mpi_info)
 
     return preFactor * threep \
         / twopFit( c0_cp, E0_cp, tsink )
@@ -1165,12 +1620,13 @@ def calcFormFactorRatio( threep, twop, tsink ):
     return ratio
 
 
-def calcFormFactorRatio_twopFit( threep, c0, mEff, tsink, p_fin,
-                         Q, pSq_twop, L, mpi_info ):
+def calcFormFactorRatio_twopFit( threep, c0, E0, tsink, p_fin,
+                                 Q, pSq_twop, L, dispRelation,
+                                 mpi_info ):
     
     # threep[ ..., p, Q, r, t ]
     # c0[ ..., p^2 ]
-    # mEff[ ... ]
+    # mEff[ ..., p^2 ]
     # tsink
     # p_fin[ p, pi ]
     # Q[ q, qi ]
@@ -1203,9 +1659,18 @@ def calcFormFactorRatio_twopFit( threep, c0, mEff, tsink, p_fin,
         # Loop over time
         for t in range( tsink + 1 ):
 
-            twop_tmp = twopFit( c0[ ..., ips ],
-                                energy( mEff, ps, L ),
-                                t )
+            if dispRelation:
+
+                twop_tmp = twopFit( c0[ ..., ips ],
+                                    energy( E0, ps, L ),
+                                    t )
+
+            else:
+
+                twop_tmp = twopFit( c0[ ..., ips ],
+                                    E0[ ..., ips ],
+                                    t )
+
             twop_tmp = np.repeat( twop_tmp, ratioNum )
 
             twop[ ..., ips, :, t ] \
@@ -1243,6 +1708,28 @@ def calcFormFactorRatio_twopFit( threep, c0, mEff, tsink, p_fin,
         # End loop ovet Q
     # End loop over p
 
+    return ratio
+
+
+def calcFormFactorRatio_tsf( a00, c0, qSq_where, mpi_info ):
+    
+    # a00[ b, q, r ]
+    # c0[ b, p^2 ]
+
+    binNum, qNum, ratioNum = a00.shape
+
+    ratio = np.zeros( a00.shape )
+
+    for iq in range( qNum ):
+        for ir in range( ratioNum ):
+
+            ratio[ :, iq, ir ] = a00[ :, iq, ir ] \
+                                 / np.sqrt( c0[ :, 0 ]
+                                            * c0[ :, qSq_where[ iq ] ] )
+
+        # End loop over ratio
+    # End loop over q
+    
     return ratio
 
 
