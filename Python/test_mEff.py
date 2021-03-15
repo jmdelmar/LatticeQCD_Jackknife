@@ -14,7 +14,7 @@ np.set_printoptions(threshold=sys.maxsize)
 
 L = 32.0
 
-srcNum = 32
+srcNum = 56
 
 particle_list = [ "pion", "kaon", "nucleon" ]
 
