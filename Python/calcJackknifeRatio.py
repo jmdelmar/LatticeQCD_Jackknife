@@ -77,7 +77,7 @@ plusMinus = args.plus_minus
 
 binNum = args.bin_num
 
-result_template = "{0}: {1:.2f}({2:.0f})"
+result_template = "{0}: {1:.3f}({2:.0f})"
 
 for ts, pm in zip( tsink, plusMinus ):
 
@@ -102,7 +102,7 @@ for ts, pm in zip( tsink, plusMinus ):
 
     result_msg = result_template.format( "plateau, tsink={}".format( ts ),
                                          ratio_plat_avg,
-                                         10**2
+                                         10**3
                                          * ratio_plat_err )
 
     print( result_msg )
@@ -121,7 +121,7 @@ ratio_tsf_err = fncs.calcError( ratio_tsf, binNum )
 
 result_msg = result_template.format( "2-state fit",
                                      ratio_tsf_avg,
-                                     10**2
+                                     10**3
                                      * ratio_tsf_err )
 
 print( result_msg )
