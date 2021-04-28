@@ -71,9 +71,11 @@ parser.add_argument( "binSize", action='store', type=int )
 parser.add_argument( "-o", "--output_template", action='store', \
                      type=str, default="./*.dat" )
 
-parser.add_argument( "-sn", "--source_number", action='store', type=int, \
-                     help="Number of sources correlators were averaged " \
-                     + "over", default=16 )
+parser.add_argument( "-sn", "--source_number", action='store',
+                     help="Comma seperated list of number of sources " \
+                     + "correlators were averaged over for each tsink",
+                     type=lambda s: [int(item) for item in s.split(',')],
+                     default=16 )
 
 parser.add_argument( "-tsf", "--two_state_fit", action='store_true',
                      help="Performs the two-state fit if supplied" )
@@ -278,7 +280,7 @@ for smr, ismr in zip( smear_str_list, range( smearNum ) ):
     = rw.readMomentumTransferList( twopDir[ ismr ],
                                    twop_template_smr,
                                    [configList[ 0 ]], particle, 
-                                   srcNum, dataFormat_twop[ ismr ],
+                                   srcNum[ -1 ], dataFormat_twop[ ismr ],
                                    args.momentum_transfer_list, 
                                    mpi_confs_info )
     
@@ -330,7 +332,7 @@ p_fin = rw.readMomentaList( twopDir[ 0 ],
                             twop_template[ 0 ].format(smear_str_list[ 0 ]),
                             configList_loc[ 0 ],
                             particle,
-                            srcNum, pSq_fin,
+                            srcNum[ -1 ], pSq_fin,
                             dataFormat_threep,
                             mpi_confs_info )
 
@@ -354,7 +356,7 @@ for smr, ismr in zip( smear_str_list, range( smearNum ) ):
                                       configList_loc, 
                                       configNum, q[ ismr ], qSq[ ismr ],
                                       qSq_start[ ismr ], qSq_end[ ismr ], 
-                                      particle, srcNum,
+                                      particle, srcNum[ -1 ],
                                       dataFormat_twop[ ismr ],
                                       mpi_confs_info )
 
@@ -689,7 +691,8 @@ if dataFormat_threep == "gpu":
                 qSq_where_threep \
                 = rw.readMomentumTransferList( threepDir, threep_template, 
                                                [configList[ 0 ]], particle, 
-                                               srcNum, dataFormat_threep,
+                                               srcNum[ its ],
+                                               dataFormat_threep,
                                                args.momentum_transfer_list, 
                                                mpi_confs_info )
             
@@ -786,7 +789,7 @@ for ts, its in fncs.zipXandIndex( tsink ):
         # threep[ conf, flav, q, proj*curr, t ]
 
         threep = rw.readFormFactorFile( threepDir, threep_tokens,
-                                        formFactor, srcNum,
+                                        formFactor, srcNum[ its ],
                                         qSq_threep,
                                         qSq_start_threep,
                                         qSq_end_threep,
@@ -1146,7 +1149,7 @@ for ts, its in zip( tsink, range( tsinkNum ) ):
 
                     if np.any( ( F_err[ :, iqs, 0 ]
                                  / np.abs( F[ iflav, :, iqs, 0 ] )
-                                 > 0.1 ) ):
+                                 > 0.25 ) ):
                         #
                         #| ( np.abs( F[ iflav, :, iqs, 0 ] )
                         #> 1.5 ) 
