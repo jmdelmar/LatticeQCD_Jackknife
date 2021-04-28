@@ -949,66 +949,134 @@ def readMesonAvgXFile_cpu( threepDir, threep_template, configList, \
 
     filename = threep_template + ".up.h5"
 
-    dsetname_pre = "/thrp/ave{}/dt{}/up/".format( srcNum, ts )
+    if srcNum:
 
-    dsetname_post = "/msq0000/arr"
+        dsetname_pre = "/thrp/ave{}/dt{}/up/".format( srcNum, ts )
+
+        dsetname_post = "/msq0000/arr"
             
-    threep_gtDt = getDatasets( threepDir, \
-                               configList, \
-                               filename, \
-                               dsetname=[ dsetname_pre \
-                                          + "=der:g0D0:sym=" \
-                                          + dsetname_post])[:,0,0,:,0].real
-    threep_gxDx = getDatasets( threepDir, \
-                               configList, \
-                               filename, \
-                               dsetname=[dsetname_pre \
-                                         +"=der:gxDx:sym=" \
-                                         +dsetname_post])[:,0,0,:,0].real
-    threep_gyDy = getDatasets( threepDir, \
-                               configList, \
-                               filename, \
-                               dsetname=[dsetname_pre \
-                                         +"=der:gyDy:sym=" \
-                                         +dsetname_post])[:,0,0,:,0].real
-    threep_gzDz = getDatasets( threepDir, \
-                               configList, \
-                               filename, \
-                               dsetname=[dsetname_pre \
-                                         +"=der:gzDz:sym=" \
-                                         +dsetname_post])[:,0,0,:,0].real
+        threep_gtDt = getDatasets( threepDir, \
+                                   configList, \
+                                   filename, \
+                                   dsetname=[dsetname_pre \
+                                             + "=der:g0D0:sym=" \
+                                             + dsetname_post])[:,0,0,:,0].real
+
+        threep_gxDx = getDatasets( threepDir, \
+                                   configList, \
+                                   filename, \
+                                   dsetname=[dsetname_pre \
+                                             +"=der:gxDx:sym=" \
+                                             +dsetname_post])[:,0,0,:,0].real
+
+        threep_gyDy = getDatasets( threepDir, \
+                                   configList, \
+                                   filename, \
+                                   dsetname=[dsetname_pre \
+                                             +"=der:gyDy:sym=" \
+                                             +dsetname_post])[:,0,0,:,0].real
+
+        threep_gzDz = getDatasets( threepDir, \
+                                   configList, \
+                                   filename, \
+                                   dsetname=[dsetname_pre \
+                                             +"=der:gzDz:sym=" \
+                                             +dsetname_post])[:,0,0,:,0].real
                 
+    else:
+
+        threep_gtDt = getDatasets( threepDir,
+                                   configList,
+                                   filename,
+                                   "dt{}".format( ts ),
+                                   "up", "=der:g0D0",
+                                   "msq0000", "arr")[:,0,0,:,0].real
+
+        threep_gxDx = getDatasets( threepDir,
+                                   configList,
+                                   filename,
+                                   "dt{}".format( ts ),
+                                   "up", "=der:gxDx",
+                                   "msq0000", "arr")[:,0,0,:,0].real
+
+        threep_gyDy = getDatasets( threepDir,
+                                   configList,
+                                   filename,
+                                   "dt{}".format( ts ),
+                                   "up", "=der:gyDy",
+                                   "msq0000", "arr")[:,0,0,:,0].real
+
+        threep_gzDz = getDatasets( threepDir,
+                                   configList,
+                                   filename,
+                                   "dt{}".format( ts ),
+                                   "up", "=der:gzDz",
+                                   "msq0000", "arr")[:,0,0,:,0].real
+
     if particle == "kaon":
             
         filename_s = threep_template + ".strange.h5"
 
-        dsetname_s_pre = "/thrp/ave{}/dt{}/strange/".format( srcNum, \
-                                                             ts )
+        if srcNum:
 
-        threep_s_gtDt=getDatasets(threepDir, \
-                                  configList, \
-                                  filename_s, \
-                                  dsetname=[dsetname_s_pre \
-                                            +"=der:g0D0:sym=" \
-                                            +dsetname_post])[:,0,0,:,0].real
-        threep_s_gxDx=getDatasets(threepDir, \
-                                  configList, \
-                                  filename_s, \
-                                  dsetname=[dsetname_s_pre \
-                                            +"=der:gxDx:sym=" \
-                                            +dsetname_post])[:,0,0,:,0].real
-        threep_s_gyDy=getDatasets(threepDir, \
-                                  configList, \
-                                  filename_s, \
-                                  dsetname=[dsetname_s_pre \
-                                            +"=der:gyDy:sym=" \
-                                            +dsetname_post])[:,0,0,:,0].real
-        threep_s_gzDz=getDatasets(threepDir, \
-                                  configList, \
-                                  filename_s, \
-                                  dsetname=[dsetname_s_pre \
-                                            +"=der:gzDz:sym=" \
-                                            +dsetname_post])[:,0,0,:,0].real
+            dsetname_s_pre = "/thrp/ave{}/dt{}/strange/".format( srcNum, \
+                                                                 ts )
+
+            threep_s_gtDt=getDatasets(threepDir, \
+                                      configList, \
+                                      filename_s, \
+                                      dsetname=[dsetname_s_pre \
+                                                +"=der:g0D0:sym=" \
+                                                +dsetname_post])[:,0,0,
+                                                                 :,0].real
+            threep_s_gxDx=getDatasets(threepDir, \
+                                      configList, \
+                                      filename_s, \
+                                      dsetname=[dsetname_s_pre \
+                                                +"=der:gxDx:sym=" \
+                                      +dsetname_post])[:,0,0,:,0].real
+            threep_s_gyDy=getDatasets(threepDir, \
+                                      configList, \
+                                      filename_s, \
+                                      dsetname=[dsetname_s_pre \
+                                                +"=der:gyDy:sym=" \
+                                      +dsetname_post])[:,0,0,:,0].real
+            threep_s_gzDz=getDatasets(threepDir, \
+                                      configList, \
+                                      filename_s, \
+                                      dsetname=[dsetname_s_pre \
+                                                +"=der:gzDz:sym=" \
+                                      +dsetname_post])[:,0,0,:,0].real
+
+        else:
+
+            threep_s_gtDt = getDatasets( threepDir,
+                                       configList,
+                                       filename_s,
+                                       "dt{}".format( ts ),
+                                       "strange", "=der:g0D0",
+                                       "msq0000", "arr")[:,0,0,:,0].real
+            
+            threep_s_gxDx = getDatasets( threepDir,
+                                       configList,
+                                       filename_s,
+                                       "dt{}".format( ts ),
+                                       "strange", "=der:gxDx",
+                                       "msq0000", "arr")[:,0,0,:,0].real
+            
+            threep_s_gyDy = getDatasets( threepDir,
+                                       configList,
+                                       filename_s,
+                                       "dt{}".format( ts ),
+                                       "strange", "=der:gyDy",
+                                       "msq0000", "arr")[:,0,0,:,0].real
+            
+            threep_s_gzDz = getDatasets( threepDir,
+                                       configList,
+                                       filename_s,
+                                       "dt{}".format( ts ),
+                                       "strange", "=der:gzDz",
+                                       "msq0000", "arr")[:,0,0,:,0].real
 
         return np.array( [ threep_gxDx, threep_gyDy, \
                            threep_gzDz, threep_gtDt, \
@@ -1210,82 +1278,136 @@ def readMesonAvgX2File_cpu( threepDir, threep_template, configList, \
     
     filename = threep_template + ".up.h5"
 
-    dsetname_pre = "/thrp/ave{}/P0/dt{}/up/".format( srcNum, ts )
+    if srcNum:
 
-    dsetname_post = "/msq0000/arr"
+        dsetname_pre = "/thrp/ave{}/P0/dt{}/up/".format( srcNum, ts )
 
-    try:
+        dsetname_post = "/msq0000/arr"
 
-        threep_g0DxDy = getDatasets( threepDir, \
-                                     configList, \
-                                     filename, \
-                                     dsetname=[ dsetname_pre \
-                                                + "der2:g0DxDy" \
-                                                + dsetname_post])[:,0,0,\
-                                                                  :,0].real
+        try:
 
-    except lqcdjk_DataSetException as dataSetException:
+            threep_g0DxDy = getDatasets( threepDir,
+                                         configList,
+                                         filename,
+                                         dsetname=[dsetname_pre
+                                                   + "der2:g0DxDy"
+                                                   + dsetname_post])[:,0,0,
+                                                                     :,0].real
 
-        dsetname_pre = "/thrp/ave{}/dt{}/up/".format( srcNum, ts )
+        except lqcdjk_DataSetException as dataSetException:
+            
+            dsetname_pre = "/thrp/ave{}/dt{}/up/".format( srcNum, ts )
 
-        threep_g0DxDy = getDatasets( threepDir, \
-                                     configList, \
-                                     filename, \
-                                     dsetname=[ dsetname_pre \
-                                                + "der2:g0DxDy" \
-                                                + dsetname_post])[:,0,0,\
-                                                                  :,0].real
+            threep_g0DxDy = getDatasets( threepDir,
+                                         configList,
+                                         filename,
+                                         dsetname=[dsetname_pre
+                                                   + "der2:g0DxDy"
+                                                   + dsetname_post])[:,0,0,
+                                                                     :,0].real
+            
+        threep_g0DxDz = getDatasets( threepDir,
+                                     configList,
+                                     filename,
+                                     dsetname=[dsetname_pre
+                                               + "der2:g0DxDz"
+                                               + dsetname_post])[:,0,0,
+                                                                 :,0].real
+        
+        threep_g0DyDz= getDatasets( threepDir,
+                                    configList,
+                                    filename,
+                                    dsetname=[dsetname_pre
+                                              + "der2:g0DyDz"
+                                              + dsetname_post] )[:,0,0,
+                                                                 :,0].real
 
-    threep_g0DxDz = getDatasets( threepDir, \
-                                 configList, \
-                                 filename, \
-                                 dsetname=[ dsetname_pre \
-                                            + "der2:g0DxDz" \
-                                            + dsetname_post])[:,0,0,\
-                                                              :,0].real
+    else:
+        
+        threep_g0DxDy = getDatasets( threepDir,
+                                     configList,
+                                     filename,
+                                     "dt{}".format( ts ),
+                                     "up", "der2:g0DxDy",
+                                     "msq0000", "arr")[:,0,0,:,0].real
 
-    threep_g0DyDz= getDatasets( threepDir, \
-                                configList, \
-                                filename, \
-                                dsetname=[ dsetname_pre \
-                                           + "der2:g0DyDz" \
-                                           + dsetname_post ] )[:,0,0,\
-                                                               :,0].real
+        threep_g0DxDz = getDatasets( threepDir,
+                                     configList,
+                                     filename,
+                                     "dt{}".format( ts ),
+                                     "up", "der2:g0DxDz",
+                                     "msq0000", "arr")[:,0,0,:,0].real
+
+        threep_g0DyDz = getDatasets( threepDir,
+                                     configList,
+                                     filename,
+                                     "dt{}".format( ts ),
+                                     "up", "der2:g0DyDz",
+                                     "msq0000", "arr")[:,0,0,:,0].real
+
 
     if particle == "kaon":
             
         filename_s = threep_template + ".strange.h5"
 
-        if "P0" in dsetname_pre:
+        if srcNum:
 
-            dsetname_s_pre = "/thrp/ave{}/P0/dt{}/strange/".format( srcNum, ts )
+            if "P0" in dsetname_pre:
+
+                dsetname_s_pre \
+                    = "/thrp/ave{}/P0/dt{}/strange/".format( srcNum, ts )
+
+            else:
+
+                dsetname_s_pre \
+                    = "/thrp/ave{}/dt{}/strange/".format( srcNum, ts )
+
+            threep_s_g0DxDy = getDatasets( threepDir, \
+                                           configList, \
+                                           filename_s, \
+                                           dsetname=[dsetname_s_pre \
+                                                     +"der2:g0DxDy" \
+                                                     +dsetname_post])[:,0,
+                                                                      0,:,
+                                                                      0].real
+            threep_s_g0DxDz = getDatasets( threepDir, \
+                                           configList, \
+                                       filename_s, \
+                                           dsetname=[dsetname_s_pre \
+                                                     +"der2:g0DxDz" \
+                                           +dsetname_post])[:,0,0,\
+                                                            :,0].real
+            threep_s_g0DyDz = getDatasets( threepDir, \
+                                           configList, \
+                                           filename_s, \
+                                           dsetname=[dsetname_s_pre \
+                                                     +"der2:g0DyDz" \
+                                           +dsetname_post])[:,0,0,\
+                                                            :,0].real
 
         else:
 
-            dsetname_s_pre = "/thrp/ave{}/dt{}/strange/".format( srcNum, ts )
-
-        threep_s_g0DxDy = getDatasets( threepDir, \
-                                       configList, \
-                                       filename_s, \
-                                       dsetname=[dsetname_s_pre \
-                                                 +"der2:g0DxDy" \
-                                                 +dsetname_post])[:,0,0,\
-                                                                  :,0].real
-        threep_s_g0DxDz = getDatasets( threepDir, \
-                                       configList, \
-                                       filename_s, \
-                                       dsetname=[dsetname_s_pre \
-                                                 +"der2:g0DxDz" \
-                                                 +dsetname_post])[:,0,0,\
-                                                                  :,0].real
-        threep_s_g0DyDz = getDatasets( threepDir, \
-                                       configList, \
-                                       filename_s, \
-                                       dsetname=[dsetname_s_pre \
-                                                 +"der2:g0DyDz" \
-                                                 +dsetname_post])[:,0,0,\
-                                                                  :,0].real
-
+            threep_s_g0DxDy = getDatasets( threepDir,
+                                           configList,
+                                           filename_s,
+                                           "dt{}".format( ts ),
+                                           "strange", "der2:g0DxDy",
+                                           "msq0000", "arr")[:,0,0,:,0].real
+            
+            threep_s_g0DxDz = getDatasets( threepDir,
+                                           configList,
+                                           filename_s,
+                                           "dt{}".format( ts ),
+                                           "strange", "der2:g0DxDz",
+                                           "msq0000", "arr")[:,0,0,:,0].real
+            
+            threep_s_g0DyDz = getDatasets( threepDir,
+                                           configList,
+                                           filename_s,
+                                           "dt{}".format( ts ),
+                                           "strange", "der2:g0DyDz",
+                                           "msq0000", "arr")[:,0,0,:,0].real
+            
         return np.array( [ threep_g0DxDy, threep_g0DxDz, \
                            threep_g0DyDz, \
                            threep_s_g0DxDy, threep_s_g0DxDz, \
@@ -1339,7 +1461,6 @@ def readMesonAvgX3File_cpu( threepDir, threep_template, configList, \
                               "up", "der3:g0DxDyDz",
                               "msq0000", "arr")[:,0,0,:,0].imag
         
-
     if particle == "kaon":
             
         filename_s = threep_template + ".strange.h5"
@@ -3937,6 +4058,35 @@ def writeTSFParamsFile( filename, params, params_err ):
         output.write( "E1".ljust( 5 ) 
                       + str( params[ 6 ] ).ljust( 20 ) 
                       + str( params_err[ 6 ] ) + "\n" )
+
+    print( "Wrote " + filename )
+
+
+def writePDFParamsFile( filename, params, params_err ):
+
+    assert len( params ) == 3, "Error (readWrite.writePDFParamsFile): " \
+        + "number of fit parameters should be 3."
+
+    assert len( params ) == len( params_err ), \
+        "Error (readWrite.writePDFParamsFile): " \
+        + "number of parameters and number of parameter errors do not match."
+
+    with open( filename, "w" ) as output:
+
+        # a
+        output.write( "a".ljust( 5 ) 
+                      + str( params[ 0 ] ).ljust( 20 ) 
+                      + str( params_err[ 0 ] ) + "\n" )
+
+        # b
+        output.write( "b".ljust( 5 ) 
+                      + str( params[ 1 ] ).ljust( 20 ) 
+                      + str( params_err[ 1 ] ) + "\n" )
+
+        # c
+        output.write( "c".ljust( 5 ) 
+                      + str( params[ 2 ] ).ljust( 20 ) 
+                      + str( params_err[ 2 ] ) + "\n" )
 
     print( "Wrote " + filename )
 
