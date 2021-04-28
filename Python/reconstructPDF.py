@@ -60,6 +60,10 @@ parser.add_argument( "parameter_num", action='store',
                      help="Number of fitting parameters to use.",
                      type=int )
 
+parser.add_argument( "moment_num", action='store',
+                     help="Number of PDF moments to include in fit.",
+                     type=int )
+
 parser.add_argument( "bin_num", action='store',
                      help="Number of bins in input files",
                      type=int )
@@ -87,8 +91,7 @@ avgX3_filename_template = args.avgX3_filename_template
 
 # Info on what to analyze
 
-#momentNum = args.moment_num
-momentNum = 2
+momentNum = args.moment_num
 
 paramNum = args.parameter_num
 
@@ -190,8 +193,9 @@ curve = np.zeros( ( particleNum, binNum, xNum ) )
 
 for part, flav, ipart in zip( particle, flavor, range( particleNum ) ):
 
-    fitParams[ ipart ] = fit.fitMellinMoments( moments[ ipart ],
-                                               paramNum )
+    fitParams[ ipart ], chiSq \
+        = fit.fitMellinMoments( moments[ ipart ],
+                                paramNum )
 
     a = fitParams[ ipart, :, 0 ]
     b = fitParams[ ipart, :, 1 ]
@@ -210,6 +214,8 @@ for part, flav, ipart in zip( particle, flavor, range( particleNum ) ):
     b_avg = np.average( b ) 
     c_avg = np.average( c ) 
 
+    chiSq_avg = np.average( chiSq ) 
+
     a_err = fncs.calcError( a, binNum ) 
     b_err = fncs.calcError( b, binNum ) 
     c_err = fncs.calcError( c, binNum ) 
@@ -217,6 +223,7 @@ for part, flav, ipart in zip( particle, flavor, range( particleNum ) ):
     print( out_str_template.format( "a", a_avg, a_err ) )
     print( out_str_template.format( "b", b_avg, b_err ) )
     print( out_str_template.format( "c", c_avg, c_err ) )
+    print( out_str_template.format( "c", chiSq_avg, 0.0 ) )
 
 
     ############################################
