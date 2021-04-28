@@ -316,7 +316,7 @@ def effEnergyTwopFit( effEnergy, twop, rangeEnd, pSq, L, tsf,
 
         elif pSq <= 3 :
             
-            plat_t_low_range = range( 8, 21 )
+            plat_t_low_range = range( 11, 21 )
 
         else:
 
@@ -1752,13 +1752,13 @@ def fitMellinMoments( moments, paramNum ):
     
     binNum = moments.shape[ -1 ]
 
+    dof = moments.shape[ 0 ] - paramNum + 1
+
     # Find fit parameters of mean values to use as initial guess
 
     moments_avg = np.average( moments, axis=-1 )
 
     moments_err = fncs.calcError( moments, binNum, axis=-1 )
-
-    # CJL:HERE
 
     a = 1.0
     b = 1.0
@@ -1791,6 +1791,7 @@ def fitMellinMoments( moments, paramNum ):
     # Find fit parameters for each bin
 
     fitParams = np.zeros( ( binNum, paramNum ) )
+    chiSq = np.zeros( binNum )
 
     # Loop over bins
     for ib in range( binNum ):
@@ -1803,11 +1804,11 @@ def fitMellinMoments( moments, paramNum ):
                             bounds=bounds )
         
         fitParams[ ib ] = leastSq.x
+        chiSq[ ib ] = leastSq.fun
 
     # End loop over bins
 
-    return fitParams
-
+    return fitParams, chiSq / dof
 
 def mellinMomentCostFunction( fitParams,
                               moments, moments_err ):
@@ -1881,7 +1882,7 @@ def mellinMomentCostFunction( fitParams,
     
     if momentsNum >= 3:
 
-        erroFunction.append( avgX3ErrorFunction ** 2 )
+        errorFunction.append( avgX3ErrorFunction ** 2 )
 
     if momentsNum >= 4:
 
