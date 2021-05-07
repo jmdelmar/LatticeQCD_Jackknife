@@ -10,75 +10,110 @@ import physQuants as pq
 import lqcdjk_fitting as fit
 from mpi4py import MPI
 
-dispRel = False
+# Set whether or not to use the dispersion
+# relation E = sqrt( m^2 + p^2 ) when fitting
+# two-point functions
+
+dispRel = True
+
+# Set which q^2 index to stop at for 
+# three-point functions. This index will
+# not be included
 
 iqSq_last = 16
 
+# Set option so that entire numpy arrays are printed
+
 np.set_printoptions(threshold=sys.maxsize)
+
+# Lattice spacing and length
 
 a = 0.093
 L = 32.0
 
-particle_list = fncs.particleList()
+# Lists of possible form factors and particles.
+# Will check that input values are in the list.
 
 form_factor_list = fncs.formFactorList()
+
+particle_list = fncs.particleList()
 
 #########################
 # Parse input arguments #
 #########################
 
-parser = argp.ArgumentParser( description="Calculate form factors for " \
+parser = argp.ArgumentParser( description="Calculate form factors for "
                               + "non-zero momentum transfer" )
 
-parser.add_argument( "threep_dir", action='store', type=str )
+# Set input arguments
 
-parser.add_argument( "threep_tokens", action='store', \
-                     type=lambda s: [str(token) for token in s.split(',')], \
-                     help="Comma seperated list of filename tokens. " \
-                     + "CPU: part before tsink, part before momentum " \
-                     + "boost components. GPU: part before momentum " \
-                     + "boost components, part after momentum boost; " \
+parser.add_argument( "threep_dir", action='store', type=str,
+                     help="Directory containing subdirectories of "
+                     + "three-point functions. Subdirectories should "
+                     + "contain three-point functions from a single "
+                     + "configurations and be named after that "
+                     + "configuration." )
+
+parser.add_argument( "threep_tokens", action='store',
+                     type=lambda s: [str(token) for token in s.split(',')],
+                     help="Comma seperated list of filename tokens. "
+                     + "CPU: part before tsink, part before momentum "
+                     + "boost components. GPU: part before momentum "
+                     + "boost components, part after momentum boost; "
                      + "* for configuration number." )
 
 parser.add_argument( "twop_dir", action='store', 
-                     help="Comma seperated list of twop directories"
-                     + " with directory for mEff first and then flavor(s)",
+                     help="Comma seperated list of directories "
+                     + "containing subdirectories of two-point "
+                     + "functions for each particle/flavor "
+                     + "combination. Subdirectories should "
+                     + "contain three-point functions from a single "
+                     + "configurations and be named after that "
+                     + "configuration. ",
                      type=lambda s: [str(item) for item in s.split(',')] )
 
 parser.add_argument( "twop_template", action='store',
                      help="Comma seperated list of twop filename templates"
-                     + " with same order as 'twop_dir'",
+                     + " with same order as 'twop_dir'. CPU: two-point function "
+                     + "filenames, GPU: two-point function filenames with '*' "
+                     + "for configuration name.",
                      type=lambda s: [str(item) for item in s.split(',')] )
 
-parser.add_argument( "particle", action='store', \
-                     help="Particle to calculate for. " \
-                     + "Should be 'pion', 'kaon', or 'nucleon'.", \
+parser.add_argument( "particle", action='store',
+                     help="Particle to calculate form facors for. "
+                     + "Must be one of"
+                     + ", ".join( particle_list ),
                      type=str )
 
-parser.add_argument( 't_sink', action='store', \
-                     help="Comma seperated list of t sink's", \
+parser.add_argument( 't_sink', action='store',
+                     help="Comma seperated list of t sink's",
                      type=lambda s: [int(item) for item in s.split(',')] )
 
-parser.add_argument( "threep_final_momentum_squared", \
-                     action='store', type=int )
+parser.add_argument( "threep_final_momentum_squared",
+                     action='store', type=int,
+                     "Final momentum p^2 of three-point functions." )
 
 parser.add_argument( "form_factor", action='store', type=str,
-                     help="Form_Factor to calculate. Must be one of "
+                     help="Form factor to calculate. Must be one of "
                      + ", ".join( form_factor_list ) )
 
-parser.add_argument( "binSize", action='store', type=int )
+parser.add_argument( "binSize", action='store', type=int,
+                     help="Size of bins for jackknife resampling." )
 
-parser.add_argument( "-o", "--output_template", action='store', \
-                     type=str, default="./*.dat" )
+parser.add_argument( "-o", "--output_template", action='store',
+                     type=str, default="./*.dat",
+                     help="Template for output files. '*' will be "
+                     + "replaced with text depending on output data." )
 
 parser.add_argument( "-sn", "--source_number", action='store',
-                     help="Comma seperated list of number of sources " \
+                     help="Comma seperated list of number of sources "
                      + "correlators were averaged over for each tsink",
                      type=lambda s: [int(item) for item in s.split(',')],
-                     default=16 )
+                     default=None )
 
 parser.add_argument( "-tsf", "--two_state_fit", action='store_true',
-                     help="Performs the two-state fit if supplied" )
+                     help="Performs the two-state fit on "
+                     + "three-point functions if supplied" )
 
 parser.add_argument( "--tsf_fit_start", action='store', type=int,
                      help="If given, will perform two-state fit on " 
@@ -91,18 +126,21 @@ parser.add_argument( "--plat_fit_start", action='store', type=int,
                      help="If given, will perform plateau fit on effective "
                      + "mass starting at given t value, otherwise, will "
                      + "use lowest t value which satisfies condition.",
-                     default=11 )
+                     default=None )
 
-#parser.add_argument( "-f", "--data_format", action='store', \
-#                     help="Data format. Should be 'gpu', " \
-#                     + "'cpu', or 'ASCII'.", \
-#                     type=str, default="gpu" )
+parser.add_argument( "-c", "--config_list", action='store',
+                     type=str, default="",
+                     help="Filename of configuration list file. "
+                     + "If not given, will use list of subdirectories "
+                     + "in 'threepDir'." )
 
-parser.add_argument( "-c", "--config_list", action='store', \
-                     type=str, default="" )
+parser.add_argument( "-m", "--momentum_transfer_list", action='store',
+                     type=str, default="",
+                     help="Filename of momentum transfer list file. "
+                     + "If not given, will use list from two-point "
+                     + "function data file." )
 
-parser.add_argument( "-m", "--momentum_transfer_list", action='store', \
-                     type=str, default="" )
+# Parse
 
 args = parser.parse_args()
 
@@ -142,8 +180,18 @@ binSize = args.binSize
 
 output_template = args.output_template
 
-#tsf_fitStart = args.tsf_fit_start
-plat_fitStart = args.plat_fit_start
+# Set whether or not to check that the two-state fit on 
+# the two-point functions and plateau fit on the 
+# effective mass meet the condition
+# | E_2sf - E_plat | = dE_plat / 2
+
+if args.tsf_fit_start and args.plat_fit_start:
+
+    checkFit = False
+
+else:
+
+    checkFit = True
 
 srcNum = args.source_number
 
@@ -162,7 +210,6 @@ mpi_confs_info[ 'configList' ] = fncs.getConfigList( args.config_list,
 configNum = len( mpi_confs_info[ 'configList' ] )
 mpi_confs_info[ 'configNum' ] = configNum
 
-binSize = args.binSize
 mpi_confs_info[ 'binSize' ] = binSize
 
 # Set mpi configuration information
@@ -179,17 +226,20 @@ recvOffset = mpi_confs_info[ 'recvOffset' ]
 
 # Check inputs
 
+# Check that particle is valid
+
 assert particle in particle_list, \
     "Error: Particle not supported. " \
     + "Supported particles: " + str( particle_list )
 
-#assert dataFormat in format_list, \
-#    "Error: Data format not supported. " \
-#    + "Supported formats: " + str( format_list )
+# Check that configNum is evenely divided by binSize
 
 assert configNum % binSize == 0, "Number of configurations " \
     + str( configNum ) + " not evenly divided by bin size " \
     + str( binSize ) + "."
+
+# Check that three-point functions are in boosted frame
+# if we are calculating the 2- or 3-derivative form factors
 
 if formFactor in [ "A30_B30", "A40_B40_C40" ] and pSq_fin == 0:
 
@@ -198,6 +248,8 @@ if formFactor in [ "A30_B30", "A40_B40_C40" ] and pSq_fin == 0:
 
     mpi_fncs.mpiPrintError( errorMessage.format( formFactor ),
                             mpi_confs_info )
+
+# Set projectors and flavors based on particle
 
 if particle == "pion":
 
@@ -218,6 +270,8 @@ elif particle == "nucleon":
     flav_str = [ "IV", "IS" ]
 
 flavNum = len( flav_str )
+
+# Set the number of ratios to be included in each SVD process
 
 ratioNum = fncs.setRatioNumber( formFactor, particle, mpi_confs_info )
 
@@ -318,6 +372,8 @@ qSq_start = np.array( qSq_start )
 qSq_end = np.array( qSq_end )
 qSq_where = np.array( qSq_where )
 
+# Write momentum transfer list file
+
 if rank == 0:
     
     q_filename = rw.makeFilename( output_template,
@@ -343,10 +399,11 @@ finalMomentaNum = len( p_fin )
 ############################
 
 # Zero momentum two-point functions
-# twop[ smr, c, q, t ]
+# twop_q[ smr, c, q, t ]
 
 twop_q = [ [] for smr in smear_str_list ]
 
+# Loop over smears
 for smr, ismr in zip( smear_str_list, range( smearNum ) ):
 
     twop_template_smr = twop_template[ ismr ].format( smr )
@@ -499,6 +556,8 @@ if rank == 0:
 ###########################
 
 
+# Initialize fit parameter arrays
+
 c0 = np.zeros( ( smearNum, binNum, qSqNum ) )
 c1 = np.zeros( ( smearNum, binNum, qSqNum ) )
 E0 = np.zeros( ( smearNum, binNum, qSqNum ) )
@@ -518,10 +577,17 @@ for ismr in range( smearNum ):
     # fitResults = ( fitParams, chiSq, plat_fit,
     #                twop_t_low, plat_t_low, fitType )
 
+    # Fit the two-point functions and effective mass
+
     fitResults = fit.effEnergyTwopFit( effEnergy[ :, ismr, 0, : ],
                                        twop[ :, ismr, 0, : ], rangeEnd,
                                        0, L, True, mpi_confs_info,
+                                       plat_t_low_range=[args.plat_fit_start],
+                                       tsf_t_low_range=[args.tsf_fit_start],
+                                       checkFit=checkFit,
                                        fitType="twop" )
+
+    # Set fitting parameters
 
     c0[ ismr, :, 0 ] = fitResults[ 0 ][ :, 0 ]
     c1[ ismr, :, 0 ] = fitResults[ 0 ][ :, 1 ]
@@ -529,13 +595,22 @@ for ismr in range( smearNum ):
     E1[ ismr, :, 0 ] = fitResults[ 0 ][ :, 3 ]
 
     mEff_plat[ ismr ] = fitResults[ 2 ]
-    tsf_fitStart = fitResults[ 3 ]
 
-    # Fit the effective two-point functions 
+    if imsr == 0:
+
+        # Set start of fit ranges
+
+        tsf_fitStart = fitResults[ 3 ]
+        plat_fitStart = fitResults_twop[ 4 ]
+
+    # Fit the two-point functions for each q > 0
     
+    # Loop over momenta
     for iq in range( 1, qSqNum ):
 
         if dispRel:
+
+            # Fit using E = sqrt( m^2 + p^2 )
 
             fitParams, chiSq \
                 = fit.twoStateFit_twop_dispersionRelation( twop[ :, ismr, iq, : ],
@@ -550,6 +625,8 @@ for ismr in range( smearNum ):
             E1[ ismr, :, iq ] = fitParams[ :, 2 ]
 
         else:
+
+            # Fit with E0 a parameter
 
             E_guess = pq.energy( np.average( mEff_plat[ ismr ], axis=0 ),
                                  qSq[ ismr, iq ], L )
@@ -645,11 +722,13 @@ if rank == 0:
 
 # End first process
 
+# Set the smear index for each flavor based on the particle
+
 if particle == "pion" or particle == "nucleon":
 
     ismr_flav = [ 0 ]
 
-else:
+else: # particle == "kaon"
 
     if pSq_fin == 0:
 
@@ -819,8 +898,8 @@ for ts, its in fncs.zipXandIndex( tsink ):
     # End loop over final momenta
 # End loop over tsink
 
-# threep_jk[ ts, p, b, flav, q, ratio, t ]
-# -> threep_jk[ ts, flav, b, p, q, ratio, t ]
+# threep_jk[ ts, p, b_loc, flav, q, ratio, t ]
+# -> threep_jk[ ts, flav, b_loc, p, q, ratio, t ]
 
 threep_jk_loc = np.moveaxis( threep_jk_loc, [ 1, 3 ], [ 3, 1 ] )
 
@@ -852,6 +931,8 @@ for iflav in range( flavNum ):
 
 Qsq = np.zeros( ( binNum, QsqNum ), dtype=float, order='c' )
 
+# Gather Q^2
+
 comm.Gatherv( Qsq_loc,
               [ Qsq,
                 recvCount \
@@ -868,6 +949,8 @@ for ts, its in zip( tsink, range( tsinkNum ) ):
 
     if rank == 0:
                 
+        # Set the number of form factors
+
         formFactorNum = 3 if formFactor == "A40_B40_C40" \
                         else 2
 
@@ -886,17 +969,25 @@ for ts, its in zip( tsink, range( tsinkNum ) ):
     Qsq_good = np.full( ( flavNum, QsqNum ), False, dtype=bool )
     #Qsq_good = np.full( ( flavNum, QsqNum, 4 ), False, dtype=bool )
 
+    # Calculate ratio
+
     # Loop over flavor
     for iflav in range( flavNum ):
+
+        # Smear index for this flavor
+
+        ismr = ismr_flav[ iflav ]
 
         # ratio_loc[ b_loc, p, q, proj*curr, t ]
         
         if particle == "nucleon":
             
+            # Calculate ratio with two-point functions
+
             ratio_loc \
                 = pq.calcFormFactorRatio( threep_jk_loc[ its, iflav ],
                                           twop_jk[ binList_loc,
-                                                   ismr_flav[ ismr ],
+                                                   ismr,
                                                    :, : ],
                                           ts )
                     
@@ -904,34 +995,41 @@ for ts, its in zip( tsink, range( tsinkNum ) ):
 
             if dispRel:
 
+                # Calculate ratio with modified two-point functions
+                # C = c0 exp( -sqrt( m^2 + p^2 ) t )
+
                 ratio_loc \
                     =pq.calcFormFactorRatio_twopFit(threep_jk_loc[ its,
                                                                    iflav ],
-                                                    c0[ ismr_flav[iflav],
+                                                    c0[ ismr,
                                                     binList_loc ],
-                                                    mEff_plat[ ismr_flav[iflav],
+                                                    mEff_plat[ ismr,
                                                                binList_loc ],
                                                     ts, p_fin[ iflav ],
                                                     q_threep[ iflav ],
-                                                    qSq[ ismr_flav[ iflav ] ],
+                                                    qSq[ ismr ],
                                                     L, True, mpi_confs_info)
 
             else:
 
+                # Calculate ratio with modified two-point functions
+                # C = c0 exp( -E0 t )
+
                 ratio_loc \
                         =pq.calcFormFactorRatio_twopFit(threep_jk_loc[ its,
                                                                    iflav ],
-                                                    c0[ ismr_flav[iflav],
+                                                    c0[ ismr,
                                                         binList_loc ],
-                                                    E0[ ismr_flav[iflav],
+                                                    E0[ ismr,
                                                         binList_loc ],
                                                     ts, p_fin[ iflav ],
                                                     q_threep[ iflav ],
-                                                    qSq[ ismr_flav[ iflav ] ],
+                                                    qSq[ ismr ],
                                                     L, False, mpi_confs_info)
             
         # End if meson
 
+        # Gather ratio
         # ratio[ b, p, q, proj*curr, t ]
 
         ratio = np.zeros( ( binNum, ) + ratio_loc.shape[ 1: ] )
@@ -946,30 +1044,29 @@ for ts, its in zip( tsink, range( tsinkNum ) ):
 
         if rank == 0:
 
+            # Average over bins
+
             ratio_avg = np.average( ratio, axis=0 )
             ratio_err = fncs.calcError( ratio, binNum )
 
-            #print("tsink={}".format(ts))
-            #print(ratio_avg)
+            # Write ratios for each final momentum
 
-            for p, ip in fncs.zipXandIndex( p_fin[ iflav ] ):
+            #for p, ip in fncs.zipXandIndex( p_fin[ iflav ] ):
 
-                output_filename \
-                    = rw.makeFilename( output_template,
-                                       "{:}_ratio_{:}_{:}_tsink{:}" \
-                                       + "_{:+}_{:+}_{:+}_Qsq0" \
-                                       + "_{:}configs_binSize{:}",
-                                       formFactor,
-                                       particle,
-                                       flav_str[ iflav ],
-                                       ts, p[ 0 ], p[ 1 ], p[ 2 ],
-                                       configNum, binSize )
+            #    output_filename \
+            #        = rw.makeFilename( output_template,
+            #                           "{:}_ratio_{:}_{:}_tsink{:}" \
+            #                           + "_{:+}_{:+}_{:+}_Qsq0" \
+            #                           + "_{:}configs_binSize{:}",
+            #                           formFactor,
+            #                           particle,
+            #                           flav_str[ iflav ],
+            #                           ts, p[ 0 ], p[ 1 ], p[ 2 ],
+            #                           configNum, binSize )
 
-                rw.writeAvgDataFile( output_filename,
-                                     ratio_avg[ ip, 0, 0, : ],
-                                     ratio_err[ ip, 0, 0, : ] )
-
-        #mpi_fncs.mpiPrint(np.average(ratio[:,:,0,0],axis=(0,1)),mpi_confs_info)
+            #    rw.writeAvgDataFile( output_filename,
+            #                         ratio_avg[ ip, 0, 0, : ],
+            #                         ratio_err[ ip, 0, 0, : ] )
 
         # ratio_err[ p, q, ratio ]
 
@@ -978,6 +1075,8 @@ for ts, its in zip( tsink, range( tsinkNum ) ):
         # ratio_fit_loc[ b_loc, p, q, ratio ]
 
         if binNum_loc:
+
+            # Fit ratios to a plateau fit
 
             ratio_fit_loc = fit.fitFormFactor( ratio_loc,
                                                ratio_err,
@@ -997,10 +1096,11 @@ for ts, its in zip( tsink, range( tsinkNum ) ):
 
                 ratio_fit_loc = Z * ratio_fit_loc
 
-        else:
+        else: # No bin on this process
 
             ratio_fit_loc = None
 
+        # Gather ratio fits
         # ratio_fit[ b, p, q, proj*curr ]
 
         ratio_fit = np.zeros( ( binNum, ) + ratio_fit_loc.shape[ 1: ] )
@@ -1013,38 +1113,11 @@ for ts, its in zip( tsink, range( tsinkNum ) ):
                            * np.prod( ratio_fit_loc.shape[ 1: ] ),
                            MPI.DOUBLE ] )
 
-        #mpi_fncs.mpiPrint(np.average(ratio_fit[:,0,0,0],axis=0),mpi_confs_info)
-
         # ratio_fit_err[ p, q, ratio ]
 
         ratio_fit_err = fncs.calcError( ratio_fit, binNum )        
-        """
-        if rank == 0:
 
-            curr_str = [ "g0D0", "g0Dx", "g0Dy", "g0Dz",
-                         "gxDy", "gxDz", "gyDz" ]
-
-            for curr, icurr in fncs.zipXandIndex( curr_str ):
-
-                output_filename \
-                    = rw.makeFilename( output_template,
-                                       "ratio_fit_{}_{}_tsink{}_psq{}" \
-                                       + "_{}configs_binSize{}",
-                                       particle,
-                                       curr,
-                                       ts, pSq_fin,
-                                       configNum, binSize )            
-          
-                rw.writeDataFile_wX( output_filename,
-                                     q_threep[ 1:7 ], 
-                                     ratio_fit[ :, 0, 1:7, icurr ] )
-        """
-
-        ###############################
-        # Calculate kinematic factors #
-        ###############################
-
-
+        # Calculate kinematic factors
         # kineFacter_loc[ b_loc, p, q, r, [ F1, F2 ] ]
         
         kineFactor_loc = pq.kineFactor( ratio_fit_err,
@@ -1055,6 +1128,7 @@ for ts, its in zip( tsink, range( tsinkNum ) ):
                                         p_fin[ iflav ], q_threep[ iflav ], L,
                                         mpi_confs_info )
         
+        # Gather kineFactor
         # kineFactor[ b, p, q, r, [ F1, F2 ] ]
 
         #kineFactor = np.zeros( ( binNum, ) + kineFactor_loc.shape[ 1: ] )
@@ -1066,23 +1140,9 @@ for ts, its in zip( tsink, range( tsinkNum ) ):
         #                   recvOffset \
         #                   * np.prod( kineFactor_loc.shape[ 1: ] ),
         #                   MPI.DOUBLE ] )
-        """
-        if rank == 0:
 
-            kineFactor_avg = np.average(kineFactor[:,0],axis=0)
+        # Expected sign of form factor to remove erroneous data
 
-            output_filename \
-                = rw.makeFilename( output_template,
-                                   "kineFactor_A20_B20_{}_tsink{}_psq{}" \
-                                   + "_{}configs_binSize{}",
-                                   particle,
-                                   ts, pSq_fin,
-                                   configNum, binSize )            
-
-            rw.writeSVDOutputFile( output_filename,
-                                   kineFactor_avg,
-                                   q_threep )
-        """
         if formFactor == "GE_GM":
 
             ratioSign = -1.0 if flav_str[ iflav ] == "s" else 1.0
@@ -1091,12 +1151,9 @@ for ts, its in zip( tsink, range( tsinkNum ) ):
                      
             ratioSign = 1.0
 
+        # Calculate form factors from ratio fits
+        # and kinematic factors using SVD
         # F_loc[ b_loc, qs, [ F1, F2(, F3 ) ] ]
-
-        #mpi_fncs.mpiPrint(kineFactor_loc.shape,mpi_confs_info)
-        #mpi_fncs.mpiPrint(kineFactor_loc[0,:3],mpi_confs_info)
-        #mpi_fncs.mpiPrint(ratio_fit.shape,mpi_confs_info)
-        #mpi_fncs.mpiPrint(ratio_fit_err.shape,mpi_confs_info)
 
         F_loc, Qsq_good[ iflav ], \
             = pq.calcFormFactors_SVD( kineFactor_loc,
@@ -1107,6 +1164,8 @@ for ts, its in zip( tsink, range( tsinkNum ) ):
                                       ratioSign,
                                       pSq_fin,
                                       mpi_confs_info )
+
+        # Gather form factors
 
         comm.Gatherv( F_loc,
                       [ F[ iflav ],
@@ -1132,6 +1191,8 @@ for ts, its in zip( tsink, range( tsinkNum ) ):
 
             #curr_str = [ "g0", "gx", "gy", "gz" ]
 
+            # This is for formatting so that we can easily change
+            # to loop over the insertion currents
             if True:
                 #for ic in range( 4 ):
 
@@ -1141,11 +1202,11 @@ for ts, its in zip( tsink, range( tsinkNum ) ):
                 F_err = F_err.reshape( ( binNum, )
                                        + F.shape[ 2: ] )
 
-                for iqs in range( QsqNum ):
+                # Determine which Q^2 are good, i.e., 
+                # the error is < 25%
 
-                    #mpi_fncs.mpiPrint(F_err[ :, iqs, 0 ]
-                    #/ np.abs( F[ iflav, :, iqs, 0 ] ),
-                    #mpi_confs_info)
+                # Loop over Q^2 index
+                for iqs in range( QsqNum ):
 
                     if np.any( ( F_err[ :, iqs, 0 ]
                                  / np.abs( F[ iflav, :, iqs, 0 ] )
@@ -1158,12 +1219,10 @@ for ts, its in zip( tsink, range( tsinkNum ) ):
                 # Get results for good Q^2
                 # F[ flav, b, qs_good, [ F1, F2 ] ]
 
-                #print(np.average(F[iflav],axis=0))
-
                 F_good = F[ :, :, Qsq_good[ iflav ], : ]
                 #F_good = F[ :, :, Qsq_good[ iflav, :, ic ], ic, : ]
 
-                #print(np.average(F_good[iflav],axis=0))
+                # Average over bins and convert to GeV^2
 
                 Qsq_GeV = np.average( Qsq[ :,
                                            Qsq_good[ iflav, : ] ],
@@ -1172,26 +1231,27 @@ for ts, its in zip( tsink, range( tsinkNum ) ):
                 #Qsq_GeV = np.average( Qsq[ :,
                 #                                Qsq_good[ iflav, :, ic ] ],
                 #                      axis=0 ) * ( 0.197 / a ) ** 2
-        
-                """
-                decomp_avg = np.average(decomp,axis=0)
 
-                output_filename \
-                    = rw.makeFilename( output_template,
-                                       "decomp_A20_B20_{}_tsink{}_psq{}" \
-                                       + "_{}configs_binSize{}",
-                                       particle,
-                                       ts, pSq_fin,
-                                       configNum, binSize )            
+                #decomp_avg = np.average(decomp,axis=0)
 
-                rw.writeSVDOutputFile( output_filename,
-                                       decomp_avg,
-                                       q_threep )
-                """
+                #output_filename \
+                #    = rw.makeFilename( output_template,
+                #                       "decomp_A20_B20_{}_tsink{}_psq{}" \
+                #                       + "_{}configs_binSize{}",
+                #                       particle,
+                #                       ts, pSq_fin,
+                #                       configNum, binSize )            
+
+                #rw.writeSVDOutputFile( output_filename,
+                #                       decomp_avg,
+                #                       q_threep )
+
                 # Average over bins
 
                 F_avg = np.average( F_good[ iflav ], axis=0 )
                 F_err = fncs.calcError( F_good[ iflav ], binNum )
+
+                # Set string used in output file based on form factor
 
                 if formFactor == "GE_GM":
                             
@@ -1223,6 +1283,8 @@ for ts, its in zip( tsink, range( tsinkNum ) ):
 
                     F_str = [ "A40", "B40", "C40" ]
 
+                # Write form factor output files
+
                 for ff, iff in fncs.zipXandIndex( F_str ):
 
                     output_filename \
@@ -1233,73 +1295,70 @@ for ts, its in zip( tsink, range( tsinkNum ) ):
                                            flav_str[ iflav ],
                                            ts, pSq_fin,
                                            configNum, binSize )
-                    """
-                    output_filename \
-                        = rw.makeFilename( output_template,
-                                           "{}_{}_{}_{}_tsink{}_psq{}" \
-                                           + "_{}configs_binSize{}",
-                                           ff,
-                                           particle,
-                                           flav_str[iflav],
-                                           curr_str[ ic ],
-                                           ts, pSq_fin,
-                                           configNum, binSize )
-                    """
+
+                    #output_filename \
+                    #    = rw.makeFilename( output_template,
+                    #                       "{}_{}_{}_{}_tsink{}_psq{}" \
+                    #                       + "_{}configs_binSize{}",
+                    #                       ff,
+                    #                       particle,
+                    #                       flav_str[iflav],
+                    #                       curr_str[ ic ],
+                    #                       ts, pSq_fin,
+                    #                       configNum, binSize )
+
                     rw.writeAvgDataFile_wX( output_filename, Qsq_GeV,
                                             F_avg[ :, iff ],
                                             F_err[ :, iff ] )
-                    
+            # End loop over insertion currents (for testing)
+        # End first process
     # End loop over flavor
+    
 
-    # Flavor combo for F_M
+    ##############################
+    # Flavor combination for F_H #
+    ##############################
+
 
     if formFactor == "GE_GM" and rank == 0:
 
-        # Write the flavor combined form factors
-                
         # Get results for good Q^2
         # F[ flav, b, qs_good, [ F1, F2 ] ]
 
+        Qsq_good_flavCombo = Qsq_good[ 0 ] & Qsq_good[ 1 ]
+
+        F_good_flavCombo = F[ :, :, Qsq_good_flavCombo, : ]
+
         if particle in [ "kaon", "nucleon" ]:
 
-            Qsq_good = Qsq_good[ 0 ] & Qsq_good[ 1 ]
+            # F_K = 2/3 F_u - 1/3 F_s
+            # F_N = 2/3 F_u - 1/3 F_d
 
-            F = F[ :, :, Qsq_good, : ]
-
-            F = 2./3. * F[ 0 ] - 1./3. * F[ 1 ]
+            F_flavCombo = 2./3. * F_good_flavCombo[ 0 ] \
+                          - 1./3. * F_good_flavCombo[ 1 ]
         
-        else:
+        else: # particle == "pion"
 
-            Qsq_good = Qsq_good[ 0 ]
+            # F_pi = 2/3 F_u - 1/3 F_d = F_u
 
-            F = F[ :, :, Qsq_good, : ]
-
-            F = F[ 0 ]
+            F_flavCombo = F_good_flavCombo[ 0 ]
 
         # End pion
 
-        Qsq_GeV = np.average( Qsq[ :, Qsq_good ], axis=0 ) \
+        # Convert Q^2 to GeV^2
+
+        Qsq_GeV_flavCombo = np.average( Qsq[ :, Qsq_good_flavCombo ],
+                                        axis=0 ) \
                   * ( 0.197 / a ) ** 2
         
         # Average over bins
         
-        F_avg = np.average( F, axis=0 )
-        F_err = fncs.calcError( F, binNum )
+        F_flavCombo_avg = np.average( F_flavCombo, axis=0 )
+        F_flavCombo_err = fncs.calcError( F_flavCombo, binNum )
                       
+        # Write output
 
-        ################
-        # Write output #
-        ################
-
-                
-        if particle == "nucleon":
-
-            F_str = [ "GE", "GM" ]
-                    
-        else:
-                
-            F_str = [ "GE" ]
-            
+        # Loop over form factors
         for ff, iff in fncs.zipXandIndex( F_str ):
 
             output_filename \
@@ -1310,9 +1369,9 @@ for ts, its in zip( tsink, range( tsinkNum ) ):
                                    ts, pSq_fin,
                                    configNum, binSize )
 
-            rw.writeAvgDataFile_wX( output_filename, Qsq_GeV,
-                                    F_avg[ :, iff ],
-                                    F_err[ :, iff ] )
+            rw.writeAvgDataFile_wX( output_filename, Qsq_GeV_flavCombo,
+                                    F_flavCombo_avg[ :, iff ],
+                                    F_flavCombo_err[ :, iff ] )
             
         # End loop over form factor
     # End first rank
@@ -1328,16 +1387,15 @@ if tsf and pSq_fin == 0:
 
     mpi_fncs.mpiPrint( "Will perform the two-state fit", mpi_confs_info )
 
+    # Number of three-point functions to neglect on source and sink sides
+
+    neglect = 3
+
     # F_tsf[ flav, b, qsq, [ F1, F2 ] ]
 
-    if rank == 0:
-                
-        formFactorNum = 3 if formFactor == "A40_B40_C40" \
-                        else 2
-
-        F_tsf = np.zeros( ( flavNum, binNum,
-                            QsqNum, formFactorNum ),
-                          dtype=float, order='c' )
+    F_tsf = np.zeros( ( flavNum, binNum,
+                        QsqNum, formFactorNum ),
+                      dtype=float, order='c' )
             
     else:
 
@@ -1350,51 +1408,69 @@ if tsf and pSq_fin == 0:
     # Loop over flavors
     for iflav in range( flavNum ):
 
+        # Smear index for this flavor
+
+        ismr = ismr_flav[ iflav ]
+
+        # Perform two-state fit
         # tsfParams[ b, q, r, [ A00, A01, A10, A11 ] ]
 
         if dispRel:
 
+            # Calculate two-state fit parameters using dispersion relation
+            # to calculate E0 = sqrt( mEff^2 + p^2 )
+
             tsfParams \
-                = fit.twoStateFit_threep_momTransfer(threep_jk_loc[ :,
-                                                                    iflav,
-                                                                    :, 0,
-                                                                    :, :, : ],
-                                                     tsink,
-                                                     mEff_plat[ismr_flav[iflav]],
-                                                     E1[ismr_flav[iflav]],
-                                                     q_threep[ iflav ],
-                                                     qSq_where_threep,
-                                                     3, L, True,
-                                                     mpi_confs_info)
+                = fit.twoStateFit_threep_momTransfer( threep_jk_loc[ :,
+                                                                     iflav,
+                                                                     :, 0,
+                                                                     :, :,
+                                                                     : ],
+                                                      tsink,
+                                                      mEff_plat[ ismr ],
+                                                      E1[ ismr ],
+                                                      q_threep[ iflav ],
+                                                      qSq_where_threep,
+                                                      neglect, L, True,
+                                                      mpi_confs_info)
 
         else:
 
+            # Calculate two-state fit parameters using E0 from 
+            # two-state fit on two-point functions
+
             tsfParams \
                 = fit.twoStateFit_threep_momTransfer(threep_jk_loc[ :,
                                                                     iflav,
                                                                     :, 0,
-                                                                    :, :, : ],
+                                                                    :, :, 
+                                                                    : ],
                                                      tsink,
-                                                     E0[ ismr_flav[ iflav ] ],
-                                                     E1[ ismr_flav[ iflav ] ],
+                                                     E0[ ismr ],
+                                                     E1[ ismr ],
                                                      q_threep[ iflav ],
                                                      qSq_where_threep,
-                                                     3, L, False,
+                                                     neglect, L, False,
                                                      mpi_confs_info)
         
+        # Two-state fit parameters
+
         a00 = tsfParams[ ..., 0 ]
         a01 = tsfParams[ ..., 1 ]
         a10 = tsfParams[ ..., 2 ]
         a11 = tsfParams[ ..., 3 ]
 
+        # Ratio from two-state fit
         # Ratio_tsf_loc[ b_loc, q, r ]
 
         ratio_tsf_loc \
             = pq.calcFormFactorRatio_tsf( a00[ binList_loc ],
-                                          c0[ ismr_flav[ iflav ],
+                                          c0[ ismr,
                                               binList_loc ],
                                           qSq_where_threep,
                                           mpi_confs_info )
+
+        # Multiply by renormalization factor
 
         if formFactor == "A20_B20":
 
@@ -1408,6 +1484,7 @@ if tsf and pSq_fin == 0:
 
             ratio_tsf_loc = Z * ratio_tsf_loc
 
+        # Gather ratio
         # ratio_tsf[ b, p, q, r ]
 
         ratio_tsf = np.zeros( ( binNum, 1, ) + ratio_tsf_loc.shape[ 1: ] )
@@ -1441,6 +1518,7 @@ if tsf and pSq_fin == 0:
                                             q_threep[ iflav ], L,
                                             mpi_confs_info )
         
+        # Gather kinematic factor
         # kineFactor_tsf[ b, p, q, r, [ F1, F2 ] ]
 
         kineFactor_tsf = np.zeros( ( binNum, )
@@ -1454,6 +1532,7 @@ if tsf and pSq_fin == 0:
                            * np.prod( kineFactor_tsf_loc.shape[ 1: ] ),
                            MPI.DOUBLE ] )
 
+        # Gather two-state fit form factor
         # F_tsf_loc[ b_loc, qs, [ F1, F2(, F3 ) ] ]
 
         F_tsf_loc, Qsq_good_tsf[ iflav ], \
@@ -1505,16 +1584,6 @@ if tsf and pSq_fin == 0:
             F_tsf_avg = np.average( F_good_tsf[ iflav ], axis=0 )
             F_tsf_err = fncs.calcError( F_good_tsf[ iflav ], binNum )
 
-            if formFactor == "GE_GM":
-                            
-                if particle == "nucleon":
-
-                    F_str = [ "GE", "GM" ]
-                    
-                else:
-                
-                    F_str = [ "GE" ]
-                
             for ff, iff in fncs.zipXandIndex( F_str ):
 
                 output_filename \
@@ -1535,7 +1604,11 @@ if tsf and pSq_fin == 0:
         # End first process
     # End loop over flavor
 
-    # Flavor combo for F_M
+
+    ##############################
+    # Flavor combination for F_H #
+    ##############################
+
 
     if formFactor == "GE_GM" and rank == 0:
 
@@ -1544,46 +1617,40 @@ if tsf and pSq_fin == 0:
         # Get results for good Q^2
         # F_tsf[ flav, b, qs_good, [ F1, F2 ] ]
 
-        if particle in [ "kaon", "nucleon" ]:
+        Qsq_good_flavCombo_tsf = Qsq_good_tsf[ 0 ] & Qsq_good_tsf[ 1 ]
 
-            Qsq_good_tsf = Qsq_good_tsf[ 0 ] & Qsq_good_tsf[ 1 ]
+        F_good_flavCombo_tsf = F_tsf[ :, :, Qsq_good_tsf, : ]
 
-            F_tsf = F_tsf[ :, :, Qsq_good_tsf, : ]
+       if particle in [ "kaon", "nucleon" ]:
 
-            F_tsf = 2./3. * F_tsf[ 0 ] - 1./3. * F_tsf[ 1 ]
+            # F_K = 2/3 F_u - 1/3 F_s
+            # F_N = 2/3 F_u - 1/3 F_d
+
+           F_flavCombo_tsf = 2./3. * F_good_flavCombo_tsf[ 0 ] \
+                         - 1./3. * F_good_flavCombo_tsf[ 1 ]
         
-        else:
+        else: # particle == "pion"
 
-            Qsq_good_tsf = Qsq_good_tsf[ 0 ]
+            # F_pi = 2/3 F_u - 1/3 F_d = F_u
 
-            F_tsf = F_tsf[ :, :, Qsq_good_tsf, : ]
-
-            F_tsf = F_tsf[ 0 ]
+            F_flavCombo_tsf = F_good_flavCombo_tsf[ 0 ]
 
         # End pion
 
-        Qsq_GeV = np.average( Qsq[ :, Qsq_good_tsf ], axis=0 ) \
-                  * ( 0.197 / a ) ** 2
+        # Convert Q^2 to GeV^2
+
+        Qsq_GeV_flavCombo = np.average( Qsq[ :, Qsq_good_flavCombo_tsf ],
+                                        axis=0 ) \
+            * ( 0.197 / a ) ** 2
         
         # Average over bins
         
-        F_tsf_avg = np.average( F_tsf, axis=0 )
-        F_tsf_err = fncs.calcError( F_tsf, binNum )
+        F_flavCombo_tsf_avg = np.average( F_flavCombo_tsf, axis=0 )
+        F_flavCombo_tsf_err = fncs.calcError( F_flavCombo_tsf, binNum )
                       
-
-        ################
-        # Write output #
-        ################
-
+        # Write output
                 
-        if particle == "nucleon":
-
-            F_str = [ "GE", "GM" ]
-                    
-        else:
-                
-            F_str = [ "GE" ]
-            
+        # Loop over form factors
         for ff, iff in fncs.zipXandIndex( F_str ):
 
             output_filename \
@@ -1596,9 +1663,9 @@ if tsf and pSq_fin == 0:
                                    pSq_fin,
                                    configNum, binSize )
 
-            rw.writeAvgDataFile_wX( output_filename, Qsq_GeV,
-                                    F_tsf_avg[ :, iff ],
-                                    F_tsf_err[ :, iff ] )
+            rw.writeAvgDataFile_wX( output_filename, Qsq_GeV_flavCombo,
+                                    F_flavCombo_tsf_avg[ :, iff ],
+                                    F_flavCombo_tsf_err[ :, iff ] )
             
         # End loop over form factor
     # End first rank
