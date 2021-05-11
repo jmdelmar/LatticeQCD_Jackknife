@@ -91,7 +91,7 @@ parser.add_argument( 't_sink', action='store',
 
 parser.add_argument( "threep_final_momentum_squared",
                      action='store', type=int,
-                     "Final momentum p^2 of three-point functions." )
+                     help="Final momentum p^2 of three-point functions." )
 
 parser.add_argument( "form_factor", action='store', type=str,
                      help="Form factor to calculate. Must be one of "
@@ -120,7 +120,7 @@ parser.add_argument( "--tsf_fit_start", action='store', type=int,
                      + "two-point functions or effective energy "
                      + "starting at given t value, otherwise, will "
                      + "use lowest t value which satisfies condition.",
-                     default=1 )
+                     default=None )
 
 parser.add_argument( "--plat_fit_start", action='store', type=int,
                      help="If given, will perform plateau fit on effective "
@@ -587,6 +587,8 @@ for ismr in range( smearNum ):
                                        checkFit=checkFit,
                                        fitType="twop" )
 
+                                           
+
     # Set fitting parameters
 
     c0[ ismr, :, 0 ] = fitResults[ 0 ][ :, 0 ]
@@ -596,12 +598,12 @@ for ismr in range( smearNum ):
 
     mEff_plat[ ismr ] = fitResults[ 2 ]
 
-    if imsr == 0:
+    if ismr == 0:
 
         # Set start of fit ranges
 
         tsf_fitStart = fitResults[ 3 ]
-        plat_fitStart = fitResults_twop[ 4 ]
+        plat_fitStart = fitResults[ 4 ]
 
     # Fit the two-point functions for each q > 0
     
@@ -1287,6 +1289,22 @@ for ts, its in zip( tsink, range( tsinkNum ) ):
 
                 for ff, iff in fncs.zipXandIndex( F_str ):
 
+                    # Write form factors for each bin
+
+                    output_filename \
+                        = rw.makeFilename( output_template,
+                                           "{}_per_bin_{}_{}_tsink{}_psq{}" \
+                                           + "_{}configs_binSize{}",
+                                           ff, particle,
+                                           flav_str[ iflav ],
+                                           ts, pSq_fin,
+                                           configNum, binSize )
+
+                    rw.writeDataFile_wX( output_filename, Qsq_GeV,
+                                         F_good[ iflav, :, :, iff ] )
+
+                    # Write bin averaged form factors
+
                     output_filename \
                         = rw.makeFilename( output_template,
                                            "{}_{}_{}_tsink{}_psq{}" \
@@ -1325,32 +1343,34 @@ for ts, its in zip( tsink, range( tsinkNum ) ):
         # Get results for good Q^2
         # F[ flav, b, qs_good, [ F1, F2 ] ]
 
-        Qsq_good_flavCombo = Qsq_good[ 0 ] & Qsq_good[ 1 ]
-
-        F_good_flavCombo = F[ :, :, Qsq_good_flavCombo, : ]
-
         if particle in [ "kaon", "nucleon" ]:
 
             # F_K = 2/3 F_u - 1/3 F_s
             # F_N = 2/3 F_u - 1/3 F_d
 
+            Qsq_good_flavCombo = Qsq_good[ 0 ] & Qsq_good[ 1 ]
+
+            F_good_flavCombo = F[ :, :, Qsq_good_flavCombo, : ]
+
             F_flavCombo = 2./3. * F_good_flavCombo[ 0 ] \
                           - 1./3. * F_good_flavCombo[ 1 ]
+        
+            # Convert Q^2 to GeV^2
+        
+            Qsq_GeV_flavCombo = np.average( Qsq[ :, Qsq_good_flavCombo ],
+                                            axis=0 ) \
+                * ( 0.197 / a ) ** 2
         
         else: # particle == "pion"
 
             # F_pi = 2/3 F_u - 1/3 F_d = F_u
 
-            F_flavCombo = F_good_flavCombo[ 0 ]
+            F_flavCombo = F_good[ 0 ]
+
+            Qsq_GeV_flavCombo = Qsq_GeV
 
         # End pion
 
-        # Convert Q^2 to GeV^2
-
-        Qsq_GeV_flavCombo = np.average( Qsq[ :, Qsq_good_flavCombo ],
-                                        axis=0 ) \
-                  * ( 0.197 / a ) ** 2
-        
         # Average over bins
         
         F_flavCombo_avg = np.average( F_flavCombo, axis=0 )
@@ -1393,10 +1413,12 @@ if tsf and pSq_fin == 0:
 
     # F_tsf[ flav, b, qsq, [ F1, F2 ] ]
 
-    F_tsf = np.zeros( ( flavNum, binNum,
-                        QsqNum, formFactorNum ),
-                      dtype=float, order='c' )
-            
+    if rank == 0:
+
+        F_tsf = np.zeros( ( flavNum, binNum,
+                            QsqNum, formFactorNum ),
+                          dtype=float, order='c' )
+        
     else:
 
         F_tsf = np.array( [ [] for flav in flav_str ] )
@@ -1586,6 +1608,8 @@ if tsf and pSq_fin == 0:
 
             for ff, iff in fncs.zipXandIndex( F_str ):
 
+                # CJL: Also write F_good_tsf for each bin
+
                 output_filename \
                     = rw.makeFilename( output_template,
                                        "{}_2sf_{}_{}_tsink{}_{}_psq{}" \
@@ -1614,35 +1638,37 @@ if tsf and pSq_fin == 0:
 
         # Write the flavor combined form factors
                 
-        # Get results for good Q^2
-        # F_tsf[ flav, b, qs_good, [ F1, F2 ] ]
+        if particle in [ "kaon", "nucleon" ]:
 
-        Qsq_good_flavCombo_tsf = Qsq_good_tsf[ 0 ] & Qsq_good_tsf[ 1 ]
+            # Get results for good Q^2
+            # F_tsf[ flav, b, qs_good, [ F1, F2 ] ]
+           
+            Qsq_good_flavCombo_tsf = Qsq_good_tsf[ 0 ] & Qsq_good_tsf[ 1 ]
 
-        F_good_flavCombo_tsf = F_tsf[ :, :, Qsq_good_tsf, : ]
-
-       if particle in [ "kaon", "nucleon" ]:
+            F_good_flavCombo_tsf = F_tsf[ :, :, Qsq_good_flavCombo_tsf, : ]
 
             # F_K = 2/3 F_u - 1/3 F_s
             # F_N = 2/3 F_u - 1/3 F_d
 
-           F_flavCombo_tsf = 2./3. * F_good_flavCombo_tsf[ 0 ] \
-                         - 1./3. * F_good_flavCombo_tsf[ 1 ]
+            F_flavCombo_tsf = 2./3. * F_good_flavCombo_tsf[ 0 ] \
+                              - 1./3. * F_good_flavCombo_tsf[ 1 ]
+        
+            # Convert Q^2 to GeV^2
+
+            Qsq_GeV_flavCombo = np.average( Qsq[ :, Qsq_good_flavCombo_tsf ],
+                                            axis=0 ) \
+                * ( 0.197 / a ) ** 2
         
         else: # particle == "pion"
 
             # F_pi = 2/3 F_u - 1/3 F_d = F_u
-
-            F_flavCombo_tsf = F_good_flavCombo_tsf[ 0 ]
+            
+            F_flavCombo_tsf = F_good_tsf[ 0 ]
+           
+            Qsq_GeV_flavCombo = Qsq_GeV
 
         # End pion
 
-        # Convert Q^2 to GeV^2
-
-        Qsq_GeV_flavCombo = np.average( Qsq[ :, Qsq_good_flavCombo_tsf ],
-                                        axis=0 ) \
-            * ( 0.197 / a ) ** 2
-        
         # Average over bins
         
         F_flavCombo_tsf_avg = np.average( F_flavCombo_tsf, axis=0 )
@@ -1652,6 +1678,8 @@ if tsf and pSq_fin == 0:
                 
         # Loop over form factors
         for ff, iff in fncs.zipXandIndex( F_str ):
+
+            # CJL: Also write F_flavCombo_tsf for each bin
 
             output_filename \
                 = rw.makeFilename( output_template,

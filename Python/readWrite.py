@@ -3760,12 +3760,23 @@ def writeDataFile_wX( filename, x, data ):
 
             else:
             
-                for d1 in range( len( data[ d0 ] ) ):
-                
-                    template = "{:<5d}{:<20.15}\n"
+                if x.dtype == int:
 
-                    output.write( template.format( x[ d1 ],
-                                                   data[ d0, d1 ] ) )
+                    for d1 in range( len( data[ d0 ] ) ):
+                        
+                        template = "{:<5d}{:<20.15}\n"
+                        
+                        output.write( template.format( x[ d1 ],
+                                                       data[ d0, d1 ] ) )
+
+                else:
+
+                    for d1 in range( len( data[ d0 ] ) ):
+                        
+                        template = "{:<20.10f}{:<20.15}\n"
+                        
+                        output.write( template.format( x[ d1 ],
+                                                       data[ d0, d1 ] ) )
 
     print( "Wrote " + filename )
 
