@@ -104,6 +104,9 @@ def twopFit( c0, E0, t ):
     #return c0 * np.exp( -E0 * t ) + c1 * np.exp( -E1 * t )
 
 
+# Calculate the kinematic factor based on the decomposition
+# of the given form factor
+
 def kineFactor( ratio_err, formFactor, particle, flavor,
                 mEff, p_fin, Q, L, mpi_info ):
 
@@ -146,16 +149,19 @@ def kineFactor( ratio_err, formFactor, particle, flavor,
     return kineFactor
 
 
+# Calculate the kinematic factor based on the vector form factor
+# decomposition
+
+# ratio_err[ p, Q, r ]
+# "particle"
+# "flavor"
+# mEff[ b ]
+# p_fin[ p, pi ]
+# momList[ Q, qi ]
+# L
+
 def kineFactor_GE_GM( ratio_err, particle, flavor, mEff, p_fin, Q, L,
                       mpi_info ):
-
-    # ratio_err[ p, Q, r ]
-    # "particle"
-    # "flavor"
-    # mEff[ b ]
-    # p_fin[ p, pi ]
-    # momList[ Q, qi ]
-    # L
 
     finalMomentaNum = ratio_err.shape[ 0 ]
     QNum = ratio_err.shape[ 1 ]
@@ -255,16 +261,19 @@ def kineFactor_GE_GM( ratio_err, particle, flavor, mEff, p_fin, Q, L,
     return kineFactor
 
 
+# Calculate the kinematic factor based on the tensor form
+# factor decomposition
+
+# ratio_err[ p, Q, r ]
+# "particle"
+# "flavor"
+# mEff[ b ]
+# p_fin[ p, pi ]
+# momList[ Q, qi ]
+# L
+
 def kineFactor_BT10( ratio_err, particle, flavor, mEff, p_fin, Q, L,
                      mpi_info ):
-
-    # ratio_err[ p, Q, r ]
-    # "particle"
-    # "flavor"
-    # mEff[ b ]
-    # p_fin[ p, pi ]
-    # momList[ Q, qi ]
-    # L
 
     finalMomentaNum = ratio_err.shape[ 0 ]
     QNum = ratio_err.shape[ 1 ]
@@ -365,16 +374,19 @@ def kineFactor_BT10( ratio_err, particle, flavor, mEff, p_fin, Q, L,
     return kineFactor
 
 
+# Calculate the kinematic factor based on the scalar
+# form factor decomposition
+
+# ratio_err[ p, Q, r ]
+# "particle"
+# "flavor"
+# mEff[ b ]
+# p_fin[ p, pi ]
+# momList[ Q, qi ]
+# L
+
 def kineFactor_FS( ratio_err, particle, flavor, mEff, p_fin, Q, L,
                    mpi_info ):
-
-    # ratio_err[ p, Q, r ]
-    # "particle"
-    # "flavor"
-    # mEff[ b ]
-    # p_fin[ p, pi ]
-    # momList[ Q, qi ]
-    # L
 
     finalMomentaNum = ratio_err.shape[ 0 ]
     QNum = ratio_err.shape[ 1 ]
@@ -443,16 +455,19 @@ def kineFactor_FS( ratio_err, particle, flavor, mEff, p_fin, Q, L,
     return kineFactor
 
 
+# Calculate the kinematic factor based on the 1-derivative
+# form factor decomposition
+
+# ratio_err[ p, Q, r ]
+# "particle"
+# "flavor"
+# mEff[ b ]
+# p_fin[ p, pi ]
+# momList[ Q, qi ]
+# L
+
 def kineFactor_A20_B20( ratio_err, particle, flavor, mEff, p_fin, Q, L,
                         mpi_info ):
-
-    # ratio_err[ p, Q, r ]
-    # "particle"
-    # "flavor"
-    # mEff[ b ]
-    # p_fin[ p, pi ]
-    # momList[ Q, qi ]
-    # L
 
     finalMomentaNum = ratio_err.shape[ 0 ]
     QNum = ratio_err.shape[ 1 ]
@@ -578,16 +593,19 @@ def kineFactor_A20_B20( ratio_err, particle, flavor, mEff, p_fin, Q, L,
     return kineFactor
 
 
+# Calculate the kinematic factor based on the 2-derivative
+# form factor decomposition
+
+# ratio_err[ p, Q, r ]
+# "particle"
+# "flavor"
+# mEff[ b ]
+# p_fin[ p, pi ]
+# momList[ Q, qi ]
+# L
+
 def kineFactor_A30_B30( ratio_err, particle, flavor, mEff, p_fin, Q, L,
                         mpi_info ):
-
-    # ratio_err[ p, Q, r ]
-    # "particle"
-    # "flavor"
-    # mEff[ b ]
-    # p_fin[ p, pi ]
-    # momList[ Q, qi ]
-    # L
 
     finalMomentaNum = ratio_err.shape[ 0 ]
     QNum = ratio_err.shape[ 1 ]
@@ -700,17 +718,20 @@ def kineFactor_A30_B30( ratio_err, particle, flavor, mEff, p_fin, Q, L,
     return kineFactor
 
 
+# Calculate the kinematic factor based on the 3-derivative
+# form factor decomposition
+
+# ratio_err[ p, Q, r ]
+# "particle"
+# "flavor"
+# mEff[ b ]
+# p_fin[ p, pi ]
+# momList[ Q, qi ]
+# L
+
 def kineFactor_A40_B40_C40( ratio_err, particle, flavor,
                             mEff, p_fin, Q, L,
                             mpi_info ):
-
-    # ratio_err[ p, Q, r ]
-    # "particle"
-    # "flavor"
-    # mEff[ b ]
-    # p_fin[ p, pi ]
-    # momList[ Q, qi ]
-    # L
 
     finalMomentaNum = ratio_err.shape[ 0 ]
     QNum = ratio_err.shape[ 1 ]
@@ -825,14 +846,18 @@ def kineFactor_A40_B40_C40( ratio_err, particle, flavor,
     return kineFactor
 
 
+# Calculates form factors using singular value decomposition
+
+# kineFactor_loc[ b_loc, p, q, ratio, [ F1, F2 ] ]
+# ratio[ b, p, q, ratio ]
+# ratio_err[ p, q, ratio ]
+# mpi_info
+    
 def calcFormFactors_SVD( kineFactor_loc, ratio, ratio_err, Qsq_where,
                          formFactor, ratioSign, pSq, mpi_info ):
 
-    # kineFactor_loc[ b_loc, p, q, ratio, [ F1, F2 ] ]
-    # ratio[ b, p, q, ratio ]
-    # ratio_err[ p, q, ratio ]
-    # mpi_info
-    
+    # Set MPI variables
+
     comm = mpi_info[ 'comm' ]
 
     binNum = mpi_info[ 'binNum_glob' ]
@@ -843,15 +868,20 @@ def calcFormFactors_SVD( kineFactor_loc, ratio, ratio_err, Qsq_where,
     recvCount = mpi_info[ 'recvCount' ]
     recvOffset = mpi_info[ 'recvOffset' ]
 
+    # Set dimension sizes
+
     qNum = kineFactor_loc.shape[ 2 ]
 
     QsqNum = len( Qsq_where )
     ratioNum = kineFactor_loc.shape[ -2 ]
 
-    ratio_loc = ratio[ binList_loc ]
-
     formFactorNum = kineFactor_loc.shape[ -1 ]
 
+    # Local ratios on this process
+
+    ratio_loc = ratio[ binList_loc ]
+
+    # Gather kinematic factors
     # kineFactor[ b, p, q, r, [ F1, F2 ] ]
 
     kineFactor = np.zeros( ( binNum, ) + kineFactor_loc.shape[ 1: ] )
@@ -873,53 +903,61 @@ def calcFormFactors_SVD( kineFactor_loc, ratio, ratio_err, Qsq_where,
     ratio_err_glob = np.array( [ ratio_err ] * binNum )
     ratio_err_glob = ratio_err_glob.reshape( ratio.shape )
 
+    # Initialize local form factors
     # F_loc[ b_loc, qs, [ F1, F2 ] ]
 
     F_loc = np.zeros( ( binNum_loc, QsqNum, formFactorNum ), dtype=float )
     #F_loc = np.zeros( ( binNum_loc, QsqNum, 4, 2 ), dtype=float )
     
+    # Initialize boolean array to set location of good Q^2
+    # Qsq_good[ qs ]
+
     Qsq_good = np.full( QsqNum, False, dtype=bool )
     #Qsq_good = np.full( ( QsqNum, 4 ), False, dtype=bool )
 
-    curr_str = [ "g0", "gx", "gy", "gz" ]
+    #curr_str = [ "g0", "gx", "gy", "gz" ]
 
+    # This is to easily switch to testing loop over insertion currents
     if True:
     #for ic in range( 4 ):
-        """
+
         #mpi_fncs.mpiPrint(curr_str[ic],mpi_info)
 
         # Calculate F1 and F2 for Q^2=0 (only needed for testing
         # when there is only one element for Q^2=0)
     
-        sum_axes = tuple( range( 1,
-                                 ratio_loc[ :,
-                                            Qsq_where[ 0 ],
-                                            ic ].ndim ) )
+        #sum_axes = tuple( range( 1,
+        #                         ratio_loc[ :,
+        #                                    Qsq_where[ 0 ],
+        #                                    ic ].ndim ) )
         
-        for f in range( 2 ):
+        #for f in range( 2 ):
 
-            F_loc[ :, 0, ic, f ] \
-                = np.average( ratio_loc[ :,
-                                         Qsq_where[ 0 ],
-                                         ic ]
-                              / ratio_err_loc[ :,
-                                               Qsq_where[ 0 ],
-                                               ic ] ** 2
-                              / kineFactor_loc[ :,
-                                                Qsq_where[ 0 ],
-                                                ic, f ],
-                              axis=sum_axes )
+        #    F_loc[ :, 0, ic, f ] \
+        #        = np.average( ratio_loc[ :,
+        #                                 Qsq_where[ 0 ],
+        #                                 ic ]
+        #                      / ratio_err_loc[ :,
+        #                                       Qsq_where[ 0 ],
+        #                                       ic ] ** 2
+        #                      / kineFactor_loc[ :,
+        #                                        Qsq_where[ 0 ],
+        #                                        ic, f ],
+        #                      axis=sum_axes )
         
-        Qsq_good[ 0, ic ] = True
-        """
+        #Qsq_good[ 0, ic ] = True
+
+        # Loop over Q^2
         for iqs in range( QsqNum ):
         #for iqs in range( 1, QsqNum ):
          
+            # Get kinematic factors for this Q^2
             # kineFactor_Qsq[ b, Q^2[ qs ], r, [ F1, F2 ] ]
 
             kineFactor_Qsq \
                 = kineFactor[ :, Qsq_where[ iqs ], :, : ]
 
+            # Get ratios and their errors for this Q^2
             # ratio_Qsq[ b, Q^2[ qs ], r ]
 
             ratio_Qsq = ratio[ :, Qsq_where[ iqs ], : ]
@@ -929,25 +967,22 @@ def calcFormFactors_SVD( kineFactor_loc, ratio, ratio_err, Qsq_where,
             # for this value of Q^2
 
             QsqNum_Qsq = kineFactor_Qsq.shape[ 1 ]
-            """
+
             # kineFactor_Qsq[ b, Q^2[ qs ], [ F1, F2 ] ]
         
-            kineFactor_Qsq = kineFactor[ :, Qsq_where[ iqs ], ic, : ]
+            #kineFactor_Qsq = kineFactor[ :, Qsq_where[ iqs ], ic, : ]
 
             # ratio_Qsq[ b, Q^2[ qs ] ]
 
-            ratio_Qsq = ratio[ :, Qsq_where[ iqs ], ic ]
-            ratio_err_Qsq = ratio_err_glob[ :, Qsq_where[ iqs ], ic ] 
+            #ratio_Qsq = ratio[ :, Qsq_where[ iqs ], ic ]
+            #ratio_err_Qsq = ratio_err_glob[ :, Qsq_where[ iqs ], ic ] 
 
             # Number of combinations of p and q
             # for this value of Q^2
 
-            QsqNum_Qsq = kineFactor_Qsq.shape[ 1 ]
+            #QsqNum_Qsq = kineFactor_Qsq.shape[ 1 ]
         
-            #mpi_fncs.mpiPrint(kineFactor_Qsq.shape,mpi_info)
-            #mpi_fncs.mpiPrint(ratio_Qsq.shape,mpi_info)
-            #mpi_fncs.mpiPrint(ratio_err_Qsq.shape,mpi_info)
-            """
+            # Combine Q^2 and ratio dimensions, i.e., 
             # kineFactor_Qsq[ b, Q^2[ qs ], r, [ F1, F2 ] ]
             # -> kineFactor_Qsq[ b, Q^2[ qs ] * r, [ F1, F2 ] ]
 
@@ -955,9 +990,7 @@ def calcFormFactors_SVD( kineFactor_loc, ratio, ratio_err, Qsq_where,
                                                      QsqNum_Qsq * ratioNum,
                                                      formFactorNum )
 
-            #mpi_fncs.mpiPrint(np.average(kineFactor_Qsq,axis=0),
-            #                  mpi_info)
-            
+            # Combine Q^2 and ratio dimensions, i.e., 
             # ratio_Qsq[ b, Q^2[ qs ], r ]
             # -> ratio_Qsq[ b, Q^2[ qs ] * r ]
 
@@ -965,43 +998,40 @@ def calcFormFactors_SVD( kineFactor_loc, ratio, ratio_err, Qsq_where,
             ratio_err_Qsq \
                 = ratio_err_Qsq.reshape( binNum, QsqNum_Qsq * ratioNum )
 
+            # Initialize boolean array to set location of good q
+            # for this Q^2
+
             where_good = np.full( ( QsqNum_Qsq * ratioNum ), False,
                                   dtype=bool )
             #where_good = np.full( ( QsqNum_Qsq ), False, dtype=bool )
+
+            # Make array of repeating ratioSign
 
             ratioSign_arr \
                 = np.array( ratio_Qsq.size
                             * [ ratioSign ] ).reshape( ratio_Qsq.shape )
 
-            #mpi_fncs.mpiPrint(kineFactor_Qsq[0],mpi_info)
-            #mpi_fncs.mpiPrint(ratio_Qsq[0],mpi_info)
-            #mpi_fncs.mpiPrint(ratio_err_Qsq[0],mpi_info)
-
             # Loop over Q^2 and ratio
             for iqr in range( QsqNum_Qsq * ratioNum ):
             #for iqr in range( QsqNum_Qsq ):
-
-                #CJL:HERE
 
                 if ( formFactor == "GE_GM" \
                      or formFactor == "BT10" \
                      or formFactor == "FS" ) \
                     and pSq > 0:
                         
-                    # Check that all bins meet requirements:
-                    # K * R has right sign
-                    # error/ratio is < 0.3
-                    # 0.25 < |R| < 1.5
-                    
-                    #mpi_fncs.mpiPrint(ratio_err_Qsq[ 0, iqr ]
-                    #                  / np.abs( ratio_Qsq[ 0, iqr ] ),
-                    #                  mpi_info)
+                    # Check that ratio error <70%
 
                     where_good[ iqr ] \
                             = np.all( ratio_err_Qsq[ :, iqr ]
                                       / np.abs( ratio_Qsq[ :, iqr ] )
                                       < 0.7 )
 
+                    # Check that all bins meet requirements:
+                    # K * R has right sign
+                    # error/ratio is < 0.3
+                    # 0.25 < |R| < 1.5
+                    
                     #where_good[ iqr ] \
                     #    = np.all( ( np.sign( kineFactor_Qsq[ :, iqr, 0 ]
                     #                         * ratio_Qsq[ :, iqr ] )
@@ -1020,16 +1050,11 @@ def calcFormFactors_SVD( kineFactor_loc, ratio, ratio_err, Qsq_where,
 
                 else:
 
-                    #    where_good[ iqr ] \
-                        #        = np.all( ratio_err_Qsq[ :, iqr ]
-                    #                  / np.abs( ratio_Qsq[ :, iqr ] )
-                    #                  < 0.3 )
+                    # Do not neglect any data for these form factors
                 
                     where_good[ iqr ] = True
                     
             # End loop over Q^2 and ratio
-
-            #mpi_fncs.mpiPrint(where_good,mpi_info)
 
             # Skip this Q^2 if there are no good elements
 
@@ -1037,18 +1062,14 @@ def calcFormFactors_SVD( kineFactor_loc, ratio, ratio_err, Qsq_where,
 
                 continue
 
-            #mpi_fncs.mpiPrint(ratio_Qsq[0]/
-            #                  kineFactor_Qsq[0,:,0]/
-            #                  ratio_err_Qsq[0]**2,
-            #                  mpi_info)
-
-            # Change to local
+            # Change to local arrays
                 
             kineFactor_Qsq = kineFactor_loc[ :, Qsq_where[ iqs ], :, : ]
 
             ratio_Qsq = ratio_loc[ :, Qsq_where[ iqs ], : ]
             ratio_err_Qsq = ratio_err_loc[ :, Qsq_where[ iqs ], : ]
             
+            # Combine Q^2 and ratio dimensions, i.e.,
             # kineFactor_Qsq[ b_loc, Q^2[ qs ], r, [ F1, F2 ] ]
             # -> kineFactor_Qsq[ b_loc, Q^2[ qs ] * r, [ F1, F2 ] ]
 
@@ -1056,6 +1077,7 @@ def calcFormFactors_SVD( kineFactor_loc, ratio, ratio_err, Qsq_where,
                                                      QsqNum_Qsq * ratioNum,
                                                      formFactorNum )
 
+            # Combine Q^2 and ratio dimensions, i.e.,
             # ratio_Qsq[ b, Q^2[ qs ], r ]
             # -> ratio_Qsq[ b, Q^2[ qs ] * r ]
 
@@ -1069,50 +1091,39 @@ def calcFormFactors_SVD( kineFactor_loc, ratio, ratio_err, Qsq_where,
             kineFactor_Qsq = kineFactor_Qsq[ :, where_good, : ]
             ratio_Qsq = ratio_Qsq[ :, where_good ]
             ratio_err_Qsq = ratio_err_Qsq[ :, where_good ]
-            """
+
             # Change to local
                 
-            kineFactor_Qsq = kineFactor_loc[ :, Qsq_where[ iqs ], ic, : ]
+            #kineFactor_Qsq = kineFactor_loc[ :, Qsq_where[ iqs ], ic, : ]
 
-            ratio_Qsq = ratio_loc[ :, Qsq_where[ iqs ], ic ]
-            ratio_err_Qsq = ratio_err_loc[ :, Qsq_where[ iqs ], ic ]
+            #ratio_Qsq = ratio_loc[ :, Qsq_where[ iqs ], ic ]
+            #ratio_err_Qsq = ratio_err_loc[ :, Qsq_where[ iqs ], ic ]
             
             # Select good elements
 
-            kineFactor_Qsq = kineFactor_Qsq[ :, where_good, : ]
-            ratio_Qsq = ratio_Qsq[ :, where_good ]
-            ratio_err_Qsq = ratio_err_Qsq[ :, where_good ]
-
-            #mpi_fncs.mpiPrint(kineFactor_Qsq.shape,mpi_info)
-            #mpi_fncs.mpiPrint(ratio_Qsq.shape,mpi_info)
-            #mpi_fncs.mpiPrint(ratio_err_Qsq.shape,mpi_info)
-            """
-            #mpi_fncs.mpiPrint(iqs,mpi_info)
-            #mpi_fncs.mpiPrint(kineFactor_Qsq[0],mpi_info)
+            #kineFactor_Qsq = kineFactor_Qsq[ :, where_good, : ]
+            #ratio_Qsq = ratio_Qsq[ :, where_good ]
+            #ratio_err_Qsq = ratio_err_Qsq[ :, where_good ]
 
             # Perform SVD
+            # kineFactor_Qsq = u s v^T
 
             u, s, vT = np.linalg.svd( kineFactor_Qsq, full_matrices=False )
 
-            #mpi_fncs.mpiPrint(u.shape,mpi_info)
-            #mpi_fncs.mpiPrint(u[0],mpi_info)
-            #mpi_fncs.mpiPrint(s.shape,mpi_info)
-            #mpi_fncs.mpiPrint(s[0],mpi_info)
-            #mpi_fncs.mpiPrint(vT.shape,mpi_info)
-            #mpi_fncs.mpiPrint(vT[0],mpi_info)
-
-            # Calculate ( v s^-1 u^T )^T
+            # Calculate kineFactor_Qsq^-1 = ( v s^-1 u^T )^T
                 
             uT = np.transpose( u, ( 0, 2, 1 ) )
             v = np.transpose( vT, ( 0, 2, 1 ) )
             
-            #mpi_fncs.mpiPrint(uT.shape,mpi_info)
-            #mpi_fncs.mpiPrint(uT[0],mpi_info)
-            
+            # s is array of values on diagonal, make a diagonal matrix
+            # with appropriate shape for matrix multiplication and
+            # calculate its inverse
+
             smat = np.zeros( ( u.shape[-1], vT.shape[-2] ) )
             smat_inv = np.zeros( ( binNum_loc, )
                                  + np.transpose( smat ).shape )
     
+            # Loop over bins
             for b in range( binNum_loc ):
                     
                 smat[ :vT.shape[ -2 ], :vT.shape[ -2 ] ] = np.diag( s[ b ] )
@@ -1121,59 +1132,20 @@ def calcFormFactors_SVD( kineFactor_loc, ratio, ratio_err, Qsq_where,
     
             # End loop over bins
 
-            #mpi_fncs.mpiPrint(v.shape,mpi_info)
-            #mpi_fncs.mpiPrint(v[0],mpi_info)
-            #mpi_fncs.mpiPrint(smat_inv.shape,mpi_info)
-            #mpi_fncs.mpiPrint(smat_inv[0],mpi_info)
-            #mpi_fncs.mpiPrint(uT.shape,mpi_info)
-            #mpi_fncs.mpiPrint(uT[0],mpi_info)
+            # Multiply matrices to get decomop = kineFactor_Qsq^-1
             # decomp[ b_loc, Q^2[qs]*ratio, [ F1, F2 ] ]
             
             decomp = np.transpose( v @ smat_inv @ uT, ( 0, 2, 1 ) )
 
-            #mpi_fncs.mpiPrint(decomp.shape,mpi_info)
+            # Axes to sum over
 
             sum_axes = tuple( range( 1, ratio_Qsq.ndim ) )
  
-            #mpi_fncs.mpiPrint( np.average( decomp[ ..., 0 ]
-            #                               * ratio_Qsq
-            #                               / ratio_err_Qsq ** 2,
-            #                               axis=0 ),
-            #                   mpi_info )
-            
-            #if iqs == 0:
-            #    mpi_fncs.mpiPrint(decomp[0,...,0],mpi_info)
-            #    mpi_fncs.mpiPrint(ratio_Qsq[0],mpi_info)
-
+            # Loop over form factors
             for iff in range( formFactorNum ):
 
-                #CJL:HERE
-                #mpi_fncs.mpiPrint( "kineFactor",mpi_info )
-                #mpi_fncs.mpiPrint( kineFactor_Qsq[ 0, ..., iff ].reshape(ratio_Qsq[0].size//1,1),
-                #                   mpi_info )
-                #mpi_fncs.mpiPrint( "decomp",mpi_info )
-                #mpi_fncs.mpiPrint( decomp[ 0, ..., iff ].reshape(ratio_Qsq[0].size//1,1),
-                #                   mpi_info )
-                #mpi_fncs.mpiPrint( "ratio",mpi_info )
-                #mpi_fncs.mpiPrint( ratio_Qsq[0].reshape(ratio_Qsq[0].size//1,1),
-                #                   mpi_info )
-                #mpi_fncs.mpiPrint( "decomp*ratio",mpi_info )
-                #mpi_fncs.mpiPrint( np.array( decomp[ 0, ..., iff ]
-                #                             * ratio_Qsq[0]
-                #                             / ratio_err_Qsq[0] ** 2 ).reshape(ratio_Qsq[0].size//1,1),
-                #                   mpi_info )
-                #mpi_fncs.mpiPrint( np.array( decomp[ 0, ..., iff ]
-                #                             * ratio_Qsq[0] ).reshape(ratio_Qsq[0].size//1,1),
-                #                   mpi_info )
-                #mpi_fncs.mpiPrint( decomp[ 0, ..., iff ]
-                #                   * ratio_Qsq[0]
-                #                   / ratio_err_Qsq[0] ** 2,
-                #                   mpi_info )
-                #mpi_fncs.mpiPrint( np.sum( decomp[ 0, ..., iff ]
-                #                           * ratio_Qsq[0] 
-                #                           / ratio_err_Qsq[0] ** 2 ),
-                #                   mpi_info )
-                
+                # Calculate form factor for this Q^2
+
                 F_loc[ :, iqs, iff ] \
                     = np.sum( decomp[ ..., iff ]
                               * ratio_Qsq
@@ -1185,24 +1157,16 @@ def calcFormFactors_SVD( kineFactor_loc, ratio, ratio_err, Qsq_where,
                 #                                   axis=sum_axes )
                 #/ ratio_err_Qsq ** 2
 
+            # End loop over form factors
+
+            # This Q^2 is good if we have gotten this far,
+            # would skipped above if there are no good data
+
             Qsq_good[ iqs ] = True
             #Qsq_good[ iqs, ic ] = True
 
-            #if iqs == 0:
-
-            #    decomp_loc = decomp
-
-            #else:
-
-            #    decomp_loc = np.concatenate( ( decomp_loc, decomp ), axis=1 )
-
         # End loop over Q^2
     # End loop over current
-
-    #decomp_loc = np.asarray( decomp_loc.reshape( binNum_loc,
-    #                                             qNum,
-    #                                             ratioNum, 2 ),
-    #                         order='c' )
 
     return F_loc, Qsq_good
 
