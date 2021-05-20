@@ -929,6 +929,8 @@ def twoStateFit_effEnergy( effEnergy, rangeStart, rangeEnd, E_guess, T,
 def twoStateFit_threep( threep, ti_to_fit, tsink, E0, E1,
                         mpi_confs_info ):
 
+    # Set mpi info
+
     comm = mpi_confs_info[ 'comm' ]
     rank = mpi_confs_info[ 'rank' ]
     binNum = mpi_confs_info[ 'binNum_glob' ]
@@ -936,6 +938,8 @@ def twoStateFit_threep( threep, ti_to_fit, tsink, E0, E1,
     binList_loc = mpi_confs_info[ 'binList_loc' ]
     recvCount = mpi_confs_info[ 'recvCount' ]
     recvOffset = mpi_confs_info[ 'recvOffset' ]
+
+    # Set and check array dimensions
 
     assert threep.shape[ 1 ] == binNum, \
         "First dimension size of two-point functions " \
@@ -949,25 +953,35 @@ def twoStateFit_threep( threep, ti_to_fit, tsink, E0, E1,
         "Number of tsink's does not match " \
         + "number of three-point function datasets."
 
+    # Initialize arrays to contain flattened data
+
     ti_flat = np.array( [] )
     tsink_flat = np.array( [] )
 
     # Loop over tsinks
     for its, ts in zip( range( tsinkNum ), tsink ):
 
+        # Flatten ti for each tsink
+
         ti = ti_to_fit[ its ]
 
         ti_flat = np.append( ti_flat, ti )
+
+        # Flatten tsink
 
         tsink_flat = np.append( tsink_flat, 
                                 np.repeat( ts, len( ti ) ) )
 
     # End loop over tsink
 
+    # Number of parameters and degrees of freedom
+
     paramNum = 3
     dof = len( ti_flat ) - paramNum
 
-    # threep[ ts, b, t ]
+    # Initialize arrays
+
+    # threep_to_fit[ ts, b, t ]
 
     threep_to_fit = fncs.initEmptyList( tsinkNum, 1 )
 
@@ -979,6 +993,7 @@ def twoStateFit_threep( threep, ti_to_fit, tsink, E0, E1,
 
     # Set three-point functions to fit based on ti_to_fit
 
+    # Loop over tsink
     for its, ts in zip( range( tsinkNum ), tsink ):
  
         threep_to_fit[ its ] = threep[ its ].take( ti_to_fit[ its ], 
@@ -994,20 +1009,31 @@ def twoStateFit_threep( threep, ti_to_fit, tsink, E0, E1,
 
     # End loop over tsink
 
+    # Average over bins
+
     E0_avg = np.average( E0 )
     E1_avg = np.average( E1 )
 
     # Find fit parameters of mean values to use as initial guess
 
+    # Initial guesses for parameters
+    # (for CG, BFGS, etc.)
+
     #a00 = -10.0 ** -5
     #a01 = -10.0 ** -4
     #a11 = -10.0 ** -4
+
+    # Ranges to search for fit parameters 
+    # (for differential_evolution)
+
     a00 = [ -10 ** -2, 10 ** 2 ]
     a01 = [ -10 ** -2, 10 ** 2 ]
     a11 = [ -10 ** -2, 10 ** 2 ]
     #a00 = [ -10 ** -2, 0.0 ]
     #a01 = [ -10 ** -2, 0.0 ]
     #a11 = [ -10 ** -2, 0.0 ]
+
+    # Array of fitting parameters
 
     fitParams = np.array( [ a00, a01, a11 ] )
 
@@ -1018,10 +1044,14 @@ def twoStateFit_threep( threep, ti_to_fit, tsink, E0, E1,
         # Loop over tsink
         for its in range( tsinkNum ):
 
+            # Flatten threep for each tsink
+
             threep_flat = np.append( threep_flat, 
                                      threep_to_fit_avg[ its ] )
 
         # End loop over tsink
+
+        # Calculate fit parameters by minimizing chi^2
 
         #leastSq_avg = least_squares( twoStateErrorFunction_threep, 
         #                             fitParams,
@@ -1047,11 +1077,17 @@ def twoStateFit_threep( threep, ti_to_fit, tsink, E0, E1,
                                                            E0_avg, E1_avg ),
                                               tol=0.01 )
 
+        # Set fit parameters from average threep from fitting results
+
         #fitParams = leastSq_avg.x
 
         fitParams_avg = leastSq_avg.x
 
         fitParams = np.zeros( ( paramNum, 2 ) )
+
+        # Set ranges to search for fit parameters based on fit
+        # on averaged threep, making sure that the ranges do 
+        # not cross 0
 
         # a00
         
@@ -1104,11 +1140,14 @@ def twoStateFit_threep( threep, ti_to_fit, tsink, E0, E1,
             fitParams[ 2 ] = [ fitParams_avg[ 2 ] - 10 ** -4,
                                fitParams_avg[ 2 ] + 10 ** -4 ]
 
+    # Broadcast fit parameters
+
     comm.Bcast( fitParams, root=0 )
 
     # Find fit parameters for each bin
 
-    # fit[b]
+    # Initialize arrays
+    # fit_loc[ b_loc, param ]
 
     fit_loc = np.zeros( ( binNum_loc, paramNum ) )
     chiSq_loc = np.zeros( binNum_loc )
@@ -1121,10 +1160,14 @@ def twoStateFit_threep( threep, ti_to_fit, tsink, E0, E1,
         # Loop over tsink
         for its in range( tsinkNum ):
 
+            # Flatten threep for each bin and tsink
+
             threep_flat = np.append( threep_flat, 
                                      threep_to_fit[ its ][ b, : ] )
 
         # End loop over tsink
+
+        # Calculate fit parameters by minimizing chi^2
 
         #leastSq = least_squares( twoStateErrorFunction_threep, 
         #                         fitParams,
@@ -1149,11 +1192,16 @@ def twoStateFit_threep( threep, ti_to_fit, tsink, E0, E1,
                                                    E0[ b ], E1[ b ] ),
                                           tol=0.0001 )
 
+        # Set fit parameters and chi^2 for each bin
+
         fit_loc[ ib ] = leastSq.x
         chiSq_loc[ ib ] = leastSq.fun
         #chiSq_loc[ ib ] = leastSq.cost
 
     # End loop over bins
+
+    # Gather fit parameters and chi^2
+    # fit[ b, param ]
 
     fit = np.zeros( ( binNum, ) + fit_loc.shape[ 1: ] )
     chiSq = np.zeros( ( binNum, ) + chiSq_loc.shape[ 1: ] )
@@ -1168,6 +1216,8 @@ def twoStateFit_threep( threep, ti_to_fit, tsink, E0, E1,
                        recvCount * np.prod( chiSq.shape[ 1: ] ),
                        recvOffset * np.prod( chiSq.shape[ 1: ] ),
                        MPI.DOUBLE ] )
+
+    # Calculate chi^2 / d.o.f.
     
     chiSq = np.array( chiSq ) / dof
     
@@ -1604,6 +1654,8 @@ def twoStateResidual_effEnergy( fitParams, tsink, T, effEnergy ):
 
 def twoStateCostFunction_threep( fitParams, ti, tsink,
                                  threep, threep_err, E0, E1 ):
+
+    # chi^2 = sum( ( ( 3pt - 3pt_fit ) / d3pt )^2 )
 
     return np.sum( twoStateErrorFunction_threep( fitParams, ti, tsink,
                                                  threep, threep_err,
