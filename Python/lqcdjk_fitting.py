@@ -2071,6 +2071,113 @@ def fitFormFactor( vals, vals_err, tsink, plusMinus ):
     return fit
 
 
+# F[ b, qs ]
+# F_err[ qs ]
+# Qsq[ b, qs ]
+# paramNum
+# mpi_info
+
+def fitFormFactor_dipole( F, F_err, Qsq, paramNum, mpi_info ):
+
+    # Get dimension lengths
+
+    binNum = F.shape[ 0 ]
+    QsqNum = F.shape[ 1 ]
+
+    # Check dimension lengths
+
+    if QsqNum != len(F_err ) and QsqNum != Qsq.shape[ 1 ]:
+
+        errorTemplate = "Error( lqcdjk_fitting.fitFormFactor_dipole: " \
+                        + "length of Qsq dimension in form factors {}, " \
+                        + "form factor errors {}, and Qsq {} do not match."
+        errorMessage = errorTemplate.format( QsqNum, len( F_err ),
+                                             Qsq.shape[ 1 ] )
+
+        mpi_fncs.mpiError( errorMessage, mpi_info )
+        
+    # End if error
+
+    # Degrees of freedom
+
+    dof = QsqNum - paramNum + 1
+
+    # Initial guess for m
+
+    m = 1.0
+
+    # Initialize fit parameters
+    # fitParams[ b, [ m, F0 ] ]
+
+    fitParams = np.zeros( ( binNum, 2 ) )
+    chiSq = np.zeros( binNum )
+
+    # Loop over bins
+    for ib in range( binNum ):
+
+        if paramNum == 1:
+
+            F0 = F[ ib, 0 ]
+
+            leastSq = minimize( dipoleCostFunction,
+                                [ m ],
+                                args = ( F[ ib ],
+                                         F_err,
+                                         Qsq[ ib ],
+                                         F0 ),
+                                method="CG" )
+
+            # m
+            fitParams[ ib, 0 ] = leastSq.x
+            # F0
+            fitParams[ ib, 1 ] = F0
+
+        elif paramNum == 2:
+
+            F0 = 1.0
+
+            leastSq = minimize( dipoleCostFunction,
+                                [ m, F0 ],
+                                args = ( F[ ib ],
+                                         F_err,
+                                         Qsq[ ib ],
+                                         None ),
+                                method="CG" )
+
+            # [ m, F0 ]
+            fitParams[ ib ] = leastSq.x
+
+        # End if 2 params
+
+        chiSq[ ib ] = leastSq.fun
+
+    return fitParams, chiSq / dof
+
+
+def dipoleCostFunction( fitParams, F, F_err, Qsq, F0_const ):
+
+    m = fitParams[ 0 ]
+
+    paramNum = len( fitParams )
+
+    if paramNum == 1:
+
+        errorFunction = ( dipole( Qsq, m, F0_const ) - F ) / F_err
+
+    elif paramNum == 2:
+
+        F0 = fitParams[ 1 ]
+
+        errorFunction = ( dipole( Qsq, m, F0 ) - F ) / F_err
+    
+    return np.sum( errorFunction ** 2 )
+
+
+def dipole( Qsq, m, F0 ):
+
+    return F0 / ( 1 + Qsq / m )
+
+
 def calcmEffTwoStateCurve( c0, c1, E0, E1, T, rangeStart, rangeEnd ):
 
     binNum = c0.shape[ 0 ]
@@ -2361,6 +2468,7 @@ def calcPDFcurve( a, b, c, xNum ):
                               * ( 1 - x[ ix ] ) ** b[ ib ] \
                               * ( 1 + c[ ib ] * x[ ix ] ) \
                               / ( beta( a[ ib ] + 1, b[ ib ] + 1 ) 
-                                  + c[ ib ] * beta( a[ ib ] + 2, b[ ib ] + 1 ) )
+                                  + c[ ib ] * beta( a[ ib ] + 2,
+                                                    b[ ib ] + 1 ) )
         
     return curve, x
