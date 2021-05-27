@@ -3483,33 +3483,31 @@ def readNthDataCol( filename, N ):
 
     return data[ ..., N ]
 
-"""
-# Reads and ASCII file of (most often) form factor data 
-# with three columns where the data of interest is in 
-# the last column. Lines should repeat over d2, then d1, 
-# and lastly d0. Data is stored in an array with shape 
-# ( d0, d1, d2 ).
+
+# Reads and ASCII file of form factor data 
+# with three columns where the columns are
+# Q^2  F  F_err
+# Lines should repeat over bins then Q^2.
 
 # filename: Name of data file to be read
-# d0: Last dimension data is repeated over, 
-#     to be first dimension in output
-# d1: Second dimension data is repeated over
-#     and in output
-# d2: First dimension data is repeated over,
-#     to be last dimension in output
 
-def readFormFactorFile( filename, d0, d1, d2 ):
+def readFormFactorFile_ASCII( filename, binNum ):
 
-    with open( filename, "r" ) as file:
+    # Read data from file
+    # data[ b*Q^2, [ Q^2, F, F_err ] ]
 
-        data = np.array( file.read().split(), dtype=float )
+    data = readTxtFile( filename )
 
-    data = data.reshape( d0, d1, d2, 3  )
+    QsqNum = data.shape[ 0 ] // binNum
 
-    # Return data in the last column
+    data = data.reshape( binNum, QsqNum, 3 )
 
-    return data[ ..., -1 ]
-"""
+    Qsq = data[ ..., 0 ]
+    F = data[ ..., 1 ]
+    F_err = data[ ..., 2 ]
+
+    return Qsq, F, F_err
+
 
 ########################################
 # Determine values from file functions #
@@ -3876,6 +3874,35 @@ def writeAvgDataFile_wX( filename, x, y, error ):
         
 
     print( "Wrote " + filename )
+
+    return
+
+
+def write2ValueDataFile( filename, data0, data1 ):
+
+    if data0.ndim != 1:
+
+        print( "Error (readWrite.write2ValueDataFile): first data array "
+               + "has more than one dimension" )
+
+        return -1
+
+    if data1.ndim != 1:
+
+        print( "Error (readWrite.write2ValueDataFile): second data array "
+               + "has more than one dimension" )
+
+        return -1
+
+    with open( filename, "w" ) as output:
+
+        for d0, d1 in zip( data0, data1 ):
+
+            output.write( "{:<25.15}{:<25.15}\n".format( d0, d1 ) )
+
+    print( "Wrote " + filename )
+
+    return
 
 
 def writeMomentumList( filename, p_list ):

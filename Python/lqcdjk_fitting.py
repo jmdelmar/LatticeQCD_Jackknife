@@ -2524,3 +2524,26 @@ def calcPDFcurve( a, b, c, xNum ):
                                                     b[ ib ] + 1 ) )
         
     return curve, x
+
+
+def calcDipoleCurve( m, F0, Qsq_last ):
+
+    # m[ b ]
+    # F0[ b ]
+    # Qsq_last
+
+    binNum = m.shape[ 0 ]
+
+    QsqNum = 100
+
+    curve = np.zeros( ( binNum, QsqNum ) )
+    Qsq = np.linspace( 0, Qsq_last, num=QsqNum )
+            
+    for ib in range( binNum ):
+        for iq in range( QsqNum ):
+            
+            curve[ ib, iq ] = dipole( Qsq[ iq ], m[ ib ], F0[ ib ] )
+
+        # End loop over Q^2
+    # End loop over bins
+    return curve, Qsq

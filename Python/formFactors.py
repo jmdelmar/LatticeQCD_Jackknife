@@ -1397,27 +1397,24 @@ for ts, its in zip( tsink, range( tsinkNum ) ):
                                 * np.prod( fitParams_dipole_loc.shape[ 1: ] ),
                                 MPI.DOUBLE ],
                               root=0 )
-
+-
                 if rank == 0:
 
                     # Write dipole fit parameter file for each bin
                     
                     output_filename \
                         = rw.makeFilename( output_template,
-                                           "{}_per_bin_dipoleFitParams"
-                                           + "_{}params_{}_{}_tsink{}_psq{}"
+                                           "{}_dipoleFitParams_per_bin"
+                                           + "_{}_{}_{}params_tsink{}_psq{}"
                                            + "_{}configs_binSize{}",
-                                           ff, paramNum_dipole,
-                                           particle, flav_str[ iflav ],
+                                           ff, particle, flav_str[ iflav ],
+                                           paramNum_dipole,
                                            ts, pSq_fin,
                                            configNum, binSize )
 
-                    # CJL: I'll use this function for now because it works
-                    # but naming is confusing
-
-                    rw.writeAvgDataFile( output_filename,
-                                         fitParams_dipole[ :, 0 ],
-                                         fitParams_dipole[ :, 1 ] )
+                    rw.write2ValueDataFile( output_filename,
+                                            fitParams_dipole[ :, 0 ],
+                                            fitParams_dipole[ :, 1 ] )
                     
                 # End first process
             # End loop over form factor
@@ -1512,23 +1509,49 @@ for ts, its in zip( tsink, range( tsinkNum ) ):
                                                 paramNum_dipole,
                                                 mpi_confs_info )
                                
+                m_dipole = fitParams_dipole_flavCombo[ :, 0 ]
+                F0_dipole = fitParams_dipole_flavCombo[ :, 1 ]
+
                 # Write dipole fit parameter file for each bin
                     
                 output_filename \
                     = rw.makeFilename( output_template,
-                                       "{}_per_bin_dipoleFitParams"
-                                       + "_{}params_{}_tsink{}_psq{}"
+                                       "{}_dipoleFitParams_per_bin_{}"
+                                       + "_{}params_tsink{}_psq{}"
                                        + "_{}configs_binSize{}",
-                                       ff, paramNum_dipole,
-                                       particle, ts, pSq_fin,
+                                       ff, particle,
+                                       paramNum_dipole, ts, pSq_fin,
                                        configNum, binSize )
 
-                # CJL: I'll use this function for now because it works
-                # but naming is confusing
+                rw.write2ValueDataFile( output_filename,
+                                        fitParams_dipole_flavCombo[ :, 0 ],
+                                        fitParams_dipole_flavCombo[ :, 1 ] )
 
-                rw.writeAvgDataFile( output_filename,
-                                     fitParams_dipole_flavCombo[ :, 0 ],
-                                     fitParams_dipole_flavCombo[ :, 1 ] )
+                # Calculate dipole curve
+                # curve_dipole[ b ]
+
+                curve_dipole, Qsq_curve \
+                    = fit.calcDipoleCurve( m_dipole, F0_dipole,
+                                           Qsq_GeV_flavCombo_avg[ -1 ] )
+
+                curve_dipole_avg = np.average( curve_dipole, axis=0 )
+                curve_dipole_err = fncs.calcError( curve_dipole, binNum )
+
+                # Write dipole fit curve
+                    
+                output_filename \
+                    = rw.makeFilename( output_template,
+                                       "{}_dipole_curve_{}"
+                                       + "_{}params_tsink{}_psq{}"
+                                       + "_{}configs_binSize{}",
+                                       ff, particle,
+                                       paramNum_dipole, ts, pSq_fin,
+                                       configNum, binSize )
+
+                rw.writeAvgDataFile_wX( output_filename,
+                                        Qsq_curve,
+                                        curve_dipole_avg,
+                                        curve_dipole_err )
 
             # End loop over form factor
         # End loop over parameter number
@@ -1753,8 +1776,7 @@ if tsf and pSq_fin == 0:
                                        "{}_per_bin_2sf_{}_{}_"
                                        + "tsink{}_{}_psq{}"
                                        + "_{}configs_binSize{}",
-                                       ff, particle,
-                                       flav_str[ iflav ],
+                                       ff, particle, flav_str[ iflav ],
                                        tsink[ 0 ], tsink[ -1 ], pSq_fin,
                                        configNum, binSize )
 
@@ -1767,8 +1789,7 @@ if tsf and pSq_fin == 0:
                     = rw.makeFilename( output_template,
                                        "{}_2sf_{}_{}_tsink{}_{}_psq{}"
                                        + "_{}configs_binSize{}",
-                                       ff, particle,
-                                       flav_str[ iflav ],
+                                       ff, particle, flav_str[ iflav ],
                                        tsink[ 0 ],
                                        tsink[ -1 ],
                                        pSq_fin,
@@ -1854,20 +1875,17 @@ if tsf and pSq_fin == 0:
                     
                     output_filename \
                         = rw.makeFilename( output_template,
-                                           "{}_per_bin_dipoleFitParams"
-                                           + "_{}params_2sf_{}_{}_tsink{}_{}"
+                                           "{}_dipoleFitParams_per_bin"
+                                           + "_{}_{}_{}params_2sf_tsink{}_{}"
                                            + "_psq{}_{}configs_binSize{}",
-                                           ff, paramNum_dipole,
-                                           particle, flav_str[ iflav ],
+                                           ff, particle, flav_str[ iflav ],
+                                           paramNum_dipole,
                                            tsink[ 0 ], tsink[ -1 ], pSq_fin,
                                            configNum, binSize )
 
-                    # CJL: I'll use this function for now because it works
-                    # but naming is confusing
-
-                    rw.writeAvgDataFile( output_filename,
-                                         fitParams_dipole[ :, 0 ],
-                                         fitParams_dipole[ :, 1 ] )
+                    rw.write2ValueDataFile( output_filename,
+                                            fitParams_dipole[ :, 0 ],
+                                            fitParams_dipole[ :, 1 ] )
                     
                 # End first process
             # End loop over form factor
@@ -1964,33 +1982,60 @@ if tsf and pSq_fin == 0:
 
                 fitParams_dipole_flavCombo, chiSq_dipole_flavCombo \
                     = fit.fitFormFactor_dipole( F_flavCombo_tsf[ ..., iff ],
-                                                F_flavCombo_tsf_err[ :, iff ],
+                                                F_flavCombo_tsf_err[ :,
+                                                                     iff ],
                                                 Qsq_GeV_flavCombo,
                                                 paramNum_dipole,
                                                 mpi_confs_info )
+                
+                m_dipole = fitParams_dipole_flavCombo[ :, 0 ]
+                F0_dipole = fitParams_dipole_flavCombo[ :, 1 ]
                                
                 # Write dipole fit parameter file for each bin
                     
                 output_filename \
                     = rw.makeFilename( output_template,
-                                       "{}_per_bin_dipoleFitParams"
-                                       + "_{}params_{}_tsink{}_psq{}"
+                                       "{}_dipoleFitParams_per_bin"
+                                       + "_{}_{}params_2sf_tsink{}_{}_psq{}"
                                        + "_{}configs_binSize{}",
-                                       ff, paramNum_dipole,
-                                       particle, ts, pSq_fin,
-                                       configNum, binSize )
+                                       ff, particle, paramNum_dipole,
+                                       tsink[ 0 ], tsink[ -1 ],
+                                       pSq_fin, configNum, binSize )
 
-                # CJL: I'll use this function for now because it works
-                # but naming is confusing
+                rw.write2ValueDataFile( output_filename,
+                                        fitParams_dipole_flavCombo[ :, 0 ],
+                                        fitParams_dipole_flavCombo[ :, 1 ] )
 
-                rw.writeAvgDataFile( output_filename,
-                                     fitParams_dipole_flavCombo[ :, 0 ],
-                                     fitParams_dipole_flavCombo[ :, 1 ] )
+                # Calculate dipole curve
+                # curve_dipole[ b ]
+
+                curve_dipole, Qsq_curve \
+                    = fit.calcDipoleCurve( m_dipole, F0_dipole,
+                                           Qsq_GeV_flavCombo_avg[ -1 ] )
+
+                curve_dipole_avg = np.average( curve_dipole, axis=0 )
+                curve_dipole_err = fncs.calcError( curve_dipole, binNum )
+
+                # Write dipole fit curve
+                    
+                output_filename \
+                    = rw.makeFilename( output_template,
+                                       "{}_dipole_curve_{}"
+                                       + "_{}params_2sf_tsink{}_{}_psq{}"
+                                       + "_{}configs_binSize{}",
+                                       ff, particle, paramNum_dipole,
+                                       tsink[ 0 ], tsink[ -1 ],
+                                       pSq_fin, configNum, binSize )
+
+                rw.writeAvgDataFile_wX( output_filename,
+                                        Qsq_curve,
+                                        curve_dipole_avg,
+                                        curve_dipole_err )
 
             # End loop over form factor
         # End loop over parameter number
-    # End first rank
-# End loop over tsink
+    # End if GE_GM
+# End if tsf
 
 
 exit()
