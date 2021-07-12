@@ -1015,11 +1015,10 @@ def calcFormFactors_SVD( kineFactor_loc, ratio, ratio_err, Qsq_where,
             for iqr in range( QsqNum_Qsq * ratioNum ):
             #for iqr in range( QsqNum_Qsq ):
 
-                if ( formFactor == "GE_GM" \
-                     or formFactor == "BT10" \
-                     or formFactor == "FS" ) \
+                if ( formFactor == "GE_GM"
+                     or formFactor == "BT10" ) \
                     and pSq > 0:
-                        
+                    #or formFactor == "FS" ) \
                     # Check that ratio error <70%
 
                     where_good[ iqr ] \
@@ -1675,25 +1674,36 @@ def calcFormFactorRatio_twopFit( threep, c0, E0, tsink, p_fin,
     return ratio
 
 
-def calcFormFactorRatio_tsf( a00, c0, qSq_where, mpi_info ):
+def calcFormFactorRatio_tsf( a00, c0, pList, qList, pSq_twop, mpi_info ):
     
-    # a00[ b, q, r ]
+    # a00[ b, p, q, r ]
     # c0[ b, p^2 ]
-
-    binNum, qNum, ratioNum = a00.shape
+    # pList[ p, [ x, y, z ] ]
+    # qList[ q, [ x, y, z ] ]
+    # pSq_twop[ p^2 ]
 
     ratio = np.zeros( a00.shape )
 
-    for iq in range( qNum ):
-        for ir in range( ratioNum ):
+    for p, ip in fncs.zipXandIndex( pList ):
+        
+        pSq_fin = np.dot( p, p )
+        
+        for q, iq in fncs.zipXandIndex( qList ):
 
-            ratio[ :, iq, ir ] = a00[ :, iq, ir ] \
-                                 / np.sqrt( c0[ :, 0 ]
-                                            * c0[ :, qSq_where[ iq ] ] )
+            pSq_ini = np.dot( p - q, p - q )
 
-        # End loop over ratio
-    # End loop over q
-    
+            for ir in range( a00.shape[ 3 ] ):
+
+                c0_ini = np.squeeze( c0[ :, pSq_twop == pSq_ini ] )
+                c0_fin = np.squeeze( c0[ :, pSq_twop == pSq_fin ] )
+                
+                ratio[ :, ip, iq, ir ] = a00[ :, ip, iq, ir ] \
+                                         / np.sqrt( c0_ini * c0_fin )
+                
+            # End loop over ratio
+        # End loop over q
+    # End loop over p
+
     return ratio
 
 

@@ -3494,19 +3494,18 @@ def readNthDataCol( filename, N ):
 def readFormFactorFile_ASCII( filename, binNum ):
 
     # Read data from file
-    # data[ b*Q^2, [ Q^2, F, F_err ] ]
+    # data[ b*Q^2, [ Q^2, F ] ]
 
-    data = readTxtFile( filename )
+    data = readTxtFile( filename, dtype=float )
 
     QsqNum = data.shape[ 0 ] // binNum
 
-    data = data.reshape( binNum, QsqNum, 3 )
+    data = data.reshape( binNum, QsqNum, 2 )
 
     Qsq = data[ ..., 0 ]
     F = data[ ..., 1 ]
-    F_err = data[ ..., 2 ]
 
-    return Qsq, F, F_err
+    return Qsq, F
 
 
 ########################################
@@ -3745,7 +3744,22 @@ def writeDataFile_wX( filename, x, data ):
 
         for d0 in range( len( data ) ):
 
-            if x.ndim == 2:
+            if np.array_equal( x.shape, data.shape ):
+
+                for d1 in range( len( data[ d0 ] ) ):
+                
+                    if x.dtype == int:
+
+                        template = "{:<5d}{:<20.15}\n"
+                        
+                    else:
+                    
+                        template = "{:<20.15f}{:<20.15f}\n"
+
+                    output.write( template.format( x[ d0, d1 ],
+                                                   data[ d0, d1 ] ) )
+
+            elif x.ndim == 2:
 
                 for d1 in range( len( data[ d0 ] ) ):
                 
@@ -3758,23 +3772,19 @@ def writeDataFile_wX( filename, x, data ):
 
             else:
             
-                if x.dtype == int:
-
-                    for d1 in range( len( data[ d0 ] ) ):
+                for d1 in range( len( data[ d0 ] ) ):
                         
+                    if x.dtype == int:
+
                         template = "{:<5d}{:<20.15}\n"
                         
-                        output.write( template.format( x[ d1 ],
-                                                       data[ d0, d1 ] ) )
-
-                else:
-
-                    for d1 in range( len( data[ d0 ] ) ):
-                        
+                    else:
+                    
                         template = "{:<20.10f}{:<20.15}\n"
                         
-                        output.write( template.format( x[ d1 ],
-                                                       data[ d0, d1 ] ) )
+                    output.write( template.format( x[ d1 ],
+                                                   data[ d0, d1 ] ) )
+
 
     print( "Wrote " + filename )
 
@@ -3898,7 +3908,13 @@ def write2ValueDataFile( filename, data0, data1 ):
 
         for d0, d1 in zip( data0, data1 ):
 
-            output.write( "{:<25.15}{:<25.15}\n".format( d0, d1 ) )
+            if d0.dtype == int:
+
+                output.write( "{:<5}{:<25.15}\n".format( d0, d1 ) )
+
+            else:
+
+                output.write( "{:<25.15}{:<25.15}\n".format( d0, d1 ) )
 
     print( "Wrote " + filename )
 
@@ -4098,6 +4114,22 @@ def writeTSFParamsFile( filename, params, params_err ):
                       + str( params_err[ 6 ] ) + "\n" )
 
     print( "Wrote " + filename )
+
+def writeDipoleFitParamsFile( filename, params, params_err, rSq, rSq_err ):
+
+    with open( filename, "w" ) as output:
+
+        template = "{:<10}{:<20.10}{:<20.10}\n"
+
+        output.write( template.format( "M", params[ 0 ], params_err[ 0 ] ) )
+
+        output.write( template.format( "F0", params[ 1 ], params_err[ 1 ] ) )
+
+        output.write( template.format( "<r^2>", rSq, rSq_err ) )
+
+    print( "Wrote " + filename )
+
+    return
 
 
 def writePDFParamsFile( filename, params, params_err ):

@@ -732,7 +732,7 @@ if rank == 0:
     rw.writeFitDataFile( mEff_outputFilename, mEff_plat_avg,
                          mEff_plat_err, plat_fitStart, rangeEnd )
 
-    # Write c0 for each bin
+    # Write c0 and plateau fit for each bin
 
     if particle == "kaon":
 
@@ -747,6 +747,15 @@ if rank == 0:
             rw.writeDataFile_wX( c0_outputFilename, qSq[ ismr ], 
                                  c0[ ismr ] )
 
+            mEff_plat_outputFilename = rw.makeFilename( output_template,
+                                                 "mEff_plat_per_bin_{}{}_psq{}" \
+                                                 + "_{}configs_binSize{}",
+                                                 particle, smr, pSq_fin,
+                                                 configNum, binSize )
+            
+            rw.write2ValueDataFile( mEff_plat_outputFilename, np.arange( binNum ),
+                                    mEff_plat[ ismr ] )
+
     else:
 
         c0_outputFilename = rw.makeFilename( output_template,
@@ -757,6 +766,15 @@ if rank == 0:
         
         rw.writeDataFile_wX( c0_outputFilename, qSq[ 0 ], 
                              c0[ 0 ] )
+
+        mEff_plat_outputFilename = rw.makeFilename( output_template,
+                                             "mEff_plat_per_bin_{}_psq{}" \
+                                             + "_{}configs_binSize{}",
+                                             particle, pSq_fin,
+                                             configNum, binSize )
+        
+        rw.write2ValueDataFile( mEff_plat_outputFilename, np.arange( binNum ), 
+                                mEff_plat[ 0 ] )
 
 # End first process
 
@@ -947,7 +965,7 @@ threep_jk_loc = np.moveaxis( threep_jk_loc, [ 1, 3 ], [ 3, 1 ] )
 p_fin = [ p_fin, -1 * p_fin ]
 #p_fin = [ -1 * p_fin, p_fin ]
 
-
+        
 ####################
 # Calculate ratios #
 ####################
@@ -1077,6 +1095,7 @@ for ts, its in zip( tsink, range( tsinkNum ) ):
 
         if rank == 0:
 
+
             # Average over bins
 
             ratio_avg = np.average( ratio, axis=0 )
@@ -1084,22 +1103,22 @@ for ts, its in zip( tsink, range( tsinkNum ) ):
 
             # Write ratios for each final momentum
 
-            #for p, ip in fncs.zipXandIndex( p_fin[ iflav ] ):
+            for p, ip in fncs.zipXandIndex( p_fin[ iflav ] ):
 
-            #    output_filename \
-            #        = rw.makeFilename( output_template,
-            #                           "{:}_ratio_{:}_{:}_tsink{:}" \
-            #                           + "_{:+}_{:+}_{:+}_Qsq0" \
-            #                           + "_{:}configs_binSize{:}",
-            #                           formFactor,
-            #                           particle,
-            #                           flav_str[ iflav ],
-            #                           ts, p[ 0 ], p[ 1 ], p[ 2 ],
-            #                           configNum, binSize )
+                output_filename \
+                    = rw.makeFilename( output_template,
+                                       "{:}_ratio_{:}_{:}_tsink{:}" \
+                                       + "_{:+}_{:+}_{:+}_Qsq0" \
+                                       + "_{:}configs_binSize{:}",
+                                       formFactor,
+                                       particle,
+                                       flav_str[ iflav ],
+                                       ts, p[ 0 ], p[ 1 ], p[ 2 ],
+                                       configNum, binSize )
 
-            #    rw.writeAvgDataFile( output_filename,
-            #                         ratio_avg[ ip, 0, 0, : ],
-            #                         ratio_err[ ip, 0, 0, : ] )
+                rw.writeAvgDataFile( output_filename,
+                                     ratio_avg[ ip, 0, 0, 5:10 ],
+                                     ratio_err[ ip, 0, 0, 5:10 ] )
 
         # ratio_err[ p, q, ratio ]
 
@@ -1113,8 +1132,8 @@ for ts, its in zip( tsink, range( tsinkNum ) ):
 
             ratio_fit_loc = fit.fitFormFactor( ratio_loc,
                                                ratio_err,
-                                               ts, 2 )
-        
+                                               ts, 1 )
+
             # Multiply by renormalization factor
 
             if formFactor == "A20_B20":
@@ -1146,6 +1165,36 @@ for ts, its in zip( tsink, range( tsinkNum ) ):
                            * np.prod( ratio_fit_loc.shape[ 1: ] ),
                            MPI.DOUBLE ] )
 
+        if rank == 0:
+
+            # Average over bins
+
+            ratio_fit_avg = np.average( ratio_fit, axis=0 )
+            ratio_fit_err = fncs.calcError( ratio_fit, binNum )
+
+            # Write ratio_fits for each final momentum
+
+            for p, ip in fncs.zipXandIndex( p_fin[ iflav ] ):
+
+                #print(ratio_fit[:,ip,0,0])
+                #print(ratio_fit_avg[ip,0,0])
+
+                output_filename \
+                    = rw.makeFilename( output_template,
+                                       "{:}_ratio_fit_{:}_{:}_tsink{:}" \
+                                       + "_{:+}_{:+}_{:+}_Qsq0" \
+                                       + "_{:}configs_binSize{:}",
+                                       formFactor,
+                                       particle,
+                                       flav_str[ iflav ],
+                                       ts, p[ 0 ], p[ 1 ], p[ 2 ],
+                                       configNum, binSize )
+
+                rw.writeFitDataFile( output_filename,
+                                     ratio_fit_avg[ ip, 0, 0 ],
+                                     ratio_fit_err[ ip, 0, 0 ],
+                                     ts // 2 - 1, ts // 2 + 1)
+
         # ratio_fit_err[ p, q, ratio ]
 
         ratio_fit_err = fncs.calcError( ratio_fit, binNum )        
@@ -1161,6 +1210,13 @@ for ts, its in zip( tsink, range( tsinkNum ) ):
                                         p_fin[ iflav ], q_threep[ iflav ], L,
                                         mpi_confs_info )
         
+        # Calculate F as a function of ti for Q^2=1,2
+
+        #for iq in range( 1, 3 ):
+
+        #F_ti_loc = pq.calcFormFactors_ti( ratio_loc, kineFactor_loc,
+        #                                      Qsq_where[ iflav
+
         # Gather kineFactor
         # kineFactor[ b, p, q, r, [ F1, F2 ] ]
 
@@ -1197,6 +1253,19 @@ for ts, its in zip( tsink, range( tsinkNum ) ):
                                       ratioSign,
                                       pSq_fin,
                                       mpi_confs_info )
+
+        #F_loc = np.zeros( ( binNum_loc, QsqNum, 2 ) )
+
+        #for iqs in range(QsqNum):
+        
+        #    ratio_Qsq = ratio_fit_loc[ :, Qsq_where[ iflav ][ iqs ], : ]
+        
+        #    kineFactor_Qsq \
+        #        = kineFactor_loc[ :, Qsq_where[ iflav ][ iqs ], :, : ]
+
+        #    F_tmp = ratio_Qsq[...,0]/kineFactor_Qsq[...,0,0]
+
+        #    F_loc[ :, iqs, 0 ] = np.average( F_tmp, axis=1 )
 
         # Gather form factors
 
@@ -1238,32 +1307,109 @@ for ts, its in zip( tsink, range( tsinkNum ) ):
                 # Determine which Q^2 are good, i.e., 
                 # the error is < 25%
 
+                #CJL:HERE
+
+                errorThreshold = 0.6 if formFactor == "FS" else 0.25
+
                 # Loop over Q^2 index
                 for iqs in range( QsqNum ):
 
-                    if np.any( ( F_err[ :, iqs, 0 ]
-                                 / np.abs( F[ iflav, :, iqs, 0 ] )
-                                 > 0.25 ) ):
-                        #
-                        #| ( np.abs( F[ iflav, :, iqs, 0 ] )
-                        #> 1.5 ) 
-                        Qsq_where_good[ iflav, iqs ] = False
+                    if Qsq_where_good[ iflav, iqs ]:
 
+                        if np.any( F_err[ :, iqs, 0 ]
+                                   / np.abs( F[ iflav, :, iqs, 0 ] )
+                                   > errorThreshold ):
+                            
+                            #| ( np.abs( F[ iflav, :, iqs, 0 ] )
+                            #> 1.5 ) 
+                            Qsq_where_good[ iflav, iqs ] = False
+
+                # End loop over Q^2
+
+                F_good = F[ iflav ]
+                F_good = F_good[ :, Qsq_where_good[ iflav ], : ]
+
+                F_good_err = F_err[ :, Qsq_where_good[ iflav ], : ]
+
+                if formFactor == "BT10":
+
+                    F_good_firstNonzero \
+                        = F_good[ :, np.where( F_good < 0 )[ 1 ][ 0 ], 0 ]
+                    
+                    igood_firstNonzero_0 \
+                        = np.where( F[ iflav, 0, :, 0 ]
+                                    == F_good_firstNonzero[ 0 ] )[ 0 ][ 0 ]
+
+                    for ib in range( 1, binNum ):
+
+                        igood_firstNonzero \
+                            = np.where( F[ iflav, ib, :, 0 ] 
+                                        == F_good_firstNonzero[ ib ] )[ 0 ][ 0 ]
+
+                        if igood_firstNonzero != igood_firstNonzero_0:
+                            
+                            warning_template = "Warning (formFactors.py):" \
+                                               + "first non-zero form factor " \
+                                               + "on bin {} is at index {}, " \
+                                               + "which differs from the first " \
+                                               + "bin where the first non-zero " \
+                                               + "form factor is at index {}"
+
+                            print( warning_template.format( ib, igood_firstNonzero,
+                                                            igood_firstNonzero_0 ) )
+
+                    # End loop over bins
+
+                    igood_firstNonzero = igood_firstNonzero_0
+
+                    F_good_last = F_good[ :, igood_firstNonzero, 0 ]
+                    F_good_err_last = F_good_err[ :, igood_firstNonzero, 0 ]
+
+                    Qsq_range = range( igood_firstNonzero, QsqNum )
+
+                else:
+
+                    F_good_last = F_good[ :, 0, 0 ]
+                    F_good_err_last = F_good_err[ :, 0, 0 ]
+
+                    Qsq_range = range( QsqNum )
+
+                # Loop over Q^2 index
+                for iqs in Qsq_range:
+
+                    if Qsq_where_good[ iflav, iqs ]:
+
+                        if np.any( np.abs( F[ iflav, :, iqs, 0 ] ) >
+                                   np.abs( F_good_last ) + F_good_err_last ):
+                            
+                            #| ( np.abs( F[ iflav, :, iqs, 0 ] )
+                            #> 1.5 ) 
+                            Qsq_where_good[ iflav, iqs ] = False
+
+                        else:
+
+                            F_good_last = F[ iflav, :, iqs, 0 ]
+                            F_good_err_last = F_err[ :, iqs, 0 ]
+
+                # End loop over Q^2
+
+                #mpi_fncs.mpiPrint(F_err[ ..., 0 ]
+                #                  / np.abs( F[ iflav, ..., 0 ] ),
+                #                  mpi_confs_info)
+                
                 # Get results for good Q^2
                 # F[ flav, b, qs_good, [ F1, F2 ] ]
 
-                F_good = F[ :, :, Qsq_where_good[ iflav ], : ]
+                F_good = F[ iflav ]
+                F_good = F_good[ :, Qsq_where_good[ iflav ], : ]
                 #F_good = F[ :, :, Qsq_where_good[ iflav, :, ic ], ic, : ]
 
                 # Average over bins and convert to GeV^2
 
-                Qsq_GeV = np.average( Qsq[ :,
-                                           Qsq_where_good[ iflav ] ],
-                                      axis=0 ) * ( 0.197 / a ) ** 2
+                Qsq_GeV = Qsq[ :, Qsq_where_good[ iflav ] ] \
+                          * ( 0.197 / a ) ** 2
 
-                #Qsq_GeV = np.average( Qsq[ :,
-                #                                Qsq_where_good[ iflav, :, ic ] ],
-                #                      axis=0 ) * ( 0.197 / a ) ** 2
+                Qsq_GeV_avg = np.average( Qsq_GeV, axis=0 )
 
                 #decomp_avg = np.average(decomp,axis=0)
 
@@ -1281,8 +1427,8 @@ for ts, its in zip( tsink, range( tsinkNum ) ):
 
                 # Average over bins
 
-                F_avg = np.average( F_good[ iflav ], axis=0 )
-                F_err = fncs.calcError( F_good[ iflav ], binNum )
+                F_avg = np.average( F_good, axis=0 )
+                F_err = fncs.calcError( F_good, binNum )
 
                 # Write form factor output files
 
@@ -1300,7 +1446,7 @@ for ts, its in zip( tsink, range( tsinkNum ) ):
                                            configNum, binSize )
 
                     rw.writeDataFile_wX( output_filename, Qsq_GeV,
-                                         F_good[ iflav, :, :, iff ] )
+                                         F_good[ :, :, iff ] )
 
                     # Write bin averaged form factors
 
@@ -1324,7 +1470,7 @@ for ts, its in zip( tsink, range( tsinkNum ) ):
                     #                       ts, pSq_fin,
                     #                       configNum, binSize )
 
-                    rw.writeAvgDataFile_wX( output_filename, Qsq_GeV,
+                    rw.writeAvgDataFile_wX( output_filename, Qsq_GeV_avg,
                                             F_avg[ :, iff ],
                                             F_err[ :, iff ] )
             # End loop over insertion currents (for testing)
@@ -1397,8 +1543,21 @@ for ts, its in zip( tsink, range( tsinkNum ) ):
                                 * np.prod( fitParams_dipole_loc.shape[ 1: ] ),
                                 MPI.DOUBLE ],
                               root=0 )
--
+
                 if rank == 0:
+
+                    # Calculate r^2
+
+                    rSq = 6. / fitParams_dipole[ :, 0 ] ** 2
+
+                    # Average over bins
+                    
+                    fitParams_dipole_avg = np.average( fitParams_dipole, axis=0 )
+                    fitParams_dipole_err = fncs.calcError( fitParams_dipole,
+                                                           binNum )
+
+                    rSq_avg = np.average( rSq, axis=0 )
+                    rSq_err = fncs.calcError( rSq, binNum )
 
                     # Write dipole fit parameter file for each bin
                     
@@ -1415,6 +1574,23 @@ for ts, its in zip( tsink, range( tsinkNum ) ):
                     rw.write2ValueDataFile( output_filename,
                                             fitParams_dipole[ :, 0 ],
                                             fitParams_dipole[ :, 1 ] )
+                    
+                    # Write average fit parameter file and r^2
+                    
+                    output_filename \
+                        = rw.makeFilename( output_template,
+                                           "{}_dipoleFitParams"
+                                           + "_{}_{}_{}params_tsink{}_psq{}"
+                                           + "_{}configs_binSize{}",
+                                           ff, particle, flav_str[ iflav ],
+                                           paramNum_dipole,
+                                           ts, pSq_fin,
+                                           configNum, binSize )
+
+                    rw.writeDipoleFitParamsFile( output_filename,
+                                                 fitParams_dipole_avg,
+                                                 fitParams_dipole_err,
+                                                 rSq_avg, rSq_err )
                     
                 # End first process
             # End loop over form factor
@@ -1448,7 +1624,7 @@ for ts, its in zip( tsink, range( tsinkNum ) ):
 
             # F_pi = 2/3 F_u - 1/3 F_d = F_u
 
-            F_flavCombo = F_good[ 0 ]
+            F_flavCombo = F_good
 
             Qsq_where_good_flavCombo = Qsq_where_good[ 0 ]
 
@@ -1470,6 +1646,21 @@ for ts, its in zip( tsink, range( tsinkNum ) ):
 
         # Loop over form factors
         for ff, iff in fncs.zipXandIndex( F_str ):
+
+            # Write form factors for each bin
+
+            output_filename \
+                = rw.makeFilename( output_template,
+                                   "{}_per_bin_{}_tsink{}_psq{}" \
+                                   + "_{}configs_binSize{}",
+                                   ff, particle,
+                                   ts, pSq_fin,
+                                   configNum, binSize )
+
+            rw.writeDataFile_wX( output_filename, Qsq_GeV_flavCombo,
+                                 F_flavCombo[ :, :, iff ] )
+
+            # Write bin-averaged orm factors
 
             output_filename \
                 = rw.makeFilename( output_template,
@@ -1514,6 +1705,22 @@ for ts, its in zip( tsink, range( tsinkNum ) ):
 
                 # Write dipole fit parameter file for each bin
                     
+                # Calculate r^2
+
+                rSq_flavCombo = 6. / fitParams_dipole_flavCombo[ :, 0 ] ** 2
+
+                # Average over bins
+                    
+                fitParams_dipole_flavCombo_avg \
+                    = np.average( fitParams_dipole_flavCombo, axis=0 )
+                fitParams_dipole_flavCombo_err \
+                    = fncs.calcError( fitParams_dipole_flavCombo, binNum )
+                
+                rSq_flavCombo_avg = np.average( rSq_flavCombo, axis=0 )
+                rSq_flavCombo_err = fncs.calcError( rSq_flavCombo, binNum )
+
+                # Write dipole fit parameter file for each bin                
+
                 output_filename \
                     = rw.makeFilename( output_template,
                                        "{}_dipoleFitParams_per_bin_{}"
@@ -1527,6 +1734,24 @@ for ts, its in zip( tsink, range( tsinkNum ) ):
                                         fitParams_dipole_flavCombo[ :, 0 ],
                                         fitParams_dipole_flavCombo[ :, 1 ] )
 
+                # Write average fit parameter file and r^2
+                    
+                output_filename \
+                    = rw.makeFilename( output_template,
+                                       "{}_dipoleFitParams"
+                                       + "_{}_{}params_tsink{}_psq{}"
+                                       + "_{}configs_binSize{}",
+                                       ff, particle,
+                                       paramNum_dipole,
+                                       ts, pSq_fin,
+                                       configNum, binSize )
+                
+                rw.writeDipoleFitParamsFile(output_filename,
+                                            fitParams_dipole_flavCombo_avg,
+                                            fitParams_dipole_flavCombo_err,
+                                            rSq_flavCombo_avg,
+                                            rSq_flavCombo_err)
+                    
                 # Calculate dipole curve
                 # curve_dipole[ b ]
 
@@ -1564,7 +1789,7 @@ for ts, its in zip( tsink, range( tsinkNum ) ):
 #################
 
 
-if tsf and pSq_fin == 0:
+if tsf:
 
     mpi_fncs.mpiPrint( "Will perform the two-state fit", mpi_confs_info )
 
@@ -1596,7 +1821,7 @@ if tsf and pSq_fin == 0:
         ismr = ismr_flav[ iflav ]
 
         # Perform two-state fit
-        # tsfParams[ b, q, r, [ A00, A01, A10, A11 ] ]
+        # tsfParams[ b, p, q, r, [ A00, A01, A10, A11 ] ]
 
         if dispRel:
 
@@ -1605,15 +1830,13 @@ if tsf and pSq_fin == 0:
 
             tsfParams \
                 = fit.twoStateFit_threep_momTransfer( threep_jk_loc[ :,
-                                                                     iflav,
-                                                                     :, 0,
-                                                                     :, :,
-                                                                     : ],
+                                                                     iflav ],
                                                       tsink,
                                                       mEff_plat[ ismr ],
                                                       E1[ ismr ],
+                                                      p_fin[ iflav ],
                                                       q_threep[ iflav ],
-                                                      qSq_where_threep,
+                                                      qSq[ ismr ],
                                                       neglect, L, True,
                                                       mpi_confs_info)
 
@@ -1624,15 +1847,13 @@ if tsf and pSq_fin == 0:
 
             tsfParams \
                 = fit.twoStateFit_threep_momTransfer(threep_jk_loc[ :,
-                                                                    iflav,
-                                                                    :, 0,
-                                                                    :, :, 
-                                                                    : ],
+                                                                    iflav ],
                                                      tsink,
                                                      E0[ ismr ],
                                                      E1[ ismr ],
+                                                     p_fin[ iflav ],
                                                      q_threep[ iflav ],
-                                                     qSq_where_threep,
+                                                     qSq[ ismr ],
                                                      neglect, L, False,
                                                      mpi_confs_info)
         
@@ -1644,13 +1865,15 @@ if tsf and pSq_fin == 0:
         a11 = tsfParams[ ..., 3 ]
 
         # Ratio from two-state fit
-        # Ratio_tsf_loc[ b_loc, q, r ]
+        # Ratio_tsf_loc[ b_loc, p, q, r ]
 
         ratio_tsf_loc \
             = pq.calcFormFactorRatio_tsf( a00[ binList_loc ],
                                           c0[ ismr,
                                               binList_loc ],
-                                          qSq_where_threep,
+                                          p_fin[ iflav ],
+                                          q_threep[ iflav ],
+                                          qSq[ ismr ],
                                           mpi_confs_info )
 
         # Multiply by renormalization factor
@@ -1670,10 +1893,10 @@ if tsf and pSq_fin == 0:
         # Gather ratio
         # ratio_tsf[ b, p, q, r ]
 
-        ratio_tsf = np.zeros( ( binNum, 1, ) + ratio_tsf_loc.shape[ 1: ] )
+        ratio_tsf = np.zeros( ( binNum, ) + ratio_tsf_loc.shape[ 1: ] )
 
         comm.Allgatherv( ratio_tsf_loc,
-                         [ ratio_tsf[ :, 0 ],
+                         [ ratio_tsf,
                            recvCount \
                            * np.prod( ratio_tsf_loc.shape[ 1: ] ),
                            recvOffset \
@@ -1744,28 +1967,96 @@ if tsf and pSq_fin == 0:
             F_tsf_err = np.array( [ F_tsf_err ] * binNum )
             F_tsf_err = F_tsf_err.reshape( ( binNum, )
                                    + F_tsf.shape[ 2: ] )
-            """
+
+            # Loop over Q^2 index
             for iqs in range( QsqNum ):
+                
+                if Qsq_where_good_tsf[ iflav, iqs ]:
 
-                if np.any( ( F_tsf_err[ :, iqs, 0 ]
-                             / np.abs( F_tsf[ iflav, :, iqs, 0 ] )
-                             > 0.1 ) ):
+                    if np.any( F_tsf_err[ :, iqs, 0 ]
+                               / np.abs( F_tsf[ iflav, :, iqs, 0 ] )
+                               > errorThreshold ):
+                            
+                        Qsq_where_good_tsf[ iflav, iqs ] = False
 
-                    Qsq_where_good_tsf[ iflav, iqs ] = False
-            """
+            F_good_tsf = F_tsf[ iflav ]
+            F_good_tsf = F_good_tsf[ :, Qsq_where_good_tsf[ iflav ], : ]
+
+            F_good_tsf_err = F_tsf_err[ :, Qsq_where_good[ iflav ], : ]
+
+            if formFactor == "BT10":
+
+                F_good_firstNonzero \
+                    = F_good_tsf[ :, np.where( F_good_tsf < 0 )[ 1 ][ 0 ], 0 ]
+                    
+                igood_firstNonzero_0 \
+                    = np.where( F_tsf[ iflav, 0, :, 0 ]
+                                == F_good_firstNonzero[ 0 ] )[ 0 ][ 0 ]
+
+                for ib in range( 1, binNum ):
+
+                    igood_firstNonzero \
+                        = np.where( F_tsf[ iflav, ib, :, 0 ] 
+                                    == F_good_firstNonzero[ ib ] )[ 0 ][ 0 ]
+                    
+                    if igood_firstNonzero != igood_firstNonzero_0:
+                            
+                        warning_template = "Warning (formFactors.py):" \
+                                           + "first non-zero form factor " \
+                                           + "on bin {} is at index {}, " \
+                                           + "which differs from the first " \
+                                           + "bin where the first non-zero " \
+                                           + "form factor is at index {}"
+                        
+                        print( warning_template.format( ib, igood_firstNonzero,
+                                                        igood_firstNonzero_0 ) )
+
+                # End loop over bins
+
+                igood_firstNonzero = igood_firstNonzero_0
+
+                F_good_last = F_good_tsf[ :, igood_firstNonzero, 0 ]
+                F_good_err_last = F_good_tsf_err[ :, igood_firstNonzero, 0 ]
+                    
+                Qsq_range = range( igood_firstNonzero, QsqNum )
+
+            else:
+
+                F_good_last = F_good_tsf[ :, 0, 0 ]
+                F_good_err_last = F_good_tsf_err[ :, 0, 0 ]
+
+                Qsq_range = range( QsqNum )
+
+            # Loop over Q^2 index
+            for iqs in Qsq_range:
+                
+                if Qsq_where_good_tsf[ iflav, iqs ]:
+
+                    if np.any( np.abs( F_tsf[ iflav, :, iqs, 0 ] ) >
+                               np.abs( F_good_last ) + F_good_err_last ):
+                            
+                        Qsq_where_good_tsf[ iflav, iqs ] = False
+
+                    else:
+
+                        F_good_last = F_tsf[ iflav, :, iqs, 0 ]
+                        F_good_err_last = F_tsf_err[ :, iqs, 0 ]
+
             # Get results for good Q^2
             # F_good_tsf[ flav, b, qs_good, [ F1, F2 ] ]
 
-            F_good_tsf = F_tsf[ :, :, Qsq_where_good_tsf[ iflav ], : ]
+            F_good_tsf = F_tsf[ iflav ]
+            F_good_tsf = F_good_tsf[ :, Qsq_where_good_tsf[ iflav ], : ]
 
-            Qsq_GeV = np.average( Qsq[ :,
-                                       Qsq_where_good_tsf[ iflav, : ] ],
-                                  axis=0 ) * ( 0.197 / a ) ** 2
+            Qsq_GeV = Qsq[ :, Qsq_where_good_tsf[ iflav, : ] ] \
+                      * ( 0.197 / a ) ** 2
+
+            Qsq_GeV_avg = np.average( Qsq_GeV, axis=0 )
 
             # Average over bins
 
-            F_tsf_avg = np.average( F_good_tsf[ iflav ], axis=0 )
-            F_tsf_err = fncs.calcError( F_good_tsf[ iflav ], binNum )
+            F_tsf_avg = np.average( F_good_tsf, axis=0 )
+            F_tsf_err = fncs.calcError( F_good_tsf, binNum )
 
             for ff, iff in fncs.zipXandIndex( F_str ):
 
@@ -1781,7 +2072,7 @@ if tsf and pSq_fin == 0:
                                        configNum, binSize )
 
                 rw.writeDataFile_wX( output_filename, Qsq_GeV,
-                                     F_good_tsf[ iflav, :, :, iff ] )
+                                     F_good_tsf[ :, :, iff ] )
 
                 # Write bin averaged form factors
 
@@ -1795,7 +2086,7 @@ if tsf and pSq_fin == 0:
                                        pSq_fin,
                                        configNum, binSize )
 
-                rw.writeAvgDataFile_wX( output_filename, Qsq_GeV,
+                rw.writeAvgDataFile_wX( output_filename, Qsq_GeV_avg,
                                         F_tsf_avg[ :, iff ],
                                         F_tsf_err[ :, iff ] )
     
@@ -1871,6 +2162,19 @@ if tsf and pSq_fin == 0:
 
                 if rank == 0:
 
+                    # Calculate r^2
+
+                    rSq = 6. / fitParams_dipole[ :, 0 ] ** 2
+
+                    # Average over bins
+                    
+                    fitParams_dipole_avg = np.average( fitParams_dipole, axis=0 )
+                    fitParams_dipole_err = fncs.calcError( fitParams_dipole,
+                                                           binNum )
+
+                    rSq_avg = np.average( rSq, axis=0 )
+                    rSq_err = fncs.calcError( rSq, binNum )
+
                     # Write dipole fit parameter file for each bin
                     
                     output_filename \
@@ -1887,6 +2191,23 @@ if tsf and pSq_fin == 0:
                                             fitParams_dipole[ :, 0 ],
                                             fitParams_dipole[ :, 1 ] )
                     
+                    # Write average fit parameter file and r^2
+                    
+                    output_filename \
+                        = rw.makeFilename( output_template,
+                                           "{}_dipoleFitParams"
+                                           + "_{}_{}_{}params_2sf_tsink{}_{}"
+                                           + "_psq{}_{}configs_binSize{}",
+                                           ff, particle, flav_str[ iflav ],
+                                           paramNum_dipole,
+                                           tsink[ 0 ], tsink[ -1 ], pSq_fin,
+                                           configNum, binSize )
+
+                    rw.writeDipoleFitParamsFile( output_filename,
+                                                 fitParams_dipole_avg,
+                                                 fitParams_dipole_err,
+                                                 rSq_avg, rSq_err )
+
                 # End first process
             # End loop over form factor
         # End loop over parameter number
@@ -1924,7 +2245,7 @@ if tsf and pSq_fin == 0:
 
             # F_pi = 2/3 F_u - 1/3 F_d = F_u
             
-            F_flavCombo_tsf = F_good_tsf[ 0 ]
+            F_flavCombo_tsf = F_good_tsf
            
             Qsq_where_good_flavCombo_tsf = Qsq_where_good_tsf[ 0 ]
 
@@ -1947,13 +2268,28 @@ if tsf and pSq_fin == 0:
         # Loop over form factors
         for ff, iff in fncs.zipXandIndex( F_str ):
 
+            # Write form factors for each bin
+
             output_filename \
                 = rw.makeFilename( output_template,
-                                   "{}_2sf_{}_tsink{}_{}_psq{}" \
+                                   "{}_per_bin_2sf_{}_tsink{}_{}_psq{}"
                                    + "_{}configs_binSize{}",
                                    ff, particle,
-                                   tsink[ 0 ],
-                                   tsink[ -1 ],
+                                   tsink[ 0 ], tsink[ -1 ],
+                                   pSq_fin,
+                                   configNum, binSize )
+
+            rw.writeDataFile_wX( output_filename, Qsq_GeV_flavCombo,
+                                 F_flavCombo_tsf[ :, :, iff ] )
+
+            # Write bin-averaged form factors
+
+            output_filename \
+                = rw.makeFilename( output_template,
+                                   "{}_2sf_{}_tsink{}_{}_psq{}"
+                                   + "_{}configs_binSize{}",
+                                   ff, particle,
+                                   tsink[ 0 ], tsink[ -1 ],
                                    pSq_fin,
                                    configNum, binSize )
 
@@ -1991,6 +2327,20 @@ if tsf and pSq_fin == 0:
                 m_dipole = fitParams_dipole_flavCombo[ :, 0 ]
                 F0_dipole = fitParams_dipole_flavCombo[ :, 1 ]
                                
+                # Calculate r^2
+                
+                rSq_flavCombo = 6. / fitParams_dipole_flavCombo[ :, 0 ] ** 2
+
+                # Average over bins
+                    
+                fitParams_dipole_flavCombo_avg \
+                    = np.average( fitParams_dipole_flavCombo, axis=0 )
+                fitParams_dipole_flavCombo_err \
+                    = fncs.calcError( fitParams_dipole_flavCombo, binNum )
+                
+                rSq_flavCombo_avg = np.average( rSq_flavCombo, axis=0 )
+                rSq_flavCombo_err = fncs.calcError( rSq_flavCombo, binNum )
+
                 # Write dipole fit parameter file for each bin
                     
                 output_filename \
@@ -2006,6 +2356,24 @@ if tsf and pSq_fin == 0:
                                         fitParams_dipole_flavCombo[ :, 0 ],
                                         fitParams_dipole_flavCombo[ :, 1 ] )
 
+                # Write average fit parameter file and r^2
+                    
+                output_filename \
+                    = rw.makeFilename( output_template,
+                                       "{}_dipoleFitParams"
+                                       + "_{}_{}params_2sf_tsink{}_{}_psq{}"
+                                       + "_{}configs_binSize{}",
+                                       ff, particle,
+                                       paramNum_dipole,
+                                       tsink[ 0 ], tsink[ -1 ],
+                                       pSq_fin, configNum, binSize )
+                
+                rw.writeDipoleFitParamsFile(output_filename,
+                                            fitParams_dipole_flavCombo_avg,
+                                            fitParams_dipole_flavCombo_err,
+                                            rSq_flavCombo_avg,
+                                            rSq_flavCombo_err)
+                    
                 # Calculate dipole curve
                 # curve_dipole[ b ]
 
