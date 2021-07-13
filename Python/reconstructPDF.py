@@ -8,7 +8,6 @@ import mpi_functions as mpi_fncs
 import readWrite as rw
 import physQuants as pq
 import lqcdjk_fitting as fit
-from mpi4py import MPI
 
 #scaleConvertFactor = [ 1.0,
 #                       1.0,
@@ -170,14 +169,12 @@ moments[ :, 1, : ] = scaleConvertFactor[ 1 ] * moments[ :, 1, : ]
 if momentNum >=3:
 
     moments[ :, 2, : ] = scaleConvertFactor[ 2 ] * moments[ :, 2, : ]
-"""
-#CJL:HERE
-# Multiply pion by 2 to get valence
 
-avgX[ 0 ] = 2. * avgX[ 0 ]
-avgX2[ 0 ] = 2. * avgX2[ 0 ]
-avgX3[ 0 ] = 2. * avgX3[ 0 ]
-"""
+# Move bin and moment axes
+# moments[ part, mmnt, b ] -> moments[ part, b, mmnt ]
+
+moments = np.moveaxis( moments, 1, 2 )
+
 
 ######################
 # Fit Mellin moments #
@@ -223,7 +220,7 @@ for part, flav, ipart in zip( particle, flavor, range( particleNum ) ):
     print( out_str_template.format( "a", a_avg, a_err ) )
     print( out_str_template.format( "b", b_avg, b_err ) )
     print( out_str_template.format( "c", c_avg, c_err ) )
-    print( out_str_template.format( "c", chiSq_avg, 0.0 ) )
+    print( out_str_template.format( "chi^2", chiSq_avg, 0.0 ) )
 
 
     ############################################

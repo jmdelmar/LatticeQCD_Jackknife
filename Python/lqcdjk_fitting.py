@@ -517,8 +517,7 @@ def twoStateFit_twop( twop, rangeStart, rangeEnd, E_guess, T,
     
     # Set two-point functions to fit based on fit range start and end
 
-    twop_to_fit = twop[ :, rangeStart : \
-                        rangeEnd + 1 ]
+    twop_to_fit = twop[ :, rangeStart : rangeEnd + 1 ]
 
     # fit[b]
 
@@ -1836,17 +1835,20 @@ def twoStateEffEnergy( tsink, T, c, E0, E1 ):
 
 def fitMellinMoments( moments, paramNum ):
 
-    # moments[ avgX, avgX2, ... ][ b ]
+    # moments[ b, [ avgX, avgX2, ... ] ]
     
-    binNum = moments.shape[ -1 ]
+    binNum = moments.shape[ 0 ]
 
-    dof = moments.shape[ 0 ] - paramNum + 1
+    dof = moments.shape[ -1 ] - paramNum + 1
 
     # Find fit parameters of mean values to use as initial guess
 
-    moments_avg = np.average( moments, axis=-1 )
+    moments_avg = np.average( moments, axis=0 )
 
-    moments_err = fncs.calcError( moments, binNum, axis=-1 )
+    #moments_cov = fncs.calcError( moments, binNum, axis=-1 )
+
+    moments_cov = np.linalg.inv( np.cov( moments, rowvar=False )
+                                 * ( binNum - 1 ) )
 
     a = 1.0
     b = 1.0
@@ -1870,7 +1872,7 @@ def fitMellinMoments( moments, paramNum ):
     leastSq_avg = minimize( mellinMomentCostFunction, 
                             fitParams_init,
                             args = ( moments_avg,
-                                     moments_err ),
+                                     moments_cov ),
                             method=method,
                             bounds=bounds )
     
@@ -1886,8 +1888,8 @@ def fitMellinMoments( moments, paramNum ):
 
         leastSq = minimize( mellinMomentCostFunction, 
                             fitParams_avg,
-                            args = ( moments[ :, ib ],
-                                     moments_err ),
+                            args = ( moments[ ib ],
+                                     moments_cov ),
                             method=method,
                             bounds=bounds )
         
@@ -1899,7 +1901,11 @@ def fitMellinMoments( moments, paramNum ):
     return fitParams, chiSq / dof
 
 def mellinMomentCostFunction( fitParams,
-                              moments, moments_err ):
+                              moments, moments_cov ):
+
+    # fitParams[ a, b(, c) ]
+    # moments[ mmnt ]
+    # moments_cov[ mmnt, mmnt ]
 
     a = fitParams[ 0 ]
     b = fitParams[ 1 ]
@@ -1914,77 +1920,28 @@ def mellinMomentCostFunction( fitParams,
 
     momentsNum = len( moments )
 
-    avgX = moments[ 0 ]
-    avgX2 = moments[ 1 ]
+    residual = np.zeros( momentsNum )
 
-    avgX_err = moments_err[ 0 ]
-    avgX2_err = moments_err[ 1 ]
-
-    if momentsNum >= 3:
-
-        avgX3 = moments[ 2 ]
-        avgX3_err = moments_err[ 2 ]
-
-    if momentsNum >= 4:
-
-       avgX4 = moments[ 3 ]
-       avgX4_err = moments_err[ 3 ]
-        
-    if momentsNum >= 5:
-
-        avgX5 = moments[ 4 ]
-        avgX5_err = moments_err[ 4 ]
-
-    if momentsNum >= 6:
-
-        avgX6 = moments[ 5 ]
-        avgX6_err = moments_err[ 5 ]
-
-    avgXErrorFunction = ( avgXFit( a, b, c ) - avgX ) / avgX_err
-    avgX2ErrorFunction = ( avgX2Fit( a, b, c ) - avgX2 ) / avgX2_err
+    residual[ 0 ] = avgXFit( a, b, c ) - moments[ 0 ]
+    residual[ 1 ] = avgX2Fit( a, b, c ) - moments[ 1 ]
 
     if momentsNum >= 3:
 
-        avgX3ErrorFunction = ( avgX3Fit( a, b, c ) - avgX3 ) / avgX3_err
+        residual[ 2 ] = avgX3Fit( a, b, c ) - moments[ 2 ]
 
     if momentsNum >= 4:
 
-        #if avgX4_err == 0.:
-
-        avgX4ErrorFunction = ( avgX4Fit( a, b, c ) - avgX4 ) / avgX3_err
-    
-        #else:
-
-        #avgX4ErrorFunction = ( avgX4Fit( a, b, c ) - avgX4 ) / avgX4_err
-    
-    if momentsNum >= 5:
-
-        avgX5ErrorFunction = ( avgX5Fit( a, b, c ) - avgX5 ) / avgX5_err
-    
-    if momentsNum >= 6:
-
-        avgX6ErrorFunction = ( avgX6Fit( a, b, c ) - avgX6 ) / avgX6_err
-    
-    errorFunction = [ avgXErrorFunction ** 2,
-                      avgX2ErrorFunction ** 2 ]
-    
-    if momentsNum >= 3:
-
-        errorFunction.append( avgX3ErrorFunction ** 2 )
-
-    if momentsNum >= 4:
-
-        errorFunction.append( avgX4ErrorFunction ** 2 )
+        residual[ 3 ] = avgX4Fit( a, b, c ) - moments[ 3 ]
 
     if momentsNum >= 5:
 
-        errorFunction.append( avgX5ErrorFunction ** 2 )
-
+        residual[ 4 ] = avgX5Fit( a, b, c ) - moments[ 4 ]
+    
     if momentsNum >= 6:
 
-        errorFunction.append( avgX6ErrorFunction ** 2 )
-
-    return np.sum( errorFunction )
+        residual[ 5 ] = avgX6Fit( a, b, c ) - moments[ 5 ]
+    
+    return residual.T @ moments_cov @ residual
 
 
 def avgXFit( a, b, c ):
