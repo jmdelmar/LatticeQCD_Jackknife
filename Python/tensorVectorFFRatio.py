@@ -61,13 +61,23 @@ data_dir = args.data_dir
 
 F_template = args.formFactor_template
 
-pSqNum = len( F_template )
-
 dipole_params_template = args.dipole_params_template
 
 particle_flavor = args.particle_flavor
 
 Qsq_last = args.Qsq_last
+
+pSq = [ 0, 3 ]
+pSqNum = len( pSq )
+
+if len( F_template ) != pSqNum:
+
+    error_template = "Error (vectorTensorFFRatio.py): length of F_template {} " \
+                     "does not match length of form factor filename templates {}."
+
+    print( error_template.format( len( F_template ), pSqNum ) )
+
+    exit()
 
 if len( Qsq_last ) != pSqNum:
 
@@ -90,14 +100,14 @@ formFactors = [ "tensorFF", "GE" ]
 ###################
 
 
-# F_pSq[ ff ][ ps ][ b, Qsq ]
+# F[ ff ][ ps ][ b, Qsq ]
 
-F_pSq = [ [ [] for ps in F_template ]
-          for ff in formFactors ]
+F = [ [ [] for ps in F_template ]
+      for ff in formFactors ]
 
-# Qsq_pSq[ ff ][ ps ][ b, Qsq ]
+# Qsq[ ff ][ ps ][ b, Qsq ]
 
-Qsq_pSq = [ [ [] for ps in F_template ]
+Qsq = [ [ [] for ps in F_template ]
             for ff in formFactors ]
 
 # M[ ff, b ]
@@ -115,7 +125,7 @@ for ff, iff in fncs.zipXandIndex( formFactors ):
 
         F_filename = template.format( data_dir, ff, particle_flavor )
 
-        Qsq_pSq[ iff ][ ips ], F_pSq[ iff ][ ips ] \
+        Qsq[ iff ][ ips ], F[ iff ][ ips ] \
             = rw.readFormFactorFile_ASCII( F_filename, binNum )
 
     # End loop over p^2 filename templates
@@ -132,165 +142,158 @@ for ff, iff in fncs.zipXandIndex( formFactors ):
 # End loop over form factors
 
 
-##################################################
-# Combine and sort form factors from both frames #
-##################################################
+##################################
+# Sort form factors based on Q^2 #
+##################################
 
-
-# F[ ff ][ b, Qsq ]
-
-F = [ [] for ff in formFactors ]
-
-# Qsq[ ff ][ b, Qsq ]
-
-Qsq = [ [] for ff in formFactors ]
 
 # Loop over form factors
 for ff, iff in fncs.zipXandIndex( formFactors ):
 
-    # Combine momentum frames
-
     # Loop over p^2
     for ips in range( pSqNum ):
 
-        # F_tmp[ b, Qsq ]
+        # Sort by Qsq
 
-        F_tmp = F_pSq[ iff ][ ips ]
-        Qsq_tmp = Qsq_pSq[ iff ][ ips ]
+        # Loop over bins
+        for b in range( binNum ):
 
-        F_tmp = F_tmp[ Qsq_pSq[ iff ][ ips ] <= Qsq_last[ ips ] ]
-        F_tmp = F_tmp.reshape( binNum, F_tmp.size // binNum )
+            iq_sort = np.argsort( Qsq[ iff ][ ips ][ b ] )
+            
+            Qsq[ iff ][ ips ][ b ] = Qsq[ iff ][ ips ][ b, iq_sort ]
+            
+            F[ iff ][ ips ][ b ] = F[ iff ][ ips ][ b, iq_sort ]
+
+        # End loop over bins
+
+        # Average over bins
+        # F_avg[ Qsq ]
+
+        F_avg = np.average( F[ iff ][ ips ], axis=0 )
+
+        # Remove elements where form factors are zero
         
-        Qsq_tmp = Qsq_tmp[ Qsq_pSq[ iff ][ ips ] <= Qsq_last[ ips ]  ]
-        Qsq_tmp = Qsq_tmp.reshape( binNum, Qsq_tmp.size // binNum )
-
-        if ips == 0:
-
-            F[ iff ] = F_tmp
-            Qsq[ iff ] = Qsq_tmp
-
-        else:
-
-            F[ iff ] = np.concatenate( ( F[ iff ], F_tmp ),
-                                       axis=-1 )
-            Qsq[ iff ] = np.concatenate( ( Qsq[ iff ], Qsq_tmp ),
-                                         axis=-1 )
+        F[ iff ][ ips ] = F[ iff ][ ips ][ :, F_avg != 0. ]
+        Qsq[ iff ][ ips ] = Qsq[ iff ][ ips ][ :, F_avg != 0. ]
 
     # End loop over p^2
-
-    # Sort by Qsq
-
-    # Loop over bins
-    for b in range( binNum ):
-
-        iq_sort = np.argsort( Qsq[ iff ][ b ] )
-
-        Qsq[ iff ][ b ] = Qsq[ iff ][ b, iq_sort ]
-            
-        F[ iff ][ b ] = F[ iff ][ b, iq_sort ]
-
-    # End loop over bins
-
-    # Average over bins
-    # F_avg[ Qsq ]
-
-    F_avg = np.average( F[ iff ], axis=0 )
-
-    # Remove elements where form factors are zero
-        
-    F[ iff ] = F[ iff ][ :, F_avg != 0. ]
-    Qsq[ iff ] = Qsq[ iff ][ :, F_avg != 0. ]
-
 # End loop over form factors
+
 
 ####################################################
 # Get Qsq shared by tensor and vector form factors #
 ####################################################
 
 
-Qsq_tmp = [ [] for b in range( binNum ) ]
-F_tensor = [ [] for b in range( binNum ) ]
-F_vector = [ [] for b in range( binNum ) ]
+Qsq_avg = [ [] for p in pSq ]
+ratio_avg = [ [] for p in pSq ]
+ratio_err = [ [] for p in pSq ]
 
-# Loop over bins
-for b in range( binNum ):
+# Loop over p^2
+for ps, ips in fncs.zipXandIndex( pSq ):
 
-    # Q^2 on this bin
+    Qsq_psq = [ [] for b in range( binNum ) ]
+    F_tensor = [ [] for b in range( binNum ) ]
+    F_vector = [ [] for b in range( binNum ) ]
 
-    Qsq_tensor = Qsq[ 0 ][ b ]
-    Qsq_vector = Qsq[ 1 ][ b ]
+    # Loop over bins
+    for b in range( binNum ):
 
-    # Qsq where are shared
+        # Q^2 on this bin
 
-    Qsq_tmp[ b ] \
-        = np.intersect1d( Qsq_tensor, Qsq_vector )
+        Qsq_tensor = Qsq[ 0 ][ ips ][ b ]
+        Qsq_vector = Qsq[ 1 ][ ips ][ b ]
 
-    # Find boolean array of where shared Q^2 are
+        # Qsq where are shared
 
-    where_shared_tensor = np.full( len( Qsq_tensor ), False, dtype=bool )
-    where_shared_vector = np.full( len( Qsq_vector ), False, dtype=bool )
+        Qsq_psq[ b ] \
+            = np.intersect1d( Qsq_tensor, Qsq_vector )
 
-    for qs in Qsq_tmp[ b ]:
+        # Find boolean array of where shared Q^2 are
 
-        where_shared_tensor = np.logical_or( where_shared_tensor,
-                                             Qsq_tensor == qs )
-        where_shared_vector = np.logical_or( where_shared_vector,
-                                             Qsq_vector == qs )
+        where_shared_tensor = np.full( len( Qsq_tensor ), False, dtype=bool )
+        where_shared_vector = np.full( len( Qsq_vector ), False, dtype=bool )
 
-    # Form factors on this bin
+        for qs in Qsq_psq[ b ]:
 
-    F_tensor_b = F[ 0 ][ b ]
-    F_vector_b = F[ 1 ][ b ]
+            where_shared_tensor = np.logical_or( where_shared_tensor,
+                                                 Qsq_tensor == qs )
+            where_shared_vector = np.logical_or( where_shared_vector,
+                                                 Qsq_vector == qs )
 
-    # Form factors on this bin which share Q^2
+        # Form factors on this bin
 
-    F_tensor[ b ] = F_tensor_b[ where_shared_tensor ]
-    F_vector[ b ] = F_vector_b[ where_shared_vector ]
+        F_tensor_b = F[ 0 ][ ips ][ b ]
+        F_vector_b = F[ 1 ][ ips ][ b ]
 
-# End loop over bins
+        # Form factors on this bin which share Q^2
 
-# Qsq[ b, Qsq ]
+        F_tensor[ b ] = F_tensor_b[ where_shared_tensor ]
+        F_vector[ b ] = F_vector_b[ where_shared_vector ]
 
-Qsq = np.array( Qsq_tmp )
+    # End loop over bins
 
-# F_tensor[ b, Qsq ]
+    # Qsq_psq[ b, Qsq ]
 
-F_tensor = np.array( F_tensor )
+    Qsq_psq = np.array( Qsq_psq )
 
-# F_vector[ b, Qsq ]
+    # F_tensor[ b, Qsq ]
 
-F_vector = np.array( F_vector )
+    F_tensor = np.array( F_tensor )
 
-# Average over bins
+    # F_vector[ b, Qsq ]
 
-Qsq_avg = np.average( Qsq, axis=0 )
+    F_vector = np.array( F_vector )
+
+    # Average over bins
+
+    Qsq_avg[ ips ] = np.average( Qsq_psq, axis=0 )
 
 
-###########################
-# Calculate dipole curves #
-###########################
+    ####################
+    # Calculate ratios #
+    ####################
 
+
+    ratio = F_tensor / F_vector
+
+    # Average over bins
+
+    ratio_avg[ ips ] = np.average( ratio, axis=0 )
+    ratio_err[ ips ] = fncs.calcError( ratio, binNum )
+
+# End loop over p^2
+
+
+
+###########################################
+# Calculate dipole curves and their ratio #
+###########################################
+    
+
+# Find highest Q^2 for all frames which will
+# be the last Q^2 in curve
+
+Qsq_last = 0.
+
+# Loop over p^2
+for ps, ips in fncs.zipXandIndex( pSq ):
+
+    Qsq_last = max( Qsq_avg[ ips ][ -1 ], Qsq_last )
+
+# End loop over p^2
 
 curve_tensor, Qsq_curve = fit.calcDipoleCurve( M[ 0 ], F0[ 0 ],
-                                               Qsq_avg[ -1 ] )
-    
+                                               Qsq_last )
+
 curve_vector, Qsq_curve = fit.calcDipoleCurve( M[ 1 ], F0[ 1 ],
-                                               Qsq_avg[ -1 ] )
+                                               Qsq_last )
 
-
-####################
-# Calculate ratios #
-####################
-
-
-ratio = F_tensor / F_vector
+# Calculate curve ratio
 
 curve_ratio = curve_tensor / curve_vector
 
 # Average over bins
-
-ratio_avg = np.average( ratio, axis=0 )
-ratio_err = fncs.calcError( ratio, binNum )
 
 curve_ratio_avg = np.average( curve_ratio, axis=0 )
 curve_ratio_err = fncs.calcError( curve_ratio, binNum )
@@ -301,18 +304,26 @@ curve_ratio_err = fncs.calcError( curve_ratio, binNum )
 ######################
 
 
-# Write ratio points
+# Loop over p^2
+for ps, ips in fncs.zipXandIndex( pSq ):
 
-output_filename = rw.makeFilename( output_template,
-                                   "tensor_vector_ratio" )
+    # Write ratio points
 
-rw.writeAvgDataFile_wX( output_filename, Qsq_avg,
-                        ratio_avg, ratio_err )
+    output_filename = rw.makeFilename( output_template,
+                                       "tensor_vector_ratio_{}_psq{}",
+                                       particle_flavor,
+                                       ps)
+
+    rw.writeAvgDataFile_wX( output_filename, Qsq_avg[ ips ],
+                            ratio_avg[ ips ], ratio_err[ ips ] )
+
+# End loop over p^2
 
 # Write ratio curve
 
 output_filename = rw.makeFilename( output_template,
-                                   "tensor_vector_curve_ratio" )
+                                   "tensor_vector_curve_ratio_{}",
+                                   particle_flavor )
 
 rw.writeAvgDataFile_wX( output_filename, Qsq_curve,
                         curve_ratio_avg, curve_ratio_err )
