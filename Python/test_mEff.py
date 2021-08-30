@@ -14,8 +14,6 @@ np.set_printoptions(threshold=sys.maxsize)
 
 L = 32.0
 
-srcNum = 56
-
 particle_list = [ "pion", "kaon", "nucleon" ]
 
 format_list = [ "gpu", "cpu" ]
@@ -52,6 +50,9 @@ parser.add_argument( "-f", "--data_format", action='store', \
 
 parser.add_argument( "-c", "--config_list", action='store', \
                      type=str, default="" )
+
+parser.add_argument( "-sn", "--source_number", action='store', \
+                     type=int, default=88 )
 
 args = parser.parse_args()
 
@@ -91,6 +92,8 @@ output_template = args.output_template
 tsf = args.two_state_fit
 
 dataFormat = args.data_format
+
+srcNum = args.source_number
 
 # Get configurations from given list or from given 
 # threep directory if list not given
