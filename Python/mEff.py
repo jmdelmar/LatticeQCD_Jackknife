@@ -117,8 +117,6 @@ rw.writeDataFile( outputFilename, twop_jk )
 
 rw.writeAvgDataFile( avgOutputFilename, twop_avg, twop_err )
 
-print( "Wrote two-point function files" )
-
 # Effective mass
 
 outputFilename = output_template.replace( "*", "mEff" )
@@ -128,6 +126,3 @@ avgOutputFilename = output_template.replace( "*", "mEff_avg" )
 rw.writeDataFile( outputFilename, mEff )
 
 rw.writeAvgDataFile( avgOutputFilename, mEff_avg, mEff_err )
-
-print( "Wrote effective mass files" )
-            
