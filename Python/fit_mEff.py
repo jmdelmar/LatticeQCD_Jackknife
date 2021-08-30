@@ -6,6 +6,7 @@ from scipy.optimize import curve_fit
 import functions as fncs
 import physQuants as pq
 import readWrite as rw
+import lqcdjk_fitting as fit
 
 #########################
 # Parse input arguments #
@@ -41,7 +42,7 @@ timestepNum, binNum = rw.detTimestepAndConfigNum( mEff_filename )
 
 mEff = rw.readDataFile( mEff_filename, binNum, timestepNum )
 
-print "Read effective masses from data file"
+print( "Read effective masses from data file" )
 
 # mEff_err[ t ]
 
@@ -64,7 +65,7 @@ mEff_fit_avg = np.average( mEff_fit )
 
 mEff_fit_err = np.std( mEff_fit ) * float( binNum - 1 ) / math.sqrt( float( binNum ) )
 
-print str( mEff_fit_avg ) + "+/-" + str( mEff_fit_err )
+print( str( mEff_fit_avg ) + "+/-" + str( mEff_fit_err ) )
 
 ######################
 # Write output files #
