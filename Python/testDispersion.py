@@ -149,11 +149,15 @@ q, qNum, qSq, qSqNum, \
    
 # Cut q off at iqSq_last
 
+mpi_fncs.mpiPrint(qSq,mpi_confs_info)
+
 qSq = qSq[ :iqSq_last ]
 qSqNum = len( qSq )
 qSq_start = qSq_start[ :iqSq_last ]
 qSq_end = qSq_end[ :iqSq_last ]
 qSq_where = qSq_where[ :qSq_end[ -1 ] + 1 ]
+
+mpi_fncs.mpiPrint(qSq,mpi_confs_info)
 
 q = q[ :qSq_end[ -1 ] + 1 ]
 qNum = len( q )
@@ -266,7 +270,7 @@ comm.Allgatherv( effEnergy_loc,
 #c0_tsf = np.zeros( ( binNum, qSqNum ) )
 #c1_tsf = np.zeros( ( binNum, qSqNum ) )
 #E1_tsf = np.zeros( ( binNum, qSqNum ) )
-E_plat = np.zeros( ( binNum, qSqNum ) )
+E_fit = np.zeros( ( binNum, qSqNum ) )
 E_disp = np.zeros( ( binNum, qSqNum ) )
 
 # Fit q^2 two-point functions to get mEff and fit starts
@@ -276,7 +280,7 @@ fitResults = fit.effEnergyTwopFit( effEnergy[ :, 0, : ],
                                    0, L, True, mpi_confs_info,
                                    fitType="twop" )
 
-E_plat[ :, 0 ] = fitResults[ 2 ]
+E_fit[ :, 0 ] = fitResults[ 2 ]
 E_disp[ :, 0 ] = fitResults[ 2 ]
 tsf_fitStart = fitResults[ 3 ]
 plat_fitStart = fitResults[ 4 ]
@@ -285,12 +289,21 @@ for iq in range( 1, qSqNum ):
     
     mpi_fncs.mpiPrint(iq,mpi_confs_info)
 
-    E_plat[ :, iq ], dummy \
-        = fit.fitPlateau_parallel( effEnergy[ :, iq, : ],
-                                   plat_fitStart, rangeEnd,
-                                   mpi_confs_info )
+    #E_fit[ :, iq ], dummy \
+    #    = fit.fitPlateau_parallel( effEnergy[ :, iq, : ],
+    #                               plat_fitStart, rangeEnd,
+    #                               mpi_confs_info )
 
-    E_disp[ :, iq ] = pq.energy( E_plat[ :, 0 ], qSq[ iq ], L )
+    E_disp[ :, iq ] = pq.energy( E_fit[ :, 0 ], qSq[ iq ], L )
+
+    E_guess = np.average( E_disp[ :, iq ] )
+
+    fitParams, dummy = fit.twoStateFit_twop( twop[ :, iq, : ],
+                                             tsf_fitStart, rangeEnd,
+                                             E_guess, T,
+                                             mpi_confs_info )
+    
+    E_fit[ :, iq ] = fitParams[ :, 2 ]
 
     #fitParams, chiSq \
     #    = fit.twoStateFit_twop_dispersionRelation( twop[ :, ismr, iq, : ],
@@ -318,25 +331,25 @@ if rank == 0:
 
     # Average over bins
 
-    E_plat_avg = np.average( E_plat, axis=0 )
-    E_plat_err = fncs.calcError( E_plat, binNum, axis=0 )
+    E_fit_avg = np.average( E_fit, axis=0 )
+    E_fit_err = fncs.calcError( E_fit, binNum, axis=0 )
 
     E_disp_avg = np.average( E_disp, axis=0 )
     E_disp_err = fncs.calcError( E_disp, binNum, axis=0 )
 
     # Write files
 
-    Qsq_GeV = pq.convertQsqToGeV( qSq, E_plat_avg[ 0 ], a, L )
+    Qsq_GeV = pq.convertQsqToGeV( qSq, E_fit_avg[ 0 ], a, L )
 
     platFilename = rw.makeFilename( output_template, 
-                                    "E_plat_{}" \
+                                    "E_fit_{}" \
                                     + "_{}configs_binSize{}",
                                     particle,
                                     configNum, binSize )
 
-    print(platFilename)
+    #print(platFilename)
 
-    rw.writeAvgDataFile_wX( platFilename, Qsq_GeV, E_plat_avg, E_plat_err )
+    rw.writeAvgDataFile_wX( platFilename, Qsq_GeV, E_fit_avg, E_fit_err )
 
     dispFilename = rw.makeFilename( output_template, 
                                     "E_disp_{}" \
@@ -344,7 +357,7 @@ if rank == 0:
                                     particle,
                                     configNum, binSize )
 
-    print(dispFilename)
+    #print(dispFilename)
 
     rw.writeAvgDataFile_wX( dispFilename, Qsq_GeV, E_disp_avg, E_disp_err )
 
