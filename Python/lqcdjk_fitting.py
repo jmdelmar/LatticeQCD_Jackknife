@@ -1238,7 +1238,7 @@ def twoStateFit_threep( threep, ti_to_fit, tsink, E0, E1,
 # qList[ q ]
 
 def twoStateFit_threep_momTransfer( threep_loc, tsink, m0E0, E1,
-                                    pList, qList, pSq_twop,
+                                    pList, qList, pSq_twop, pSq_last,
                                     neglect, L, dispRel, mpi_info ):
 
     #if dispRel:
@@ -1372,6 +1372,10 @@ def twoStateFit_threep_momTransfer( threep_loc, tsink, m0E0, E1,
         for q, iq in zip( qList[ 1: ], range( 1, qNum ) ):
         
             pSq_ini = np.dot( p - q, p - q )
+
+            if pSq_last and pSq_ini > pSq_last:
+
+                continue
 
             # E0_ini[ b ]
 
@@ -1839,7 +1843,13 @@ def fitMellinMoments( moments, paramNum ):
     
     binNum = moments.shape[ 0 ]
 
-    dof = moments.shape[ -1 ] - paramNum + 1
+    if paramNum != moments.shape[ -1 ]:
+
+        dof = moments.shape[ -1 ] - paramNum
+
+    else:
+        
+        dof = 1.
 
     # Find fit parameters of mean values to use as initial guess
 
@@ -2097,7 +2107,7 @@ def fitFormFactor( vals, vals_err, tsink, plusMinus ):
     fit = np.zeros( vals.shape[ :-1 ] )
     chiSq = np.zeros( vals.shape[ :-1 ] )
 
-    fitStart = tsink // 2 - plusMinus
+    fitStart = tsink // 2 - plusMinus 
     fitEnd = tsink // 2 + plusMinus
 
     # Loop over p_fin
