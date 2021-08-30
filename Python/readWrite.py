@@ -422,7 +422,7 @@ def readMomentaList( corrDir, corr_template, config, particle,
 
             momList = pList[ 0, ipSqStart : ipSqEnd + 1 ]
 
-    return momList
+    return np.array( momList )
 
 
 def readMomentumTransferList( corrDir, corrTemplate, configList,
@@ -2722,6 +2722,10 @@ def readFormFactorFile_GE_GM( threepDir, threep_tokens, srcNum,
                                   "=noe:gx=" ,
                                   "=noe:gy=" ,
                                   "=noe:gz=" ]
+                #insertion_str = [ "=loc:g0=" ,
+                #                  "=loc:gx=" ,
+                #                  "=loc:gy=" ,
+                #                  "=loc:gz=" ]
 
                 threep_loc[ :, iflav, iproj ] \
                     = getFormFactorThreep_cpu( threepDir,
@@ -2923,13 +2927,13 @@ def readFormFactorFile_FS( threepDir, threep_tokens, srcNum,
                              QNum, currNum, T ),
                            dtype=complex )
 
-    # Loop over flavor
-    for flav, iflav in zip( flavor, range( flavorNum ) ):
+    if dataFormat == "cpu":
 
-        # Set filename template
+        # Loop over flavor
+        for flav, iflav in zip( flavor, range( flavorNum ) ):
+
+            # Set filename template
     
-        if dataFormat == "cpu":
-
             template = "{0}{1}{2}{3:+}_{4:+}_{5:+}.{6}.h5"
     
             threep_template = template.format( threep_tokens[0],
@@ -2938,7 +2942,8 @@ def readFormFactorFile_FS( threepDir, threep_tokens, srcNum,
                                                p[0], p[1], p[2],
                                                flav )
 
-            insertion_str = [ "=loc:1=" ]
+            #insertion_str = [ "=loc:1=" ]
+            insertion_str = [ "=loc:g5=" ]
 
             threep_loc[ :, iflav ] \
                 = getFormFactorThreep_cpu( threepDir,
@@ -2952,8 +2957,17 @@ def readFormFactorFile_FS( threepDir, threep_tokens, srcNum,
                                            flav, T,
                                            mpi_info,
                                            **kwargs )
-                
-        elif dataFormat == "gpu":
+
+        # End loop over flavor
+
+        threep_loc = np.array( threep_loc.imag,
+                               dtype=float,
+                               order='c' )
+
+    elif dataFormat == "gpu":
+
+        # Loop over flavor
+        for flav, iflav in zip( flavor, range( flavorNum ) ):
 
             template = "{0}{1}{2}"
             
@@ -2971,17 +2985,13 @@ def readFormFactorFile_FS( threepDir, threep_tokens, srcNum,
                                  mpi_info,
                                  **kwargs )
 
-    # End loop over flavor
+        # End loop over flavor
 
-    # Get the projector and insertion combinations we want
-    # threep_loc[ conf, flav, Q, ratio, t ]
+        threep_loc = np.array( threep_loc.real,
+                               dtype=float,
+                               order='c' )
 
-    # ratio   Insertion
-    # 0       1
-        
-    threep_loc = np.asarray( threep_loc.real,
-                             dtype=float,
-                             order='c' )
+    # End gpu format
 
     return threep_loc
 
