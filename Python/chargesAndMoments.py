@@ -72,9 +72,11 @@ parser.add_argument( "binSize", action='store', type=int )
 parser.add_argument( "-o", "--output_template", action='store',
                      type=str, default="./*.dat" )
 
-parser.add_argument( "-sn", "--source_number", action='store', type=int,
-                     help="Number of sources correlators were averaged "
-                     + "over", default=None )
+parser.add_argument( "-sn", "--source_number", action='store',
+                     help="Comma seperated list of number of sources "
+                     + "correlators were averaged over for each tsink",
+                     type=lambda s: [int(item) for item in s.split(',')],
+                     default=None )
 
 parser.add_argument( "-tsf", "--two_state_fit", action='store_true',
                      help="Performs the two-state fit if supplied" )
@@ -261,7 +263,7 @@ elif whichRatio == "GE0_noether":
 momList = rw.readMomentaList( twopDir[ 0 ], 
                               twop_template[ 0 ].format(smear_str_list[ 0 ]),
                               configList_loc[ 0 ], particle,
-                              srcNum, momSq, dataFormat_twop[ 0 ], 
+                              srcNum[ -1 ], momSq, dataFormat_twop[ 0 ], 
                               mpi_confs_info )
 
 momBoostNum = len( momList )
@@ -284,7 +286,7 @@ for smr, ismr in zip( smear_str_list, range( smearNum ) ):
     twop[ ismr ] = rw.readTwopFile_zeroQ( twopDir[ ismr ], configList_loc, 
                                           configNum,
                                           twop_template_smr,
-                                          srcNum, 0, 
+                                          srcNum[ -1 ], 0, 
                                           dataFormat_twop[ ismr ],
                                           mpi_confs_info )
 
@@ -370,6 +372,9 @@ for ismr in range( smearNum ):
 
     # End if first rank
 
+    mpi_fncs.mpiPrint(plat_fitStart,mpi_confs_info)
+    mpi_fncs.mpiPrint(tsf_fitStart,mpi_confs_info)
+
     # Fit the effective mass and two-point functions 
 
     try:
@@ -386,7 +391,7 @@ for ismr in range( smearNum ):
     except fit.lqcdjk_BadFitError as error: # Bad twop fit
     
         mpi_fncs.mpiPrint( error, mpi_confs_info )
-        mpi_fncs.mpiPrint( " Will try fit on effective mass.", 
+        mpi_fncs.mpiPrint( "Will try fit on effective mass.", 
                            mpi_confs_info )
 
         try:
@@ -553,7 +558,7 @@ if momSq > 0:
                                             configList_loc, 
                                             configNum,
                                             twop_template_smr, 
-                                            srcNum, momSq,
+                                            srcNum[ -1 ], momSq,
                                             dataFormat_twop[ ismr ], 
                                             mpi_confs_info )
 
@@ -638,8 +643,8 @@ for smr, ismr in smear_to_loop_over:
             fitParams_twop = fitResults_twop[ 0 ]
             twop_rangeStart = fitResults_twop[ 3 ]
 
-            mpi_fncs.mpiPrint( fitResults_twop[ 4 ], mpi_confs_info )
-            
+            plat_rangeStart = fitResults_twop[ 4 ]
+
         except fit.lqcdjk_BadFitError as error:
         
             mpi_fncs.mpiPrint( error + " Will try fit on effective energy." )
@@ -664,6 +669,8 @@ for smr, ismr in smear_to_loop_over:
 
             twop_rangeStart = fitResults_tmp[ 3 ]
             
+            plat_rangeStart = fitResults_tmp[ 4 ]
+
             twop_rangeStart = comm.bcast( twop_rangeStart, root=0 )
         
             E_guess = np.sqrt( mEff_fit_avg[ ismr ] ** 2 
@@ -677,6 +684,13 @@ for smr, ismr in smear_to_loop_over:
 
         # End bad twop fit
 
+        mpi_fncs.mpiPrint( "2sf range start: "
+                           + str( twop_rangeStart ),
+                           mpi_confs_info )
+        mpi_fncs.mpiPrint( "Plat range start: "
+                           + str( plat_rangeStart ),
+                           mpi_confs_info )
+            
     else: # Zero momentum two-point functions
 
         twop_to_fit = twop_fold[ ismr ]
@@ -876,7 +890,8 @@ for imom in range( momBoostNum ):
                                                  configList_loc,
                                                  configNum, 
                                                  threep_tokens,
-                                                 srcNum, ts, momList[ imom ],
+                                                 srcNum[ its ], ts,
+                                                 momList[ imom ],
                                                  particle, 
                                                  dataFormat_threep, 
                                                  whichRatio, L, T, 
@@ -896,7 +911,7 @@ for imom in range( momBoostNum ):
                                       configList_loc,
                                       configNum,
                                       threep_tokens, 
-                                      srcNum, ts, momList[ imom ], 
+                                      srcNum[ its ], ts, momList[ imom ], 
                                       particle, dataFormat_threep, 
                                       insType, T, 
                                       mpi_confs_info )
@@ -1176,8 +1191,9 @@ if tsf:
                 chiSq_avg = np.average( chiSq, axis=0 )
                 chiSq_err = fncs.calcError( chiSq, binNum )
                 
-                tsf_threep_range_str = twopFit_str[ ismr_flav[ iflav ] ] \
-                                       + ".3n" + str( neglect )
+                #tsf_threep_range_str = twopFit_str[ ismr_flav[ iflav ] ] \
+                #                       + ".3n" + str( neglect )
+                tsf_threep_range_str = "3n" + str( neglect )
 
                 # Write fit per bin
 
