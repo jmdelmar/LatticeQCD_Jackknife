@@ -128,7 +128,6 @@ if nptFunction == "2" or nptFunction == "both":
 
 print( "Read data from HDF5 files" )
 
-
 if nptFunction == "3" or nptFunction == "both":
 
     for c in range( configNum ):
@@ -217,15 +216,19 @@ for c in range( configNum ):
                         # Set name output dataset which is the same as the input
                         # but without the source (2nd) group
             
-                        outputDataset = threepDsetName_curr[ c ][ 0 ][ ds ][ 0 ]
+                        datasetGroup \
+                            = threepDsetName_curr[c][0][ds][0].split( "/" )
 
-                        for grp in range( 2, len( threepDsetName_curr[ c ][ 0 ][ ds ] ) ):
+                        outputDataset = datasetGroup[ 0 ]
+
+                        for grp in range( 2, len( datasetGroup ) ):
                             
-                            outputDataset += "/" + threepDsetName_curr[ c ][ 0 ][ ds ][ grp ]
+                            outputDataset += "/" + datasetGroup[ grp ]
                     
                         # Write averaged three-point functions to output file
 
-                        outputFile.create_dataset( outputDataset, data=threep_curr[ c ][ ds ] )
+                        outputFile.create_dataset( outputDataset,
+                                                   data=threep_curr[ c ][ ds ] )
 
                     # End loop over datasets
 
@@ -256,16 +259,19 @@ for c in range( configNum ):
 
                 # Set name output dataset which is the same as the input
                 # but without the source (2nd) group
+                
+                datasetGroup = twopDatasetName[ c ][ 0 ][ ds ].split( "/" )
 
-                outputDataset = twopDatasetName[ c ][ 0 ][ ds ][ 0 ]
+                outputDataset = datasetGroup[ 0 ]
 
-                for grp in range( 2, len( twopDatasetName[ c ][ 0 ][ ds ] ) ):
+                for grp in range( 2, len( datasetGroup ) ):
 
-                    outputDataset += "/" + twopDatasetName[ c ][ 0 ][ ds ][ grp ]
+                    outputDataset += "/" + datasetGroup[ grp ]
 
                 # Write averaged two-point functions to output file
 
-                outputFile.create_dataset( outputDataset, data=twop_avg[ c ][ ds ] )
+                outputFile.create_dataset( outputDataset,
+                                           data=twop_avg[ c ][ ds ] )
 
             # End loop over datasets
 
