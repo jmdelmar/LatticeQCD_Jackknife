@@ -111,10 +111,6 @@ parser.add_argument( "-sn", "--source_number", action='store',
                      type=lambda s: [int(item) for item in s.split(',')],
                      default=None )
 
-parser.add_argument( "-tsf", "--two_state_fit", action='store_true',
-                     help="Performs the 2-state fit on "
-                     + "three-point functions if supplied" )
-
 parser.add_argument( "--tsf_fit_start", action='store', type=int,
                      help="If given, will perform 2-state fit on " 
                      + "two-point functions or effective energy "
@@ -204,8 +200,6 @@ else:
     checkFit = True
 
 srcNum = args.source_number
-
-tsf = args.two_state_fit
 
 pSq_fin = args.threep_final_momentum_squared
 
@@ -1116,6 +1110,7 @@ F_loc = np.zeros( ( binNum_loc, tsinkNum, flavNum, QsqNum, formFactorNum ),
 
 # Loop over tsink
 for ts, its in fncs.zipXandIndex( tsink ):
+
     # Loop over flavor
     for iflav in range( flavNum ):
 
@@ -1425,6 +1420,11 @@ for ts, its in fncs.zipXandIndex( tsink ):
                                       mpi_confs_info )
         
     # End loop over flavor
+
+    mpi_fncs.mpiPrint( "Calculated form factors for "
+                       + "tsink={}".format( ts ),
+                       mpi_confs_info )
+
 # End loop over tsink
 
 
@@ -1433,222 +1433,223 @@ for ts, its in fncs.zipXandIndex( tsink ):
 #################
 
 
-if tsf:
+# F_tsf_loc[ b_loc, flav, qsq, [ F1, F2 ] ]
 
-    mpi_fncs.mpiPrint( "Will perform the 2-state fit", mpi_confs_info )
+F_tsf_loc = np.zeros( ( binNum_loc, flavNum,
+                        QsqNum, formFactorNum ),
+                      dtype=float, order='c' )
 
-    # F_tsf_loc[ b_loc, flav, qsq, [ F1, F2 ] ]
+# Number of three-point functions to neglect on source and sink sides
 
-    F_tsf_loc = np.zeros( ( binNum_loc, flavNum,
-                            QsqNum, formFactorNum ),
-                          dtype=float, order='c' )
+neglect = 3
 
-    # Number of three-point functions to neglect on source and sink sides
+# Qsq_where_good[ flav, qs ]
 
-    neglect = 3
+Qsq_where_good = np.full( ( flavNum, QsqNum ), True, dtype=bool )
 
-    # Qsq_where_good_tsf[ flav, qs ]
+mpi_fncs.mpiPrint( "Performing 2-state fit...", mpi_confs_info,
+                   end='', flush=True )
 
-    Qsq_where_good_tsf = np.full( ( flavNum, QsqNum ), True, dtype=bool )
+# Loop over flavors
+for iflav in range( flavNum ):
+        
+    # Smear index for this flavor
+    
+    ismr = ismr_flav[ iflav ]
 
+    # Perform 2-state fit
+    # tsfParams[ b, p, q, r, [ A00, A01, A10, A11 ] ]
+
+    if dispRel:
+        
+        # Calculate 2-state fit parameters using dispersion relation
+        # to calculate E0 = sqrt( mEff^2 + p^2 )
+
+        tsfParams \
+            = fit.twoStateFit_threep_momTransfer( threep_jk_loc[ :,
+                                                                 iflav ],
+                                                  tsink,
+                                                  mEff_plat[ ismr ],
+                                                  E1[ ismr ],
+                                                  p_fin[ iflav ],
+                                                  q_threep[ iflav ],
+                                                  qSq[ ismr ],
+                                                  pSq_last,
+                                                  neglect, L, True,
+                                                  mpi_confs_info)
+
+    else:
+
+        # Calculate 2-state fit parameters using E0 from 
+        # 2-state fit on two-point functions
+
+        tsfParams \
+            = fit.twoStateFit_threep_momTransfer(threep_jk_loc[ :,
+                                                                iflav ],
+                                                 tsink,
+                                                 E0[ ismr ],
+                                                 E1[ ismr ],
+                                                 p_fin[ iflav ],
+                                                 q_threep[ iflav ],
+                                                 qSq[ ismr ],
+                                                 pSq_last,
+                                                 neglect, L, False,
+                                                 mpi_confs_info)
+        
+    # 2-state fit parameters
+
+    a00 = tsfParams[ ..., 0 ]
+    a01 = tsfParams[ ..., 1 ]
+    a10 = tsfParams[ ..., 2 ]
+    a11 = tsfParams[ ..., 3 ]
+
+    # Ratio from 2-state fit
+    # Ratio_tsf_loc[ b_loc, p, q, r ]
+    
+    ratio_tsf_loc \
+        = pq.calcFormFactorRatio_tsf( a00[ binList_loc ],
+                                      c0[ ismr,
+                                          binList_loc ],
+                                      p_fin[ iflav ],
+                                      q_threep[ iflav ],
+                                      qSq[ ismr ],
+                                      mpi_confs_info )
+
+    # Multiply by renormalization factor
+
+    if formFactor == "A20_B20":
+
+        # Off-diagonal insertions have a different factor
+        
+        ratio_tsf_loc[ ..., 0 ] = Z[ 0 ] * ratio_tsf_loc[ ..., 0 ]
+
+        ratio_tsf_loc[ ..., 1: ] = Z[ 1 ] * ratio_tsf_loc[ ..., 1: ]
+
+    else:
+
+        ratio_tsf_loc = Z * ratio_tsf_loc
+
+    # Gather ratio
+    # ratio_tsf[ b, p, q, r ]
+        
+    ratio_tsf = np.zeros( ( binNum, ) + ratio_tsf_loc.shape[ 1: ] )
+
+    comm.Allgatherv( ratio_tsf_loc,
+                     [ ratio_tsf,
+                       recvCount \
+                       * np.prod( ratio_tsf_loc.shape[ 1: ] ),
+                       recvOffset \
+                       * np.prod( ratio_tsf_loc.shape[ 1: ] ),
+                       MPI.DOUBLE ] )
+
+    # ratio_tsf_err[ p, q, ratio ]
+
+    ratio_tsf_err = fncs.calcError( ratio_tsf, binNum )        
+
+
+    ###############################
+    # Calculate kinematic factors #
+    ###############################
+
+
+    # kineFacter_tsf_loc[ b_loc, p, q, r, [ F1, F2 ] ]
+        
+    kineFactor_tsf_loc = pq.kineFactor( ratio_tsf_err,
+                                        formFactor,
+                                        particle,
+                                        flav_str[ iflav ],
+                                        mEff_plat[ 0, binList_loc ],
+                                        p_fin[ iflav ],
+                                        q_threep[ iflav ], L,
+                                        mpi_confs_info )
+        
+    # Gather kinematic factor
+    # kineFactor_tsf[ b, p, q, r, [ F1, F2 ] ]
+
+    kineFactor_tsf = np.zeros( ( binNum, )
+                               + kineFactor_tsf_loc.shape[ 1: ] )
+    
+    comm.Allgatherv( kineFactor_tsf_loc,
+                     [ kineFactor_tsf,
+                       recvCount \
+                       * np.prod( kineFactor_tsf_loc.shape[ 1: ] ),
+                       recvOffset \
+                       * np.prod( kineFactor_tsf_loc.shape[ 1: ] ),
+                       MPI.DOUBLE ] )
+
+    # Calculate 2-state fit form factor
+    # F_tsf_loc[ b_loc, flav, qs, ff ]
+
+    F_tsf_loc[ :, iflav ] = pq.calcFormFactors_SVD( kineFactor_tsf_loc,
+                                                    ratio_tsf,
+                                                    ratio_tsf_err,
+                                                    Qsq_where[ iflav ],
+                                                    formFactor,
+                                                    pSq_fin,
+                                                    mpi_confs_info )
+
+# End loop over flavor
+
+mpi_fncs.mpiPrint( "done", mpi_confs_info )
+
+# Gather 2-state fit form factors
+# F_tsf[ b, flav, qsq, [ F1, F2 ] ]
+
+# F_tsf[ b, flav, qsq, [ F1, F2 ] ]
+
+if rank == 0:
+
+    F_tsf = np.zeros( ( binNum, flavNum,
+                        QsqNum, formFactorNum ),
+                      dtype=float, order='c' )
+    
+else:
+
+    F_tsf = np.array( [] )
+
+comm.Gatherv( F_tsf_loc,
+              [ F_tsf,
+                recvCount * np.prod( F_tsf_loc.shape[ 1: ] ),
+                recvOffset * np.prod( F_tsf_loc.shape[ 1: ] ),
+                MPI.DOUBLE ],
+              root=0 )
+
+if rank == 0:
+          
+    F_tsf_err = fncs.calcError( F_tsf, binNum )
+
+    F_tsf_err = np.array( [ F_tsf_err ] * binNum )
+    F_tsf_err = F_tsf_err.reshape( F_tsf.shape )
+        
     # Loop over flavors
     for iflav in range( flavNum ):
 
-        # Smear index for this flavor
+        # Loop over Q^2 index
+        for iqs in range( QsqNum ):
+                    
+            # Q^2 are bad if they do not correspond to any
+            # p^2 < pSq_last
 
-        ismr = ismr_flav[ iflav ]
-
-        # Perform 2-state fit
-        # tsfParams[ b, p, q, r, [ A00, A01, A10, A11 ] ]
-
-        if dispRel:
-
-            # Calculate 2-state fit parameters using dispersion relation
-            # to calculate E0 = sqrt( mEff^2 + p^2 )
-
-            tsfParams \
-                = fit.twoStateFit_threep_momTransfer( threep_jk_loc[ :,
-                                                                     iflav ],
-                                                      tsink,
-                                                      mEff_plat[ ismr ],
-                                                      E1[ ismr ],
-                                                      p_fin[ iflav ],
-                                                      q_threep[ iflav ],
-                                                      qSq[ ismr ],
-                                                      pSq_last,
-                                                      neglect, L, True,
-                                                      mpi_confs_info)
-
-        else:
-
-            # Calculate 2-state fit parameters using E0 from 
-            # 2-state fit on two-point functions
-
-            tsfParams \
-                = fit.twoStateFit_threep_momTransfer(threep_jk_loc[ :,
-                                                                    iflav ],
-                                                     tsink,
-                                                     E0[ ismr ],
-                                                     E1[ ismr ],
-                                                     p_fin[ iflav ],
-                                                     q_threep[ iflav ],
-                                                     qSq[ ismr ],
-                                                     pSq_last,
-                                                     neglect, L, False,
-                                                     mpi_confs_info)
+            if not np.any( Qsq_where[ iflav ][ iqs ] ):
         
-        # 2-state fit parameters
+                Qsq_where_good[ :, iqs ] = False
 
-        a00 = tsfParams[ ..., 0 ]
-        a01 = tsfParams[ ..., 1 ]
-        a10 = tsfParams[ ..., 2 ]
-        a11 = tsfParams[ ..., 3 ]
+            elif errorThreshold:
 
-        # Ratio from 2-state fit
-        # Ratio_tsf_loc[ b_loc, p, q, r ]
+                # Q^2 are bad if dF(Q^2)/F(Q^2) > errorThreshold
 
-        ratio_tsf_loc \
-            = pq.calcFormFactorRatio_tsf( a00[ binList_loc ],
-                                          c0[ ismr,
-                                              binList_loc ],
-                                          p_fin[ iflav ],
-                                          q_threep[ iflav ],
-                                          qSq[ ismr ],
-                                          mpi_confs_info )
-
-        # Multiply by renormalization factor
-
-        if formFactor == "A20_B20":
-
-            # Off-diagonal insertions have a different factor
-
-            ratio_tsf_loc[ ..., 0 ] = Z[ 0 ] * ratio_tsf_loc[ ..., 0 ]
-
-            ratio_tsf_loc[ ..., 1: ] = Z[ 1 ] * ratio_tsf_loc[ ..., 1: ]
-
-        else:
-
-            ratio_tsf_loc = Z * ratio_tsf_loc
-
-        # Gather ratio
-        # ratio_tsf[ b, p, q, r ]
-
-        ratio_tsf = np.zeros( ( binNum, ) + ratio_tsf_loc.shape[ 1: ] )
-
-        comm.Allgatherv( ratio_tsf_loc,
-                         [ ratio_tsf,
-                           recvCount \
-                           * np.prod( ratio_tsf_loc.shape[ 1: ] ),
-                           recvOffset \
-                           * np.prod( ratio_tsf_loc.shape[ 1: ] ),
-                           MPI.DOUBLE ] )
-
-        # ratio_tsf_err[ p, q, ratio ]
-
-        ratio_tsf_err = fncs.calcError( ratio_tsf, binNum )        
-
-
-        ###############################
-        # Calculate kinematic factors #
-        ###############################
-
-
-        # kineFacter_tsf_loc[ b_loc, p, q, r, [ F1, F2 ] ]
-        
-        kineFactor_tsf_loc = pq.kineFactor( ratio_tsf_err,
-                                            formFactor,
-                                            particle,
-                                            flav_str[ iflav ],
-                                            mEff_plat[ 0, binList_loc ],
-                                            p_fin[ iflav ],
-                                            q_threep[ iflav ], L,
-                                            mpi_confs_info )
-        
-        # Gather kinematic factor
-        # kineFactor_tsf[ b, p, q, r, [ F1, F2 ] ]
-
-        kineFactor_tsf = np.zeros( ( binNum, )
-                                   + kineFactor_tsf_loc.shape[ 1: ] )
-    
-        comm.Allgatherv( kineFactor_tsf_loc,
-                         [ kineFactor_tsf,
-                           recvCount \
-                           * np.prod( kineFactor_tsf_loc.shape[ 1: ] ),
-                           recvOffset \
-                           * np.prod( kineFactor_tsf_loc.shape[ 1: ] ),
-                           MPI.DOUBLE ] )
-
-        # Calculate 2-state fit form factor
-        # F_tsf_loc[ b_loc, flav, qs, ff ]
-
-        F_tsf_loc[ :, iflav ] = pq.calcFormFactors_SVD( kineFactor_tsf_loc,
-                                                        ratio_tsf,
-                                                        ratio_tsf_err,
-                                                        Qsq_where[ iflav ],
-                                                        formFactor,
-                                                        pSq_fin,
-                                                        mpi_confs_info )
+                if np.any( F_tsf_err[ :, iflav, iqs, 0 ]
+                           / np.abs( F_tsf[ :, iflav, iqs, 0 ] )
+                           > errorThreshold ):
+                    
+                    Qsq_where_good[ iflav, iqs ] = False
+                        
+                # End if dF/F > errorThreshold
+            # End errorThreshold
+        # End loop over Q^2
 
     # End loop over flavor
-
-    # Gather 2-state fit form factors
-    # F_tsf[ b, flav, qsq, [ F1, F2 ] ]
-
-    # F_tsf[ b, flav, qsq, [ F1, F2 ] ]
-
-    if rank == 0:
-
-        F_tsf = np.zeros( ( binNum, flavNum,
-                            QsqNum, formFactorNum ),
-                          dtype=float, order='c' )
-        
-    else:
-
-        F_tsf = np.array( [] )
-
-    comm.Gatherv( F_tsf_loc,
-                  [ F_tsf,
-                    recvCount * np.prod( F_tsf_loc.shape[ 1: ] ),
-                    recvOffset * np.prod( F_tsf_loc.shape[ 1: ] ),
-                    MPI.DOUBLE ],
-                  root=0 )
-
-    if rank == 0:
-          
-        F_tsf_err = fncs.calcError( F_tsf, binNum )
-
-        F_tsf_err = np.array( [ F_tsf_err ] * binNum )
-        F_tsf_err = F_tsf_err.reshape( F_tsf.shape )
-
-        # Loop over flavors
-        for iflav in range( flavNum ):
-
-            # Loop over Q^2 index
-            for iqs in range( QsqNum ):
-                    
-                # Q^2 are bad if they do not correspond to any
-                # p^2 < pSq_last
-
-                if not np.any( Qsq_where[ iflav ][ iqs ] ):
-        
-                    Qsq_where_good_tsf[ :, iqs ] = False
-
-                elif errorThreshold:
-
-                    # Q^2 are bad if dF(Q^2)/F(Q^2) > errorThreshold
-
-                    if np.any( F_tsf_err[ :, iflav, iqs, 0 ]
-                               / np.abs( F_tsf[ :, iflav, iqs, 0 ] )
-                               > errorThreshold ):
-                            
-                        Qsq_where_good_tsf[ iflav, iqs ] = False
-                        
-                    # End if dF/F > errorThreshold
-                # End errorThreshold
-            # End loop over Q^2
-        # End loop over flavor
-    # End first process
-# End 2-state fit
+# End first process
 
 
 ##########################################
@@ -1656,120 +1657,88 @@ if tsf:
 ##########################################
 
 
-# Gather form factors
-# F[ b, ts, flav, qs, ff ]
+# Broadcast Qsq_where_good from first process
 
-if rank == 0:
+if rank != 0:
+
+    Qsq_where_good = np.full( ( flavNum, QsqNum ),
+                              False, dtype=bool )
+
+comm.Bcast( Qsq_where_good, root=0 )
+
+F_good_loc = [ [] for flav in flav_str ]
+
+F_avg = [ [] for flav in flav_str ]
+F_err = [ [] for flav in flav_str ]
+
+F_good_tsf_loc = [ [] for flav in flav_str ]
+
+F_tsf_avg = [ [] for flav in flav_str ]
+F_tsf_err = [ [] for flav in flav_str ]
+
+Qsq_GeV = [ [] for flav in flav_str ]
+Qsq_GeV_loc = [ [] for flav in flav_str ]
+
+Qsq_GeV_avg = [ [] for flav in flav_str ]
+
+# Loop over flavor
+for iflav in range( flavNum ):
+            
+    # Get results for good Q^2
+    # F_good_loc[ iflav ][ b_loc, its, qs_good, [ F1, F2 ] ]
+
+    F_good_loc[ iflav ] = F_loc[ :, :, iflav ]
+
+    F_good_loc[ iflav ] = F_good_loc[ iflav ][ :, :,
+                                               Qsq_where_good[ iflav ], : ]
+
+    F_good_loc[ iflav ] = np.array( F_good_loc[ iflav ],
+                                    order='c' )
+    
+    # Convert good Q^2 to GeV^2
+    # Qsq_GeV[ b, qs_good ]
+
+    Qsq_GeV[ iflav ] = Qsq[ :, Qsq_where_good[ iflav ] ] \
+                       * ( 0.197 / a ) ** 2
+
+    # Qsq_GeV_loc[ b_loc, qs_good ]
+
+    Qsq_GeV_loc[ iflav ] = Qsq_loc[ :, Qsq_where_good[ iflav ] ] \
+                           * ( 0.197 / a ) ** 2
+
+    # Gather good form factors
+    # F_good[ iflav ][ b, ts, qs, ff ]
+
+    if rank == 0:
         
-    F = np.zeros( ( binNum, tsinkNum, flavNum, 
-                    QsqNum, formFactorNum ),
-                  dtype=float, order='c' )
+        F_good = np.zeros( ( binNum, )
+                           + F_good_loc[ iflav ].shape[ 1: ],
+                           dtype=float, order='c' )
             
-else:
+    else:
     
-    F = np.array( [] )
+        F_good = np.array( [] )
 
-comm.Gatherv( F_loc,
-              [ F, recvCount * np.prod( F_loc.shape[ 1: ] ),
-                recvOffset * np.prod( F_loc.shape[ 1: ] ),
-                MPI.DOUBLE ],
-              root=0 )
+    comm.Gatherv( F_good_loc[ iflav ],
+                  [ F_good,
+                    recvCount * np.prod( F_good_loc[ iflav ].shape[ 1: ] ),
+                    recvOffset * np.prod( F_good_loc[ iflav ].shape[ 1: ] ),
+                    MPI.DOUBLE ],
+                  root=0 )
 
-if rank == 0:
+    if rank == 0:
 
-    # Qsq_where_good[ ts, flav, qs ]
+        # Average over bins
+        # F_avg[ iflav ][ ts, qs_good, ff ]
 
-    Qsq_where_good = np.full( ( tsinkNum, flavNum, QsqNum ),
-                              True, dtype=bool )
+        F_avg[ iflav ] = np.average( F_good, axis=0 )
+        F_err[ iflav ] = fncs.calcError( F_good, binNum )
 
-    if tsf:
-
-        # Choose "good" form factors based on 2-state fit
+        Qsq_GeV_avg[ iflav ] = np.average( Qsq_GeV[ iflav ], axis=0 )
 
         # Loop over tsink
         for ts, its in fncs.zipXandIndex( tsink ):
-    
-            Qsq_where_good[ its ] = Qsq_where_good_tsf
-
-    else: # not tsf
-
-        # Choose "good" form factors based on each tsink
-
-        # Loop over tsink
-        for ts, its in fncs.zipXandIndex( tsink ):
-            # Loop over flavor
-            for iflav in range( flavNum ):
-
-                F_err = fncs.calcError( F[ :, its, iflav ], binNum )
-                
-                F_err = np.array( [ F_err ] * binNum )
-                F_err = F_err.reshape( F.shape )
-
-                # Determine which Q^2 are good
-                    
-                # Loop over Q^2 index
-                for iqs in range( QsqNum ):
-                        
-                    # Q^2 are bad if they do not correspond to any
-                    # p^2 < pSq_last
-
-                    if not np.any( Qsq_where[ iflav ][ iqs ] ):
-
-                        Qsq_where_good[ :, iflav, iqs ] = False
-
-                    elif errorThreshold:
-                
-                        # Q^2 are bad if dF(Q^2)/F(Q^2) > errorThreshold
-
-                        if np.any( F_err[ :, iqs, 0 ]
-                                   / np.abs( F[ iflav, :, iqs, 0 ] )
-                                   > errorThreshold ):
-                            
-                            Qsq_where_good[ its, iflav, iqs ] = False
-
-                # End loop over Q^2
-
-                if not np.any( Qsq_where_good[ its, iflav ] ):
-
-                    warning_msg = "Warning (formFactors.py):" \
-                                  + "no good Q^2 for tsink {}, " \
-                                  + "flavor {}"
-
-                    mpi_fncs.mpiPrint( warning_msg.format( ts,
-                                                           flav_str[iflav][-1]),
-                                       mpi_confs_info )
-
-                    continue
-                    
-                # End no good form factors
-            # End loop over flavor
-        # End loop over tsink
-    # End if not tsf
-
-    # Loop over tsink
-    for ts, its in fncs.zipXandIndex( tsink ):
-        # Loop over flavor
-        for iflav in range( flavNum ):
-            
-            # Get results for good Q^2
-            # F_good[ b, qs_good, [ F1, F2 ] ]
-
-            F_good = F[ :, its, iflav ]
-            F_good = F_good[ :, Qsq_where_good[ its, iflav ], : ]
-
-            # Convert good Q^2 to GeV^2
-
-            Qsq_GeV = Qsq[ :, Qsq_where_good[ its, iflav ] ] \
-                      * ( 0.197 / a ) ** 2
-
-            # Average over bins
-            # F_avg[ qs_good, ff ]
-
-            F_avg = np.average( F_good, axis=0 )
-            F_err = fncs.calcError( F_good, binNum )
-
-            Qsq_GeV_avg = np.average( Qsq_GeV, axis=0 )
-
+            # Loop over form factors
             for ff, iff in fncs.zipXandIndex( F_str ):
 
                 # Write form factors for each bin
@@ -1783,8 +1752,8 @@ if rank == 0:
                                        ts, pSq_fin,
                                        configNum, binSize )
 
-                rw.writeDataFile_wX( output_filename, Qsq_GeV,
-                                     F_good[ :, :, iff ] )
+                rw.writeDataFile_wX( output_filename, Qsq_GeV[ iflav ],
+                                     F_good[ :, its, :, iff ] )
 
                 # Write bin averaged form factors
 
@@ -1797,58 +1766,170 @@ if rank == 0:
                                        ts, pSq_fin,
                                        configNum, binSize )
 
-                rw.writeAvgDataFile_wX( output_filename, Qsq_GeV_avg,
-                                        F_avg[ :, iff ],
-                                        F_err[ :, iff ] )
+                rw.writeAvgDataFile_wX( output_filename,
+                                        Qsq_GeV_avg[ iflav ],
+                                        F_avg[ iflav ][ its, :, iff ],
+                                        F_err[ iflav ][ its, :, iff ] )
 
             # End loop over form factors
-        # End loop over flavor
+        # End loop over tsink
+    # End first process
 
-        if formFactor == "GE_GM":
+    # Get results for good Q^2
+    # F_good_tsf_loc[ flav ][ b, qs_good, [ F1, F2 ] ]
 
-            # Flavor combination for F_H
+    F_good_tsf_loc[ iflav ] = F_tsf_loc[ :, iflav ]
+    F_good_tsf_loc[ iflav ] \
+        = F_good_tsf_loc[ iflav ][ :, Qsq_where_good[ iflav ], : ]
+    F_good_tsf_loc[ iflav ] = np.array( F_good_tsf_loc[ iflav ],
+                                        order='c' )
+    
+    # Gather 2-state form factors
 
-            # Get results for good Q^2
-            # F[ flav, b, qs_good, [ F1, F2 ] ]
+    if rank == 0:
 
-            if particle in [ "kaon", "nucleon" ]:
+        F_good_tsf = np.zeros( ( binNum, )
+                                        + F_good_tsf_loc[ iflav ].shape[1:],
+                                        dtype=float, order='c' )
 
-                # F_K = 2/3 F_u - 1/3 F_s
-                # F_N = 2/3 F_u - 1/3 F_d
+    else:
 
-                Qsq_where_good_flavCombo \
-                    = Qsq_where_good[ its, 0 ] & Qsq_where_good[ its, 1 ]
+        F_good_tsf = np.array( [] )
 
-                F_good_flavCombo = F[ :, its ]
-                F_good_flavCombo = F_good_flavCombo[ :, :, Qsq_where_good_flavCombo, : ]
+    comm.Gatherv( F_good_tsf_loc[ iflav ],
+                  [ F_good_tsf,
+                    recvCount
+                    * np.prod( F_good_tsf_loc[ iflav ].shape[ 1: ] ),
+                    recvOffset
+                    * np.prod( F_good_tsf_loc[ iflav ].shape[ 1: ] ),
+                    MPI.DOUBLE ],
+                  root=0 )
 
-                F_flavCombo = 2./3. * F_good_flavCombo[ :, 0 ] \
-                              - 1./3. * F_good_flavCombo[ :, 1 ]
+    if rank == 0:
+
+        # Average over bins
+
+        F_tsf_avg[ iflav ] = np.average( F_good_tsf, axis=0 )
+        F_tsf_err[ iflav ] = fncs.calcError( F_good_tsf, binNum )
+
+        for ff, iff in fncs.zipXandIndex( F_str ):
+
+            # Write form factors for each bin
+
+            output_filename \
+                = rw.makeFilename( output_template,
+                                   "{}_per_bin_2sf_{}_{}_"
+                                   + "tsink{}_{}_psq{}"
+                                   + "_{}configs_binSize{}",
+                                   ff, particle, flav_str[ iflav ],
+                                   tsink[ 0 ], tsink[ -1 ], pSq_fin,
+                                   configNum, binSize )
+
+            rw.writeDataFile_wX( output_filename, Qsq_GeV[ iflav ],
+                                 F_good_tsf[ :, :, iff ] )
+
+            # Write bin averaged form factors
+
+            output_filename \
+                = rw.makeFilename( output_template,
+                                   "{}_2sf_{}_{}_tsink{}_{}_psq{}"
+                                   + "_{}configs_binSize{}",
+                                   ff, particle, flav_str[ iflav ],
+                                   tsink[ 0 ],
+                                   tsink[ -1 ],
+                                   pSq_fin,
+                                   configNum, binSize )
+
+            rw.writeAvgDataFile_wX( output_filename, Qsq_GeV_avg[ iflav ],
+                                    F_tsf_avg[ iflav ][ :, iff ],
+                                    F_tsf_err[ iflav ][ :, iff ] )
+    
+        # End loop over form factor
+    # End first process
+# End loop over flavors
+
+
+##############################
+# Flavor combination for F_H #
+##############################
+
+
+if formFactor == "GE_GM":
+
+    # Get results for good Q^2
+    # F_flavCombo_loc[ b_loc, ts, qs_good, [ F1, F2 ] ]
+    
+    if particle in [ "kaon", "nucleon" ]:
+
+        # F_K = 2/3 F_u - 1/3 F_s
+        # F_N = 2/3 F_u - 1/3 F_d
+
+        Qsq_where_good_flavCombo \
+            = np.array( Qsq_where_good[ 0 ] & Qsq_where_good[ 1 ],
+                        dtype=bool )
+
+        #CJL: This part does not work for some reason
         
-            else: # particle == "pion"
+        F_good_flavCombo = F_loc[ :, :, :
+                                  Qsq_where_good_flavCombo, : ]
 
-                # F_pi = 2/3 F_u - 1/3 F_d = F_u
+        F_flavCombo_loc = 2./3. * F_good_flavCombo[ :, :, 0 ] \
+                          - 1./3. * F_good_flavCombo[ :, :, 1 ]
+        
+    else: # particle == "pion"
 
-                F_flavCombo = F_good
-
-                Qsq_where_good_flavCombo = Qsq_where_good[ its, 0 ]
-
-            # End pion
-
-            # Convert Q^2 to GeV^2
+        # F_pi = 2/3 F_u - 1/3 F_d = F_u
             
-            Qsq_GeV_flavCombo \
-                = Qsq[ :, Qsq_where_good_flavCombo ] * ( 0.197 / a ) ** 2
-        
-            # Average over bins
-        
-            F_flavCombo_avg = np.average( F_flavCombo, axis=0 )
-            F_flavCombo_err = fncs.calcError( F_flavCombo, binNum )
-        
-            Qsq_GeV_flavCombo_avg = np.average( Qsq_GeV_flavCombo, axis=0 )
+        F_flavCombo_loc = F_good_loc[ 0 ]
 
-            # Write output
+        Qsq_where_good_flavCombo = Qsq_where_good[ 0 ]
+            
+    # End pion
 
+    F_flavCombo_loc = np.array( F_flavCombo_loc,
+                                order='c' )
+
+    # Convert Q^2 to GeV^2
+            
+    Qsq_GeV_flavCombo \
+        = Qsq[ :, Qsq_where_good_flavCombo ] * ( 0.197 / a ) ** 2
+    
+    Qsq_GeV_flavCombo_loc \
+        = Qsq_loc[ :, Qsq_where_good_flavCombo ] * ( 0.197 / a ) ** 2
+    
+    # Gather flavor combo form factors
+    # F_flavCombo[ b, ts, qs_good, ff ]
+
+    if rank == 0:
+
+        F_flavCombo = np.zeros( ( binNum, ) + F_flavCombo_loc.shape[ 1: ],
+                                dtype=float, order='c' )
+
+    else:
+
+        F_flavCombo = np.array( [] )
+
+    comm.Gatherv( F_flavCombo_loc,
+                  [ F_flavCombo,
+                    recvCount * np.prod( F_flavCombo_loc.shape[ 1: ] ),
+                    recvOffset * np.prod( F_flavCombo_loc.shape[ 1: ] ),
+                    MPI.DOUBLE ],
+                  root=0 )
+
+    if rank == 0:
+
+        # Average over bins
+        # F_flavCombo_avg[ ts, qs_good, ff ]
+
+        F_flavCombo_avg = np.average( F_flavCombo, axis=0 )
+        F_flavCombo_err = fncs.calcError( F_flavCombo, binNum )
+        
+        Qsq_GeV_flavCombo_avg = np.average( Qsq_GeV_flavCombo, axis=0 )
+
+        # Write output
+
+        # Loop over tsink
+        for ts, its in fncs.zipXandIndex( tsink ):
             # Loop over form factors
             for ff, iff in fncs.zipXandIndex( F_str ):
 
@@ -1863,9 +1944,9 @@ if rank == 0:
                                        configNum, binSize )
 
                 rw.writeDataFile_wX( output_filename, Qsq_GeV_flavCombo,
-                                     F_flavCombo[ :, :, iff ] )
+                                     F_flavCombo[ :, its, :, iff ] )
 
-                # Write bin-averaged orm factors
+                # Write bin-averaged form factors
 
                 output_filename \
                     = rw.makeFilename( output_template,
@@ -1875,218 +1956,284 @@ if rank == 0:
                                        ts, pSq_fin,
                                        configNum, binSize )
 
-                rw.writeAvgDataFile_wX( output_filename, Qsq_GeV_flavCombo_avg,
-                                        F_flavCombo_avg[ :, iff ],
-                                        F_flavCombo_err[ :, iff ] )
+                rw.writeAvgDataFile_wX(output_filename,Qsq_GeV_flavCombo_avg,
+                                       F_flavCombo_avg[ its, :, iff ],
+                                       F_flavCombo_err[ its, :, iff ] )
             
             # End loop over form factor
-        # End if GE_GM
-    # End loop over tsink
+        # End loop over tsink
+    # End first process
 
-    if tsf:
+    # Flavor combination for 2-state F_H
 
-        # Loop over flavor
-        for iflav in range( flavNum ):
+    if particle in [ "kaon", "nucleon" ]:
 
-            # Get results for good Q^2
-            # F_good_tsf[ b, qs_good, [ F1, F2 ] ]
-
-            F_good_tsf = F_tsf[ :, iflav ]
-            F_good_tsf = F_good_tsf[ :, Qsq_where_good_tsf[ iflav ], : ]
-
-            # Convert good Q^2 to GeV^2
-
-            Qsq_GeV = Qsq[ :, Qsq_where_good_tsf[ iflav ] ] \
-                      * ( 0.197 / a ) ** 2
-
-            # Average over bins
-
-            F_tsf_avg = np.average( F_good_tsf, axis=0 )
-            F_tsf_err = fncs.calcError( F_good_tsf, binNum )
-
-            Qsq_GeV_avg = np.average( Qsq_GeV, axis=0 )
-
-            for ff, iff in fncs.zipXandIndex( F_str ):
-
-                # Write form factors for each bin
-
-                output_filename \
-                    = rw.makeFilename( output_template,
-                                       "{}_per_bin_2sf_{}_{}_"
-                                       + "tsink{}_{}_psq{}"
-                                       + "_{}configs_binSize{}",
-                                       ff, particle, flav_str[ iflav ],
-                                       tsink[ 0 ], tsink[ -1 ], pSq_fin,
-                                       configNum, binSize )
-
-                rw.writeDataFile_wX( output_filename, Qsq_GeV,
-                                     F_good_tsf[ :, :, iff ] )
-
-                # Write bin averaged form factors
-
-                output_filename \
-                    = rw.makeFilename( output_template,
-                                       "{}_2sf_{}_{}_tsink{}_{}_psq{}"
-                                       + "_{}configs_binSize{}",
-                                       ff, particle, flav_str[ iflav ],
-                                       tsink[ 0 ],
-                                       tsink[ -1 ],
-                                       pSq_fin,
-                                       configNum, binSize )
-
-                rw.writeAvgDataFile_wX( output_filename, Qsq_GeV_avg,
-                                        F_tsf_avg[ :, iff ],
-                                        F_tsf_err[ :, iff ] )
-    
-            # End loop over form factor
-        # End loop over flavor
-
-        # Flavor combination for F_H
-
-        if formFactor == "GE_GM" and rank == 0:
-
-            # Write the flavor combined form factors
-                
-            if particle in [ "kaon", "nucleon" ]:
-
-                # Get results for good Q^2
-                # F_flavCombo_tsf[ b, qs_good, [ F1, F2 ] ]
+        # Get results for good Q^2
+        # F_flavCombo_tsf[ b, qs_good, [ F1, F2 ] ]
            
-                Qsq_where_good_flavCombo_tsf = Qsq_where_good_tsf[ 0 ] \
-                                               & Qsq_where_good_tsf[ 1 ]
+        F_good_flavCombo_tsf = F_tsf_loc[ :, :,
+                                          Qsq_where_good_flavCombo, : ]
 
-                F_good_flavCombo_tsf = F_tsf[ :, :,
-                                              Qsq_where_good_flavCombo_tsf,
-                                              : ]
-
-                # F_K = 2/3 F_u - 1/3 F_s
-                # F_N = 2/3 F_u - 1/3 F_d
-
-                F_flavCombo_tsf = 2./3. * F_good_flavCombo_tsf[ :, 0 ] \
-                                  - 1./3. * F_good_flavCombo_tsf[ :, 1 ]
+        # F_K = 2/3 F_u - 1/3 F_s
+        # F_N = 2/3 F_u - 1/3 F_d
         
-            else: # particle == "pion"
-
-                # F_pi = 2/3 F_u - 1/3 F_d = F_u
-            
-                F_flavCombo_tsf = F_good_tsf
-           
-                Qsq_where_good_flavCombo_tsf = Qsq_where_good_tsf[ 0 ]
-
-            # End pion
-
-            # Convert Q^2 to GeV^2
-
-            Qsq_GeV_flavCombo \
-                = Qsq[ :, Qsq_where_good_flavCombo_tsf ] * ( 0.197 / a ) ** 2
-            
-            # Average over bins
+        F_flavCombo_tsf_loc = 2./3. * F_good_flavCombo_tsf[ :, 0 ] \
+                              - 1./3. * F_good_flavCombo_tsf[ :, 1 ]
         
-            F_flavCombo_tsf_avg = np.average( F_flavCombo_tsf, axis=0 )
-            F_flavCombo_tsf_err = fncs.calcError( F_flavCombo_tsf, binNum )
+    else: # particle == "pion"
+
+        # F_pi = 2/3 F_u - 1/3 F_d = F_u
+            
+        F_flavCombo_tsf_loc = F_good_tsf_loc[ 0 ]
+
+    # End pion
+
+    F_flavCombo_tsf_loc = np.array( F_flavCombo_tsf_loc,
+                                    order='c' )
+
+    # Gather flavor combo form factors
+
+    if rank == 0:
+
+        F_flavCombo_tsf \
+            = np.zeros( ( binNum, )
+                        + F_flavCombo_tsf_loc.shape[1:],
+                        dtype=float, order='c' )
+
+    else:
+
+        F_flavCombo_tsf = np.array( [] )
+
+    comm.Gatherv( F_flavCombo_tsf_loc,
+                  [ F_flavCombo_tsf,
+                    recvCount
+                    * np.prod( F_flavCombo_tsf_loc.shape[ 1: ] ),
+                    recvOffset
+                    * np.prod( F_flavCombo_tsf_loc.shape[ 1: ] ),
+                    MPI.DOUBLE ],
+                  root=0 )
+
+    if rank == 0:
+
+        # Average over bins
+        
+        F_flavCombo_tsf_avg = np.average( F_flavCombo_tsf, axis=0 )
+        F_flavCombo_tsf_err = fncs.calcError( F_flavCombo_tsf, binNum )
                       
-            Qsq_GeV_flavCombo_avg = np.average( Qsq_GeV_flavCombo, axis=0 )
-
-            # Write output
+        # Write output
                 
-            # Loop over form factors
-            for ff, iff in fncs.zipXandIndex( F_str ):
+        # Loop over form factors
+        for ff, iff in fncs.zipXandIndex( F_str ):
 
-                # Write form factors for each bin
+            # Write form factors for each bin
                 
-                output_filename \
-                    = rw.makeFilename( output_template,
-                                       "{}_per_bin_2sf_{}_tsink{}_{}_psq{}"
-                                       + "_{}configs_binSize{}",
-                                       ff, particle,
-                                       tsink[ 0 ], tsink[ -1 ],
-                                       pSq_fin,
-                                       configNum, binSize )
-
-                rw.writeDataFile_wX( output_filename, Qsq_GeV_flavCombo,
-                                     F_flavCombo_tsf[ :, :, iff ] )
-
-                # Write bin-averaged form factors
-
-                output_filename \
-                    = rw.makeFilename( output_template,
-                                       "{}_2sf_{}_tsink{}_{}_psq{}"
-                                       + "_{}configs_binSize{}",
-                                       ff, particle,
-                                       tsink[ 0 ], tsink[ -1 ],
-                                       pSq_fin,
-                                       configNum, binSize )
-
-                rw.writeAvgDataFile_wX( output_filename, Qsq_GeV_flavCombo_avg,
-                                        F_flavCombo_tsf_avg[ :, iff ],
-                                        F_flavCombo_tsf_err[ :, iff ] )
+            output_filename \
+                = rw.makeFilename( output_template,
+                                   "{}_per_bin_2sf_{}_tsink{}_{}_psq{}"
+                                   + "_{}configs_binSize{}",
+                                   ff, particle,
+                                   tsink[ 0 ], tsink[ -1 ],
+                                   pSq_fin,
+                                   configNum, binSize )
             
-            # End loop over form factor
-        # End GE_GM
-    # End tsf
-# End first process
+            rw.writeDataFile_wX( output_filename, Qsq_GeV_flavCombo,
+                                 F_flavCombo_tsf[ :, :, iff ] )
 
-# Broadcast Qsq_where_good from first process
+            # Write bin-averaged form factors
 
-if rank != 0:
+            output_filename \
+                = rw.makeFilename( output_template,
+                                   "{}_2sf_{}_tsink{}_{}_psq{}"
+                                   + "_{}configs_binSize{}",
+                                   ff, particle,
+                                   tsink[ 0 ], tsink[ -1 ],
+                                   pSq_fin,
+                                   configNum, binSize )
 
-    Qsq_where_good = np.full( ( tsinkNum, flavNum, QsqNum ),
-                              False, dtype=bool )
-
-comm.Bcast( Qsq_where_good, root=0 )
-
-# Get local form factors at good Q^2
-# F_good_loc[ tsink ][ flav ][ b_loc, qs_good, [ F1, F2 ] ]
-
-F_good_loc = [ [ [] for flav in flav_str ] for ts in tsink ]
-
-# Loop over tsink
-for ts, its in fncs.zipXandIndex( tsink ):
-    # Loop over flavor
-    for iflav in range( flavNum ):
+            rw.writeAvgDataFile_wX( output_filename, Qsq_GeV_flavCombo_avg,
+                                    F_flavCombo_tsf_avg[ :, iff ],
+                                    F_flavCombo_tsf_err[ :, iff ] )
             
-        F_good_loc[ its ][ iflav ] = F_loc[ :, its, iflav ]
-        F_good_loc[ its ][ iflav ] \
-            = F_good_loc[ its ][ iflav ][ :,
-                                          Qsq_where_good[ its, iflav ],
-                                          : ]
+        # End loop over form factor
+    # End first process
+# End GE_GM
 
-"""
+
 #################################################
 # Fit the form factors to a dipole distribution #
 #################################################
 
 
-# Convert good Qsq^2 to GeV^2
-
-Qsq_GeV_loc = Qsq_loc[ :, Qsq_where_good[ iflav ] ] \
-              * ( 0.197 / a ) ** 2
-
 # Broadcast F_avg and F_err
-# F_avg[ qs, ff ]
-# F_err[ qs, ff ]
+# F_avg[ iflav ][ ts, qs, ff ]
+# F_err[ iflav ][ ts, qs, ff ]
+# F_tsf_avg[ iflav ][ qs, ff ]
+# F_tsf_err[ iflav ][ qs, ff ]
 
 if rank != 0:
 
-    F_avg = np.zeros( F_good_loc.shape[ 1: ] )
-    F_err = np.zeros( F_good_loc.shape[ 1: ] )
-
-comm.Bcast( F_avg, root=0 )
-comm.Bcast( F_err, root=0 )
-
-if formFactor == "BT10":
-
-    # Remove elements where form factor is are zero
-
-    F_good_loc = F_good_loc[ :, F_avg[ :, 0 ] != 0. ]
-    Qsq_GeV_loc = Qsq_GeV_loc[ :, F_avg[ :, 0 ] != 0. ]
-    F_err = F_err[ F_avg[ :, 0 ] != 0. ]
+    # Loop over flavor
+    for iflav in range( flavNum ):
             
-    F_avg = F_avg[ F_avg[ :, 0 ] != 0. ]
+        F_avg[ iflav ] = np.zeros( F_good_loc[ iflav ].shape[ 1: ] )
+        F_err[ iflav ] = np.zeros( F_good_loc[ iflav ].shape[ 1: ] )
+
+        F_tsf_avg[ iflav ] = np.zeros( F_good_tsf_loc[ iflav ].shape[ 1: ] )
+        F_tsf_err[ iflav ] = np.zeros( F_good_tsf_loc[ iflav ].shape[ 1: ] )
+
+    # End loop over flavor
+# End not first process
+    
+# Loop over flavor
+for iflav in range( flavNum ):
+            
+    comm.Bcast( F_avg[ iflav ], root=0 )
+    comm.Bcast( F_err[ iflav ], root=0 )
+
+    comm.Bcast( F_tsf_avg[ iflav ], root=0 )
+    comm.Bcast( F_tsf_err[ iflav ], root=0 )
+
+    if formFactor == "BT10":
+
+        # Remove elements where form factors are zero
+
+        Qsq_GeV_loc[ iflav ] \
+            = Qsq_GeV_loc[ iflav ][ :, F_tsf_avg[ iflav ][ :, 0 ] != 0. ]
+            
+        F_good_loc[ iflav ] \
+            = F_good_loc[ iflav ][ :, F_avg[ iflav ] != 0. ]
+            
+        F_err[ iflav ] = F_err[ iflav ][ F_avg[ iflav ] != 0. ]
+            
+        F_avg[ iflav ] = F_avg[ iflav ][ F_avg[ iflav ] != 0. ]
+
+        F_good_tsf_loc[ iflav ] \
+            = F_good_tsf_loc[ iflav ][ :, F_tsf_avg[ iflav ] != 0. ]
+
+        F_tsf_err[ iflav ] = F_tsf_err[ iflav ][ F_tsf_avg[ iflav ] != 0. ]
+
+        F_tsf_avg[ iflav ] = F_tsf_avg[ iflav ][ F_tsf_avg[ iflav ] != 0. ]
+
+    # End BT10
 
     # Loop over number of parameters
-
     for paramNum_dipole in 1, 2:
+        # Loop over tsink
+        for ts, its in fncs.zipXandIndex( tsink ):
+            # Loop over form factors
+            for ff, iff in fncs.zipXandIndex( F_str ):
+            
+                # Fit form factors to dipole
+                # fitParams_dipole_loc[ b_loc, param ]
+
+                fitParams_dipole_loc, chiSq_dipole_loc \
+                    =fit.fitFormFactor_dipole(F_good_loc[iflav][:,its,:,iff],
+                                              F_err[ iflav ][ its, :, iff ],
+                                              Qsq_GeV_loc[ iflav ],
+                                              paramNum_dipole,
+                                              mpi_confs_info )
+                               
+                # Gather dipole fit parameters to first rank
+                # fitParams_dipole[ b, param ]
+
+                if rank == 0:
+
+                    fitParams_dipole = np.zeros( ( binNum, 2 ) )
+                
+                else:
+
+                    fitParams_dipole = []
+
+                comm.Gatherv( fitParams_dipole_loc,
+                              [ fitParams_dipole,
+                                recvCount
+                                * np.prod( fitParams_dipole_loc.shape[1:] ),
+                                recvOffset
+                                * np.prod( fitParams_dipole_loc.shape[1:] ),
+                                MPI.DOUBLE ],
+                              root=0 )
+
+                if rank == 0:
+
+                    M_dipole = fitParams_dipole[ :, 0 ]
+                    F0_dipole = fitParams_dipole[ :, 1 ]
+
+                    # Calculate r^2
+
+                    rSq = 6. / M_dipole ** 2
+
+                    # Calculate dipole curve
+                    # curve_dipole[ b ]
+
+                    curve_dipole, Qsq_curve \
+                        = fit.calcDipoleCurve( M_dipole, F0_dipole,
+                                               Qsq_GeV_avg[ iflav ][ -1 ] )
+
+                    # Average over bins
+                    
+                    fitParams_dipole_avg \
+                        = np.average( fitParams_dipole, axis=0 )
+                    fitParams_dipole_err = fncs.calcError( fitParams_dipole,
+                                                           binNum )
+                    
+                    rSq_avg = np.average( rSq, axis=0 )
+                    rSq_err = fncs.calcError( rSq, binNum )
+
+                    curve_dipole_avg = np.average( curve_dipole, axis=0 )
+                    curve_dipole_err = fncs.calcError( curve_dipole, binNum )
+
+                    # Write dipole fit parameter file for each bin
+                    
+                    output_filename \
+                        = rw.makeFilename( output_template,
+                                           "{}_dipoleFitParams_per_bin"
+                                           + "_{}_{}_{}params_tsink{}_psq{}"
+                                           + "_{}configs_binSize{}",
+                                           ff, particle, flav_str[ iflav ],
+                                           paramNum_dipole,
+                                           ts, pSq_fin,
+                                           configNum, binSize )
+
+                    rw.write2ValueDataFile( output_filename,
+                                            fitParams_dipole[ :, 0 ],
+                                            fitParams_dipole[ :, 1 ] )
+                    
+                    # Write average fit parameter file and r^2
+                    
+                    output_filename \
+                        = rw.makeFilename( output_template,
+                                           "{}_dipoleFitParams"
+                                           + "_{}_{}_{}params_tsink{}_psq{}"
+                                           + "_{}configs_binSize{}",
+                                           ff, particle, flav_str[ iflav ],
+                                           paramNum_dipole,
+                                           ts, pSq_fin,
+                                           configNum, binSize )
+
+                    rw.writeDipoleFitParamsFile( output_filename,
+                                                 fitParams_dipole_avg,
+                                                 fitParams_dipole_err,
+                                                 rSq_avg, rSq_err )
+                
+                    # Write dipole fit curve
+                    
+                    output_filename \
+                        = rw.makeFilename( output_template,
+                                           "{}_dipole_curve_{}_{}"
+                                           + "_{}params_tsink{}_psq{}"
+                                           + "_{}configs_binSize{}",
+                                           ff, particle, flav_str[ iflav ],
+                                           paramNum_dipole, ts, pSq_fin,
+                                           configNum, binSize )
+
+                    rw.writeAvgDataFile_wX( output_filename,
+                                            Qsq_curve,
+                                            curve_dipole_avg,
+                                            curve_dipole_err )
+
+                # End first process
+            # End loop over form factor
+        # End loop over tsink
 
         # Loop over form factors
 
@@ -2094,259 +2241,165 @@ if formFactor == "BT10":
             
             # Fit form factors to dipole
             # fitParams_dipole_loc[ b_loc, param ]
-
-                fitParams_dipole_loc, chiSq_dipole_loc \
-                    = fit.fitFormFactor_dipole( F_good_loc[ ..., iff ],
-                                                F_err[ :, iff ],
-                                                Qsq_GeV_loc,
-                                                paramNum_dipole,
-                                                mpi_confs_info )
+            
+            fitParams_dipole_loc, chiSq_dipole_loc \
+                = fit.fitFormFactor_dipole( F_good_tsf_loc[iflav][...,iff],
+                                            F_tsf_err[ iflav ][ :, iff ],
+                                            Qsq_GeV_loc[ iflav ],
+                                            paramNum_dipole,
+                                            mpi_confs_info )
                                
-                # Gather dipole fit parameters to first rank
-                # fitParams_dipole[ b, param ]
+            # Gather dipole fit parameters to first rank
+            # fitParams_dipole[ b, param ]
+                
+            if rank == 0:
 
-                if rank == 0:
+                fitParams_dipole = np.zeros( ( binNum, 2 ) )
 
-                    fitParams_dipole = np.zeros( ( binNum, 2 ) )
+            else:
 
-                else:
+                fitParams_dipole = []
+                
+            comm.Gatherv( fitParams_dipole_loc,
+                          [ fitParams_dipole,
+                            recvCount \
+                            * np.prod( fitParams_dipole_loc.shape[ 1: ] ),
+                            recvOffset \
+                            * np.prod( fitParams_dipole_loc.shape[ 1: ] ),
+                            MPI.DOUBLE ],
+                          root=0 )
 
-                    fitParams_dipole = []
+            if rank == 0:
 
-                # End not first process
+                M_dipole = fitParams_dipole[ :, 0 ]
+                F0_dipole = fitParams_dipole[ :, 1 ]
 
-                comm.Gatherv( fitParams_dipole_loc,
-                              [ fitParams_dipole,
-                                recvCount \
-                                * np.prod( fitParams_dipole_loc.shape[ 1: ] ),
-                                recvOffset \
-                                * np.prod( fitParams_dipole_loc.shape[ 1: ] ),
-                                MPI.DOUBLE ],
-                              root=0 )
+                # Calculate r^2
 
-                if rank == 0:
+                rSq = 6. / M_dipole ** 2
 
-                    # Calculate r^2
+                # Calculate dipole curve
+                # curve_dipole[ b ]
 
-                    rSq = 6. / fitParams_dipole[ :, 0 ] ** 2
+                curve_dipole, Qsq_curve \
+                    = fit.calcDipoleCurve( M_dipole, F0_dipole,
+                                           Qsq_GeV_avg[ iflav ][ -1 ] )
 
-                    # Average over bins
+                # Average over bins
                     
-                    fitParams_dipole_avg = np.average( fitParams_dipole, axis=0 )
-                    fitParams_dipole_err = fncs.calcError( fitParams_dipole,
-                                                           binNum )
+                fitParams_dipole_avg = np.average( fitParams_dipole, axis=0 )
+                fitParams_dipole_err = fncs.calcError( fitParams_dipole,
+                                                       binNum )
 
-                    rSq_avg = np.average( rSq, axis=0 )
-                    rSq_err = fncs.calcError( rSq, binNum )
+                rSq_avg = np.average( rSq, axis=0 )
+                rSq_err = fncs.calcError( rSq, binNum )
 
-                    # Write dipole fit parameter file for each bin
-                    
-                    output_filename \
-                        = rw.makeFilename( output_template,
-                                           "{}_dipoleFitParams_per_bin"
-                                           + "_{}_{}_{}params_tsink{}_psq{}"
-                                           + "_{}configs_binSize{}",
-                                           ff, particle, flav_str[ iflav ],
-                                           paramNum_dipole,
-                                           ts, pSq_fin,
-                                           configNum, binSize )
+                curve_dipole_avg = np.average( curve_dipole, axis=0 )
+                curve_dipole_err = fncs.calcError( curve_dipole, binNum )
 
-                    rw.write2ValueDataFile( output_filename,
-                                            fitParams_dipole[ :, 0 ],
-                                            fitParams_dipole[ :, 1 ] )
-                    
-                    # Write average fit parameter file and r^2
-                    
-                    output_filename \
-                        = rw.makeFilename( output_template,
-                                           "{}_dipoleFitParams"
-                                           + "_{}_{}_{}params_tsink{}_psq{}"
-                                           + "_{}configs_binSize{}",
-                                           ff, particle, flav_str[ iflav ],
-                                           paramNum_dipole,
-                                           ts, pSq_fin,
-                                           configNum, binSize )
+                # Write dipole fit parameter file for each bin
+                
+                output_filename \
+                    = rw.makeFilename( output_template,
+                                       "{}_dipoleFitParams_per_bin_2sf"
+                                       + "_{}_{}_{}params_tsink{}_{}"
+                                       + "_psq{}_{}configs_binSize{}",
+                                       ff, particle, flav_str[ iflav ],
+                                       paramNum_dipole,
+                                       tsink[ 0 ], tsink[ -1 ], pSq_fin,
+                                       configNum, binSize )
 
-                    rw.writeDipoleFitParamsFile( output_filename,
-                                                 fitParams_dipole_avg,
-                                                 fitParams_dipole_err,
-                                                 rSq_avg, rSq_err )
+                rw.write2ValueDataFile( output_filename,
+                                        fitParams_dipole[ :, 0 ],
+                                        fitParams_dipole[ :, 1 ] )
                     
-                # End first process
-            # End loop over form factor
-        # End loop over parameter number
-    # End loop over flavor
+                # Write average fit parameter file and r^2
+                    
+                output_filename \
+                    = rw.makeFilename( output_template,
+                                       "{}_dipoleFitParams_2sf"
+                                       + "_{}_{}_{}params_tsink{}_{}"
+                                       + "_psq{}_{}configs_binSize{}",
+                                       ff, particle, flav_str[ iflav ],
+                                       paramNum_dipole,
+                                       tsink[ 0 ], tsink[ -1 ], pSq_fin,
+                                       configNum, binSize )
+
+                rw.writeDipoleFitParamsFile( output_filename,
+                                             fitParams_dipole_avg,
+                                             fitParams_dipole_err,
+                                             rSq_avg, rSq_err )
+
+                # Write dipole fit curve
+                    
+                output_filename \
+                    = rw.makeFilename( output_template,
+                                       "{}_dipole_curve_2sf"
+                                       + "_{}_{}_{}params_tsink{}_{}"
+                                       + "_psq{}_{}configs_binSize{}",
+                                       ff, particle, flav_str[ iflav ],
+                                       paramNum_dipole,
+                                       tsink[ 0 ], tsink[ -1 ], pSq_fin,
+                                       configNum, binSize )
+
+                rw.writeAvgDataFile_wX( output_filename,
+                                        Qsq_curve,
+                                        curve_dipole_avg,
+                                        curve_dipole_err )
+
+            # End first process
+        # End loop over form factor
+    # End loop over parameter number
+# End loop over flavor
+
+if formFactor == "GE_GM":
+
+    # Broadcast F_flavCombo_avg and F_flavCombo_err
+    # F_flavCombo_avg[ ts, qs, ff ]
+    # F_flavCombo_err[ ts, qs, ff ]
+    # F_flavCombo_tsf_avg[ qs, ff ]
+    # F_flavCombo_tsf_err[ qs, ff ]
+
+    if rank != 0:
+
+        F_flavCombo_avg = np.zeros( F_flavCombo_loc.shape[ 1: ] )
+        F_flavCombo_err = np.zeros( F_flavCombo_loc.shape[ 1: ] )
+
+        F_flavCombo_tsf_avg \
+            = np.zeros( F_flavCombo_tsf_loc.shape[ 1: ] )
+        F_flavCombo_tsf_err \
+            = np.zeros( F_flavCombo_tsf_loc.shape[ 1: ] )
+
+    # End not first process
     
+    comm.Bcast( F_flavCombo_avg, root=0 )
+    comm.Bcast( F_flavCombo_err, root=0 )
 
+    comm.Bcast( F_flavCombo_tsf_avg, root=0 )
+    comm.Bcast( F_flavCombo_tsf_err, root=0 )
 
+    # Flavor combination for F_H
 
-        #################################################
-        # Fit the form factors to a dipole distribution #
-        #################################################
-
-
-        # Loop over number of parameters
-
-        for paramNum_dipole in 1, 2:
-
+    # Loop over number of parameters
+    for paramNum_dipole in 1, 2:
+        # Loop over tsink
+        for ts, its in fncs.zipXandIndex( tsink ):
             # Loop over form factors
-
             for ff, iff in fncs.zipXandIndex( F_str ):
             
                 # Fit form factors to dipole
                 # fitParams_dipole_flavCombo[ b, param ]
 
-                fitParams_dipole_flavCombo, chiSq_dipole_flavCombo \
-                    = fit.fitFormFactor_dipole( F_flavCombo[ ..., iff ],
-                                                F_flavCombo_err[ :, iff ],
-                                                Qsq_GeV_flavCombo,
-                                                paramNum_dipole,
-                                                mpi_confs_info )
-                               
-                m_dipole = fitParams_dipole_flavCombo[ :, 0 ]
-                F0_dipole = fitParams_dipole_flavCombo[ :, 1 ]
+                fitParams_dipole, chiSq_dipole \
+                    = fit.fitFormFactor_dipole(F_flavCombo_loc[:,its,:,iff],
+                                               F_flavCombo_err[its,:,iff],
+                                               Qsq_GeV_flavCombo_loc,
+                                               paramNum_dipole,
+                                               mpi_confs_info )
 
-                # Write dipole fit parameter file for each bin
-                    
-                # Calculate r^2
-
-                rSq_flavCombo = 6. / fitParams_dipole_flavCombo[ :, 0 ] ** 2
-
-                # Average over bins
-                    
-                fitParams_dipole_flavCombo_avg \
-                    = np.average( fitParams_dipole_flavCombo, axis=0 )
-                fitParams_dipole_flavCombo_err \
-                    = fncs.calcError( fitParams_dipole_flavCombo, binNum )
-                
-                rSq_flavCombo_avg = np.average( rSq_flavCombo, axis=0 )
-                rSq_flavCombo_err = fncs.calcError( rSq_flavCombo, binNum )
-
-                # Write dipole fit parameter file for each bin                
-
-                output_filename \
-                    = rw.makeFilename( output_template,
-                                       "{}_dipoleFitParams_per_bin_{}"
-                                       + "_{}params_tsink{}_psq{}"
-                                       + "_{}configs_binSize{}",
-                                       ff, particle,
-                                       paramNum_dipole, ts, pSq_fin,
-                                       configNum, binSize )
-
-                rw.write2ValueDataFile( output_filename,
-                                        fitParams_dipole_flavCombo[ :, 0 ],
-                                        fitParams_dipole_flavCombo[ :, 1 ] )
-
-                # Write average fit parameter file and r^2
-                    
-                output_filename \
-                    = rw.makeFilename( output_template,
-                                       "{}_dipoleFitParams"
-                                       + "_{}_{}params_tsink{}_psq{}"
-                                       + "_{}configs_binSize{}",
-                                       ff, particle,
-                                       paramNum_dipole,
-                                       ts, pSq_fin,
-                                       configNum, binSize )
-                
-                rw.writeDipoleFitParamsFile(output_filename,
-                                            fitParams_dipole_flavCombo_avg,
-                                            fitParams_dipole_flavCombo_err,
-                                            rSq_flavCombo_avg,
-                                            rSq_flavCombo_err)
-                    
-                # Calculate dipole curve
-                # curve_dipole[ b ]
-
-                curve_dipole, Qsq_curve \
-                    = fit.calcDipoleCurve( m_dipole, F0_dipole,
-                                           Qsq_GeV_flavCombo_avg[ -1 ] )
-
-                curve_dipole_avg = np.average( curve_dipole, axis=0 )
-                curve_dipole_err = fncs.calcError( curve_dipole, binNum )
-
-                # Write dipole fit curve
-                    
-                output_filename \
-                    = rw.makeFilename( output_template,
-                                       "{}_dipole_curve_{}"
-                                       + "_{}params_tsink{}_psq{}"
-                                       + "_{}configs_binSize{}",
-                                       ff, particle,
-                                       paramNum_dipole, ts, pSq_fin,
-                                       configNum, binSize )
-
-                rw.writeAvgDataFile_wX( output_filename,
-                                        Qsq_curve,
-                                        curve_dipole_avg,
-                                        curve_dipole_err )
-
-            # End loop over form factor
-        # End loop over parameter number
-    # End if GE_GM and first rank
-
-
-        #################################################
-        # Fit the form factors to a dipole distribution #
-        #################################################
-
-
-        # Broadcast Qsq_where_good from first process
-
-        comm.Bcast( Qsq_where_good_tsf[ iflav ], root=0 )
-
-        # Get form factors at good Q^2
-
-        F_good_tsf_loc = F_tsf_loc[ :, Qsq_where_good_tsf[ iflav ], : ]
-
-        # Convert good Qsq^2 to GeV^2
-
-        Qsq_GeV_loc \
-            = Qsq_loc[ :, Qsq_where_good_tsf[ iflav ] ] * ( 0.197 / a ) ** 2
-
-        # Broadcast F_tsf_avg and F_tsf_err
-        # F_tsf_avg[ qs, ff ]
-        # F_tsf_err[ qs, ff ]
-
-        if rank != 0:
-
-            F_tsf_avg = np.zeros( F_good_tsf_loc.shape[ 1: ] )
-            F_tsf_err = np.zeros( F_good_tsf_loc.shape[ 1: ] )
-
-        comm.Bcast( F_tsf_avg, root=0 )
-        comm.Bcast( F_tsf_err, root=0 )
-
-        if formFactor == "BT10":
-
-            # Remove elements where form factors are zero
-
-            F_good_tsf_loc = F_good_tsf_loc[ :, F_tsf_avg[ :, 0 ] != 0. ]
-            Qsq_GeV_loc = Qsq_GeV_loc[ :, F_tsf_avg[ :, 0 ] != 0. ]
-            F_tsf_err = F_tsf_err[ F_tsf_avg[ :, 0 ] != 0. ]
-            
-            F_tsf_avg = F_tsf_avg[ F_tsf_avg[ :, 0 ] != 0. ]
-
-        # Loop over number of parameters
-
-        for paramNum_dipole in 1, 2:
-
-            # Loop over form factors
-
-            for ff, iff in fncs.zipXandIndex( F_str ):
-            
-                # Fit form factors to dipole
-                # fitParams_dipole_loc[ b_loc, param ]
-
-                fitParams_dipole_loc, chiSq_dipole_loc \
-                    = fit.fitFormFactor_dipole( F_good_tsf_loc[ ..., iff ],
-                                                F_tsf_err[ :, iff ],
-                                                Qsq_GeV_loc,
-                                                paramNum_dipole,
-                                                mpi_confs_info )
-                               
                 # Gather dipole fit parameters to first rank
                 # fitParams_dipole[ b, param ]
-
+                
                 if rank == 0:
 
                     fitParams_dipole = np.zeros( ( binNum, 2 ) )
@@ -2354,136 +2407,182 @@ if formFactor == "BT10":
                 else:
 
                     fitParams_dipole = []
-
-                # End not first process
-
+                
                 comm.Gatherv( fitParams_dipole_loc,
                               [ fitParams_dipole,
                                 recvCount \
-                                * np.prod( fitParams_dipole_loc.shape[ 1: ] ),
+                                * np.prod( fitParams_dipole_loc.shape[1:] ),
                                 recvOffset \
-                                * np.prod( fitParams_dipole_loc.shape[ 1: ] ),
+                                * np.prod( fitParams_dipole_loc.shape[1:] ),
                                 MPI.DOUBLE ],
                               root=0 )
 
                 if rank == 0:
-
-                    # Calculate r^2
-
-                    rSq = 6. / fitParams_dipole[ :, 0 ] ** 2
-
-                    # Average over bins
-                    
-                    fitParams_dipole_avg = np.average( fitParams_dipole, axis=0 )
-                    fitParams_dipole_err = fncs.calcError( fitParams_dipole,
-                                                           binNum )
-
-                    rSq_avg = np.average( rSq, axis=0 )
-                    rSq_err = fncs.calcError( rSq, binNum )
+                
+                    M_dipole = fitParams_dipole[ :, 0 ]
+                    F0_dipole = fitParams_dipole[ :, 1 ]
 
                     # Write dipole fit parameter file for each bin
                     
+                    # Calculate r^2
+
+                    rSq = 6. / fitParams_dipole[ :, 0 ] ** 2
+                    
+                    # Calculate dipole curve
+                    # curve_dipole[ b ]
+
+                    curve_dipole, Qsq_curve \
+                        = fit.calcDipoleCurve( M_dipole, F0_dipole,
+                                               Qsq_GeV_flavCombo_avg[ -1 ] )
+
+                    # Average over bins
+                    
+                    fitParams_dipole_avg \
+                        = np.average( fitParams_dipole, axis=0 )
+                    fitParams_dipole_err \
+                        = fncs.calcError( fitParams_dipole, binNum )
+                
+                    rSq_avg = np.average( rSq, axis=0 )
+                    rSq_err = fncs.calcError( rSq, binNum )
+
+                    curve_dipole_avg = np.average( curve_dipole, axis=0 )
+                    curve_dipole_err = fncs.calcError( curve_dipole, binNum )
+
+                    # Write dipole fit parameter file for each bin                
                     output_filename \
                         = rw.makeFilename( output_template,
-                                           "{}_dipoleFitParams_per_bin"
-                                           + "_{}_{}_{}params_2sf_tsink{}_{}"
-                                           + "_psq{}_{}configs_binSize{}",
-                                           ff, particle, flav_str[ iflav ],
-                                           paramNum_dipole,
-                                           tsink[ 0 ], tsink[ -1 ], pSq_fin,
+                                           "{}_dipoleFitParams_per_bin_{}"
+                                           + "_{}params_tsink{}_psq{}"
+                                           + "_{}configs_binSize{}",
+                                           ff, particle,
+                                           paramNum_dipole, ts, pSq_fin,
                                            configNum, binSize )
 
                     rw.write2ValueDataFile( output_filename,
                                             fitParams_dipole[ :, 0 ],
                                             fitParams_dipole[ :, 1 ] )
-                    
+
                     # Write average fit parameter file and r^2
                     
                     output_filename \
                         = rw.makeFilename( output_template,
                                            "{}_dipoleFitParams"
-                                           + "_{}_{}_{}params_2sf_tsink{}_{}"
-                                           + "_psq{}_{}configs_binSize{}",
-                                           ff, particle, flav_str[ iflav ],
+                                           + "_{}_{}params_tsink{}_psq{}"
+                                           + "_{}configs_binSize{}",
+                                           ff, particle,
                                            paramNum_dipole,
-                                           tsink[ 0 ], tsink[ -1 ], pSq_fin,
+                                           ts, pSq_fin,
                                            configNum, binSize )
+                    
+                    rw.writeDipoleFitParamsFile(output_filename,
+                                                fitParams_dipole_avg,
+                                                fitParams_dipole_err,
+                                                rSq_avg,
+                                                rSq_err)
+                    
+                    # Write dipole fit curve
+                    
+                    output_filename \
+                        = rw.makeFilename( output_template,
+                                           "{}_dipole_curve_{}"
+                                           + "_{}params_tsink{}_psq{}"
+                                           + "_{}configs_binSize{}",
+                                           ff, particle,
+                                           paramNum_dipole, ts, pSq_fin,
+                                           configNum, binSize )
+                    
+                    rw.writeAvgDataFile_wX( output_filename,
+                                            Qsq_curve,
+                                            curve_dipole_avg,
+                                            curve_dipole_err )
 
-                    rw.writeDipoleFitParamsFile( output_filename,
-                                                 fitParams_dipole_avg,
-                                                 fitParams_dipole_err,
-                                                 rSq_avg, rSq_err )
-
-                # End first process
+                # End first rank
             # End loop over form factor
-        # End loop over parameter number
-    # End loop over flavor
+        # End loop over tsink
 
-
-
-
-        #################################################
-        # Fit the form factors to a dipole distribution #
-        #################################################
-
-
-        # Loop over number of parameters
-
-        for paramNum_dipole in 1, 2:
-
-            # Loop over form factors
-
-            for ff, iff in fncs.zipXandIndex( F_str ):
+        # Loop over form factors
+        for ff, iff in fncs.zipXandIndex( F_str ):
             
-                # Fit form factors to dipole
-                # fitParams_dipole_flavCombo[ b, param ]
+            # Fit form factors to dipole
+            # fitParams_dipole[ b, param ]
 
-                fitParams_dipole_flavCombo, chiSq_dipole_flavCombo \
-                    = fit.fitFormFactor_dipole( F_flavCombo_tsf[ ..., iff ],
-                                                F_flavCombo_tsf_err[ :,
-                                                                     iff ],
-                                                Qsq_GeV_flavCombo,
-                                                paramNum_dipole,
-                                                mpi_confs_info )
+            fitParams_dipole, chiSq_dipole \
+                = fit.fitFormFactor_dipole( F_flavCombo_tsf_loc[ ..., iff ],
+                                            F_flavCombo_tsf_err[ :, iff ],
+                                            Qsq_GeV_flavCombo_loc,
+                                            paramNum_dipole,
+                                            mpi_confs_info )
                 
-                m_dipole = fitParams_dipole_flavCombo[ :, 0 ]
-                F0_dipole = fitParams_dipole_flavCombo[ :, 1 ]
+            # Gather dipole fit parameters to first rank
+            # fitParams_dipole[ b, param ]
+                
+            if rank == 0:
+
+                fitParams_dipole = np.zeros( ( binNum, 2 ) )
+
+            else:
+
+                fitParams_dipole = []
+                
+            comm.Gatherv( fitParams_dipole_loc,
+                          [ fitParams_dipole,
+                            recvCount \
+                            * np.prod( fitParams_dipole_loc.shape[ 1: ] ),
+                            recvOffset \
+                            * np.prod( fitParams_dipole_loc.shape[ 1: ] ),
+                            MPI.DOUBLE ],
+                          root=0 )
+
+            if rank == 0:
+
+                M_dipole = fitParams_dipole[ :, 0 ]
+                F0_dipole = fitParams_dipole[ :, 1 ]
                                
                 # Calculate r^2
                 
-                rSq_flavCombo = 6. / fitParams_dipole_flavCombo[ :, 0 ] ** 2
+                rSq = 6. / M_dipole ** 2
+
+                # Calculate dipole curve
+                # curve_dipole[ b ]
+
+                curve_dipole, Qsq_curve \
+                    = fit.calcDipoleCurve( M_dipole, F0_dipole,
+                                           Qsq_GeV_flavCombo_avg[ -1 ] )
 
                 # Average over bins
-                    
-                fitParams_dipole_flavCombo_avg \
-                    = np.average( fitParams_dipole_flavCombo, axis=0 )
-                fitParams_dipole_flavCombo_err \
-                    = fncs.calcError( fitParams_dipole_flavCombo, binNum )
                 
-                rSq_flavCombo_avg = np.average( rSq_flavCombo, axis=0 )
-                rSq_flavCombo_err = fncs.calcError( rSq_flavCombo, binNum )
+                fitParams_dipole_avg \
+                    = np.average( fitParams_dipole, axis=0 )
+                fitParams_dipole_err \
+                    = fncs.calcError( fitParams_dipole, binNum )
+                
+                rSq_avg = np.average( rSq, axis=0 )
+                rSq_err = fncs.calcError( rSq, binNum )
+
+                curve_dipole_avg = np.average( curve_dipole, axis=0 )
+                curve_dipole_err = fncs.calcError( curve_dipole, binNum )
 
                 # Write dipole fit parameter file for each bin
                     
                 output_filename \
                     = rw.makeFilename( output_template,
-                                       "{}_dipoleFitParams_per_bin"
-                                       + "_{}_{}params_2sf_tsink{}_{}_psq{}"
+                                       "{}_dipoleFitParams_per_bin_2sf"
+                                       + "_{}_{}params_tsink{}_{}_psq{}"
                                        + "_{}configs_binSize{}",
                                        ff, particle, paramNum_dipole,
                                        tsink[ 0 ], tsink[ -1 ],
                                        pSq_fin, configNum, binSize )
 
                 rw.write2ValueDataFile( output_filename,
-                                        fitParams_dipole_flavCombo[ :, 0 ],
-                                        fitParams_dipole_flavCombo[ :, 1 ] )
+                                        fitParams_dipole[ :, 0 ],
+                                        fitParams_dipole[ :, 1 ] )
 
                 # Write average fit parameter file and r^2
                     
                 output_filename \
                     = rw.makeFilename( output_template,
-                                       "{}_dipoleFitParams"
-                                       + "_{}_{}params_2sf_tsink{}_{}_psq{}"
+                                       "{}_dipoleFitParams_2sf"
+                                       + "_{}_{}params_tsink{}_{}_psq{}"
                                        + "_{}configs_binSize{}",
                                        ff, particle,
                                        paramNum_dipole,
@@ -2491,27 +2590,17 @@ if formFactor == "BT10":
                                        pSq_fin, configNum, binSize )
                 
                 rw.writeDipoleFitParamsFile(output_filename,
-                                            fitParams_dipole_flavCombo_avg,
-                                            fitParams_dipole_flavCombo_err,
-                                            rSq_flavCombo_avg,
-                                            rSq_flavCombo_err)
+                                            fitParams_dipole_avg,
+                                            fitParams_dipole_err,
+                                            rSq_avg,
+                                            rSq_err)
                     
-                # Calculate dipole curve
-                # curve_dipole[ b ]
-
-                curve_dipole, Qsq_curve \
-                    = fit.calcDipoleCurve( m_dipole, F0_dipole,
-                                           Qsq_GeV_flavCombo_avg[ -1 ] )
-
-                curve_dipole_avg = np.average( curve_dipole, axis=0 )
-                curve_dipole_err = fncs.calcError( curve_dipole, binNum )
-
                 # Write dipole fit curve
                     
                 output_filename \
                     = rw.makeFilename( output_template,
-                                       "{}_dipole_curve_{}"
-                                       + "_{}params_2sf_tsink{}_{}_psq{}"
+                                       "{}_dipole_curve_{}_2sf"
+                                       + "_{}params_tsink{}_{}_psq{}"
                                        + "_{}configs_binSize{}",
                                        ff, particle, paramNum_dipole,
                                        tsink[ 0 ], tsink[ -1 ],
@@ -2522,9 +2611,9 @@ if formFactor == "BT10":
                                         curve_dipole_avg,
                                         curve_dipole_err )
 
-            # End loop over form factor
-        # End loop over parameter number
-    # End if GE_GM
-# End if tsf
-"""
+            # End first process
+        # End loop over form factor
+    # End loop over parameter number
+# End if GE_GM
+
 exit()
