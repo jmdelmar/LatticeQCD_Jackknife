@@ -2964,6 +2964,12 @@ def readFormFactorFile_FS( threepDir, threep_tokens, srcNum,
                                dtype=float,
                                order='c' )
 
+        if particle == "kaon":
+
+            # Change sign of strange part
+
+            threep_loc[ :, 1 ] = -threep_loc[ :, 1 ]
+
     elif dataFormat == "gpu":
 
         # Loop over flavor
