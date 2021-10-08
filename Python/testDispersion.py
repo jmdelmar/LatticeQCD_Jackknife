@@ -44,7 +44,7 @@ parser.add_argument( "particle", action='store', \
 
 parser.add_argument( "binSize", action='store', type=int )
 
-parser.add_argument( "qSq_last_index", action='store', type=int )
+#parser.add_argument( "pSq_last_index", action='store', type=int )
 
 parser.add_argument( "-o", "--output_template", action='store', \
                      type=str, default="./*.dat" )
@@ -92,7 +92,7 @@ particle = args.particle
 
 binSize = args.binSize
 
-iqSq_last = args.qSq_last_index
+#ipSq_last = args.pSq_last_index
 
 output_template = args.output_template
 
@@ -138,49 +138,49 @@ assert configNum % binSize == 0, "Number of configurations " \
     + str( configNum ) + " not evenly divided by bin size " \
     + str( binSize ) + "."
 
-q, qNum, qSq, qSqNum, \
-    qSq_start, qSq_end, qSq_where \
+p, pNum, pSq, pSqNum, \
+    pSq_start, pSq_end, pSq_where \
     = rw.readMomentumTransferList( twopDir,
                                    twop_template,
                                    [configList[ 0 ]], particle, 
                                    srcNum, dataFormat,
                                    args.momentum_transfer_list, 
                                    mpi_confs_info )
-   
-# Cut q off at iqSq_last
+"""
+# Cut p off at ipSq_last
 
-mpi_fncs.mpiPrint(qSq,mpi_confs_info)
+mpi_fncs.mpiPrint(pSq,mpi_confs_info)
 
-qSq = qSq[ :iqSq_last ]
-qSqNum = len( qSq )
-qSq_start = qSq_start[ :iqSq_last ]
-qSq_end = qSq_end[ :iqSq_last ]
-qSq_where = qSq_where[ :qSq_end[ -1 ] + 1 ]
+pSq = pSq[ :ipSq_last ]
+pSqNum = len( pSq )
+pSq_start = pSq_start[ :ipSq_last ]
+pSq_end = pSq_end[ :ipSq_last ]
+pSq_where = pSq_where[ :pSq_end[ -1 ] + 1 ]
 
-mpi_fncs.mpiPrint(qSq,mpi_confs_info)
+mpi_fncs.mpiPrint(pSq,mpi_confs_info)
 
-q = q[ :qSq_end[ -1 ] + 1 ]
-qNum = len( q )
-
+p = p[ :pSq_end[ -1 ] + 1 ]
+pNum = len( p )
+"""
 
 ############################
 # Read Two-point Functions #
 ############################
 
-# twop_q[ c, Q, t ]
+# twop_p[ c, P, t ]
 
-twop_q = rw.readTwopFile( twopDir,
+twop_p = rw.readTwopFile( twopDir,
                           twop_template,
                           configList_loc, 
-                          configNum, q, qSq,
-                          qSq_start, qSq_end, 
+                          configNum, p, pSq,
+                          pSq_start, pSq_end, 
                           particle, srcNum,
                           dataFormat,
                           mpi_confs_info )
 
 # Time dimension length
 
-T = twop_q.shape[ -1 ]
+T = twop_p.shape[ -1 ]
 
 # Time dimension length after fold
 
@@ -196,13 +196,13 @@ rangeEnd = T // 2 - 1
 
 if binNum_loc:
 
-    # twop_jk_loc[ b_loc, q, t ]
+    # twop_jk_loc[ b_loc, p, t ]
 
-    twop_jk_loc = fncs.jackknifeBinSubset( twop_q,
+    twop_jk_loc = fncs.jackknifeBinSubset( twop_p,
                                            binSize,
                                            binList_loc )
 
-    # twop_jk_loc[ b_loc, q, t ]
+    # twop_jk_loc[ b_loc, p, t ]
 
     twop_fold_loc = fncs.fold( twop_jk_loc )
 
@@ -212,10 +212,10 @@ if binNum_loc:
     #############################################
 
     
-    # twop_loc[ b_loc, qSq, t ]
+    # twop_loc[ b_loc, pSq, t ]
 
     twop_loc = fncs.averageOverQsq( twop_fold_loc[ :, :, : ],
-                                    qSq_start, qSq_end )
+                                    pSq_start, pSq_end )
         
 
     ####################
@@ -223,7 +223,7 @@ if binNum_loc:
     ####################
 
 
-    # effEnergy_loc[ b_loc, smr, qSq, t ]
+    # effEnergy_loc[ b_loc, smr, pSq, t ]
 
     effEnergy_loc = pq.mEffFromSymTwop( twop_loc )
 
@@ -239,10 +239,10 @@ else:
 ####################################################
 
 
-# twop[ b, qSq, t ]
-# effEnergy[ b, qSq, t ]
+# twop[ b, pSq, t ]
+# effEnergy[ b, pSq, t ]
 
-twop = np.zeros( ( binNum, qSqNum, T_fold ) )
+twop = np.zeros( ( binNum, pSqNum, T_fold ) )
 effEnergy = np.zeros( twop.shape )
 
 comm.Allgatherv( twop_loc,
@@ -267,61 +267,86 @@ comm.Allgatherv( effEnergy_loc,
 ###########################
 
 
-#c0_tsf = np.zeros( ( binNum, qSqNum ) )
-#c1_tsf = np.zeros( ( binNum, qSqNum ) )
-#E1_tsf = np.zeros( ( binNum, qSqNum ) )
-E_fit = np.zeros( ( binNum, qSqNum ) )
-E_disp = np.zeros( ( binNum, qSqNum ) )
+#c0_tsf = np.zeros( ( binNum, pSqNum ) )
+#c1_tsf = np.zeros( ( binNum, pSqNum ) )
+#E1_tsf = np.zeros( ( binNum, pSqNum ) )
+E_plat = np.zeros( ( binNum, pSqNum ) )
+E_tsf = np.zeros( ( binNum, pSqNum ) )
+E_disp = np.zeros( ( binNum, pSqNum ) )
 
-# Fit q^2 two-point functions to get mEff and fit starts
+# Fit p^2 two-point functions to get mEff and fit starts
 
 fitResults = fit.effEnergyTwopFit( effEnergy[ :, 0, : ],
                                    twop[ :, 0, : ], rangeEnd,
                                    0, L, True, mpi_confs_info,
                                    fitType="twop" )
 
-E_fit[ :, 0 ] = fitResults[ 2 ]
+E_plat[ :, 0 ] = fitResults[ 2 ]
+E_tsf[ :, 0 ] = fitResults[ 0 ][ :, 2 ]
 E_disp[ :, 0 ] = fitResults[ 2 ]
 tsf_fitStart = fitResults[ 3 ]
 plat_fitStart = fitResults[ 4 ]
 
-for iq in range( 1, qSqNum ):
+# Calculate dispertion relation
+
+# Loop over p^2
+for ip in range( 1, pSqNum ):
     
-    mpi_fncs.mpiPrint(iq,mpi_confs_info)
+    E_disp[ :, ip ] = pq.energy( E_plat[ :, 0 ], pSq[ ip ], L )
 
-    #E_fit[ :, iq ], dummy \
-    #    = fit.fitPlateau_parallel( effEnergy[ :, iq, : ],
-    #                               plat_fitStart, rangeEnd,
-    #                               mpi_confs_info )
+# End loop over p^2
 
-    E_disp[ :, iq ] = pq.energy( E_fit[ :, 0 ], qSq[ iq ], L )
+# Calculate plateau fit
 
-    E_guess = np.average( E_disp[ :, iq ] )
+# Loop over p^2
+for ip in range( 1, pSqNum ):
 
-    fitParams, dummy = fit.twoStateFit_twop( twop[ :, iq, : ],
-                                             tsf_fitStart, rangeEnd,
-                                             E_guess, T,
-                                             mpi_confs_info )
+    try:
+
+        E_plat[ :, ip ], dummy \
+            = fit.fitPlateau_parallel( effEnergy[ :, ip, : ],
+                                       plat_fitStart, rangeEnd,
+                                       mpi_confs_info )
+
+    except ( ValueError, TypeError ) as error:
+
+        msg_template = "Plateau fit at p^2={} threw error:"
+
+        mpi_fncs.mpiPrint( msg_template.format( pSq[ ip ]), mpi_confs_info )
+
+        mpi_fncs.mpiPrint( error, mpi_confs_info )
+
+        break
+
+# End loop over p^2
+
+# Calculate 2-state fit
+
+# Loop over p^2
+for ip in range( 1, pSqNum ):
+
+    E_guess = np.average( E_disp[ :, ip ] )
+
+    try:
+
+        fitParams, dummy = fit.twoStateFit_twop( twop[ :, ip, : ],
+                                                 tsf_fitStart, rangeEnd,
+                                                 E_guess, T,
+                                                 mpi_confs_info )
     
-    E_fit[ :, iq ] = fitParams[ :, 2 ]
+    except ValueError as error:
 
-    #fitParams, chiSq \
-    #    = fit.twoStateFit_twop_dispersionRelation( twop[ :, ismr, iq, : ],
-    #                                               tsf_fitStart,
-    #                                               rangeEnd, 
-    #                                               mEff_plat[ ismr ],
-    #                                               qSq[ ismr, iq ], L,
-    #                                               mpi_confs_info )
+        msg_template = "2-state fit at p^2={} threw error:"
 
-    #c0[ :, iq ] = fitParams[ :, 0 ]
-    #c1[ :, iq ] = fitParams[ :, 1 ]
-    #E1[ :, iq ] = fitParams[ :, 2 ]
+        mpi_fncs.mpiPrint( msg_template.format( pSq[ ip ]), mpi_confs_info )
+
+        mpi_fncs.mpiPrint( error, mpi_confs_info )
+
+        break
+
+    E_tsf[ :, ip ] = fitParams[ :, 2 ]
     
-    #mpi_fncs.mpiPrint( "Fit two-point functions at " \
-    #                   + "Q^2={}".format( qSq[ ismr, iq ] ),
-    #                   mpi_confs_info )
-    
-# End loop over q^2
+# End loop over p^2
 
 ##########
 # Output #
@@ -331,35 +356,46 @@ if rank == 0:
 
     # Average over bins
 
-    E_fit_avg = np.average( E_fit, axis=0 )
-    E_fit_err = fncs.calcError( E_fit, binNum, axis=0 )
+    E_plat_avg = np.average( E_plat, axis=0 )
+    E_plat_err = fncs.calcError( E_plat, binNum, axis=0 )
+
+    E_tsf_avg = np.average( E_tsf, axis=0 )
+    E_tsf_err = fncs.calcError( E_tsf, binNum, axis=0 )
 
     E_disp_avg = np.average( E_disp, axis=0 )
     E_disp_err = fncs.calcError( E_disp, binNum, axis=0 )
 
-    # Write files
+    pSq_GeV = pq.convertQsqToGeV( pSq, E_plat_avg[ 0 ], a, L )
 
-    Qsq_GeV = pq.convertQsqToGeV( qSq, E_fit_avg[ 0 ], a, L )
+    # Write plateau file
 
-    platFilename = rw.makeFilename( output_template, 
-                                    "E_fit_{}" \
-                                    + "_{}configs_binSize{}",
-                                    particle,
-                                    configNum, binSize )
+    output_filename = rw.makeFilename( output_template, 
+                                       "E_plat_{}" \
+                                       + "_{}configs_binSize{}",
+                                       particle,
+                                       configNum, binSize )
 
-    #print(platFilename)
+    rw.writeAvgDataFile_wX( output_filename, pSq_GeV, E_plat_avg, E_plat_err )
 
-    rw.writeAvgDataFile_wX( platFilename, Qsq_GeV, E_fit_avg, E_fit_err )
+    # Write 2-state fit file
 
-    dispFilename = rw.makeFilename( output_template, 
-                                    "E_disp_{}" \
-                                    + "_{}configs_binSize{}",
-                                    particle,
-                                    configNum, binSize )
+    output_filename = rw.makeFilename( output_template, 
+                                       "E_tsf_{}" \
+                                       + "_{}configs_binSize{}",
+                                       particle,
+                                       configNum, binSize )
 
-    #print(dispFilename)
+    rw.writeAvgDataFile_wX( output_filename, pSq_GeV, E_tsf_avg, E_tsf_err )
 
-    rw.writeAvgDataFile_wX( dispFilename, Qsq_GeV, E_disp_avg, E_disp_err )
+    # Write dispersion relation file
+
+    output_filename = rw.makeFilename( output_template, 
+                                       "E_disp_{}" \
+                                       + "_{}configs_binSize{}",
+                                       particle,
+                                       configNum, binSize )
+
+    rw.writeAvgDataFile_wX( output_filename, pSq_GeV, E_disp_avg, E_disp_err )
 
 # End first process
 
