@@ -143,8 +143,12 @@ parser.add_argument( "-e", "--error_threshold", action='store',
                      + "than threshold will be neglected." )
 
 parser.add_argument( "--pSq_last", action='store', type=int, default=None,
-                     help="Last pSq to be used in form factor ratio, "
+                     help="Last p^2 to be used in form factor ratio "
                      + "in lattice momentum units (2pi/L)^2" )
+
+parser.add_argument( "--Qsq_last_monopole", action='store',
+                     type=float, default=None,
+                     help="Last Q^2 to be used in monopole fit in GeV" )
 
 # Parse
 
@@ -208,6 +212,8 @@ formFactor = args.form_factor
 errorThreshold = args.error_threshold
 
 pSq_last = args.pSq_last
+
+Qsq_last_monopole = args.Qsq_last_monopole
 
 # Set the number of form factors
 
@@ -350,7 +356,7 @@ elif formFactor == "BT10":
 
 elif formFactor == "FS":
 
-    Z = 0.445
+    Z = 0.475
     
 elif formFactor == "A20_B20":
 
@@ -1311,32 +1317,31 @@ for ts, its in fncs.zipXandIndex( tsink ):
                                         p_fin[ iflav ], q_threep[ iflav ], L,
                                         mpi_confs_info )
 
-        #if pSq_fin == 0:
+        if pSq_fin == 0:
         #if True:
         #for p, ip in fncs.zipXandIndex( p_fin[ iflav ] ):
-        if False:
+        #if False:
 
             # Calculate F as a function of ti for Q^2=1
-        
             # F_ti_loc[ b_loc, ff, t ]
 
-            #F_ti_loc \
-            #    = Z * pq.calcFormFactors_ti( kineFactor_loc,
-            #                                 ratio_loc, ratio_fit_err,
-            #                                 Qsq_where[ iflav ], 0,
-            #                                 mpi_confs_info )
+            F_ti_loc \
+                = Z * pq.calcFormFactors_ti( kineFactor_loc,
+                                             ratio_loc, ratio_fit_err,
+                                             Qsq_where[ iflav ], 1,
+                                             mpi_confs_info )
 
-            F_ti_loc = np.zeros( ( binNum_loc, len( F_str ), ts + 1 ) )
+            #F_ti_loc = np.zeros( ( binNum_loc, len( F_str ), ts + 1 ) )
 
             # Loop over bins
-            for ib in range( binNum_loc ):
-                # Loop over form factors
-                for ff, iff in fncs.zipXandIndex( F_str ):
+            #for ib in range( binNum_loc ):
+            # Loop over form factors
+            #    for ff, iff in fncs.zipXandIndex( F_str ):
                         
-                    F_ti_loc[ ib, iff ] = Z * ratio_loc[ ib, ip, 0, 0, : ] \
-                                          / kineFactor_loc[ ib, ip, 0, 0, iff ] \
-                                          / ratio_fit_err[ ip, 0, 0 ] ** 2
-                    
+            #        F_ti_loc[ ib, iff ] = Z * ratio_loc[ ib, ip, 0, 0, : ] \
+            #                              / kineFactor_loc[ ib, ip, 0, 0, iff ] \
+            #                              / ratio_fit_err[ ip, 0, 0 ] ** 2
+            
             # Gather F_ti
             # F_ti[ b, ff, t ]
 
@@ -1369,7 +1374,7 @@ for ts, its in fncs.zipXandIndex( tsink ):
                                            + "_{:+}_{:+}_{:+}_Qsq{}"
                                            + "_{}configs_binSize{}",
                                            ff, particle, flav_str[ iflav ],
-                                           ts, p[ 0 ], p[ 1 ], p[ 2 ], 0,
+                                           ts, p[ 0 ], p[ 1 ], p[ 2 ], 1,
                                            configNum, binSize )
 
                     rw.writeAvgDataFile( output_filename,
@@ -1382,7 +1387,7 @@ for ts, its in fncs.zipXandIndex( tsink ):
                                            + "_psq{}_Qsq{}"
                                            + "_{}configs_binSize{}",
                                            ff, particle, flav_str[ iflav ],
-                                           ts, pSq_fin, 0,
+                                           ts, pSq_fin, 1,
                                            configNum, binSize )
 
                     rw.writeAvgDataFile( output_filename,
@@ -1447,8 +1452,8 @@ neglect = 3
 
 Qsq_where_good = np.full( ( flavNum, QsqNum ), True, dtype=bool )
 
-mpi_fncs.mpiPrint( "Performing 2-state fit...", mpi_confs_info,
-                   end='', flush=True )
+mpi_fncs.mpiPrint( "Performing 2-state fit...",
+                   mpi_confs_info, flush=True )
 
 # Loop over flavors
 for iflav in range( flavNum ):
@@ -1589,8 +1594,6 @@ for iflav in range( flavNum ):
                                                     mpi_confs_info )
 
 # End loop over flavor
-
-mpi_fncs.mpiPrint( "done", mpi_confs_info )
 
 # Gather 2-state fit form factors
 # F_tsf[ b, flav, qsq, [ F1, F2 ] ]
@@ -1808,6 +1811,7 @@ for iflav in range( flavNum ):
     if rank == 0:
 
         # Average over bins
+        # F_tsf_avg[ flav ][ qs_good, [ F1, F2 ] ]
 
         F_tsf_avg[ iflav ] = np.average( F_good_tsf, axis=0 )
         F_tsf_err[ iflav ] = fncs.calcError( F_good_tsf, binNum )
@@ -1868,9 +1872,7 @@ if formFactor == "GE_GM":
             = np.array( Qsq_where_good[ 0 ] & Qsq_where_good[ 1 ],
                         dtype=bool )
 
-        #CJL: This part does not work for some reason
-        
-        F_good_flavCombo = F_loc[ :, :, :
+        F_good_flavCombo = F_loc[ :, :, :,
                                   Qsq_where_good_flavCombo, : ]
 
         F_flavCombo_loc = 2./3. * F_good_flavCombo[ :, :, 0 ] \
@@ -2060,7 +2062,7 @@ if formFactor == "GE_GM":
 
 
 #################################################
-# Fit the form factors to a dipole distribution #
+# Fit the form factors to a monopole distribution #
 #################################################
 
 
@@ -2097,139 +2099,177 @@ for iflav in range( flavNum ):
 
         # Remove elements where form factors are zero
 
+        F_nonzero_where = F_tsf_avg[ iflav ] != 0
+
         Qsq_GeV_loc[ iflav ] \
-            = Qsq_GeV_loc[ iflav ][ :, F_tsf_avg[ iflav ][ :, 0 ] != 0. ]
+            = Qsq_GeV_loc[ iflav ][ :, F_nonzero_where[ :, 0 ] ]
             
+        QsqNum_good = Qsq_GeV_loc[ iflav ].shape[ -1 ]
+
         F_good_loc[ iflav ] \
-            = F_good_loc[ iflav ][ :, F_avg[ iflav ] != 0. ]
+            = F_good_loc[ iflav ][ :, :, F_nonzero_where ]
+        F_good_loc[ iflav ] \
+            = F_good_loc[ iflav ].reshape( binNum_loc,
+                                           tsinkNum,
+                                           QsqNum_good, 1 )
             
-        F_err[ iflav ] = F_err[ iflav ][ F_avg[ iflav ] != 0. ]
+        F_err[ iflav ] = F_err[ iflav ][ :, F_nonzero_where ]
+        F_err[ iflav ] \
+            = F_err[ iflav ].reshape( tsinkNum,
+                                      QsqNum_good, 1 )
             
-        F_avg[ iflav ] = F_avg[ iflav ][ F_avg[ iflav ] != 0. ]
+        F_avg[ iflav ] = F_avg[ iflav ][ :, F_nonzero_where ]
+        F_avg[ iflav ] \
+            = F_avg[ iflav ].reshape( tsinkNum,
+                                      QsqNum_good, 1 )
 
         F_good_tsf_loc[ iflav ] \
-            = F_good_tsf_loc[ iflav ][ :, F_tsf_avg[ iflav ] != 0. ]
+            = F_good_tsf_loc[ iflav ][ :, F_nonzero_where ]
+        F_good_tsf_loc[ iflav ] \
+            = F_good_tsf_loc[ iflav ].reshape( binNum_loc,
+                                               QsqNum_good, 1 )
 
-        F_tsf_err[ iflav ] = F_tsf_err[ iflav ][ F_tsf_avg[ iflav ] != 0. ]
+        F_tsf_err[ iflav ] = F_tsf_err[ iflav ][ F_nonzero_where ]
+        F_tsf_err[ iflav ] \
+            = F_tsf_err[ iflav ].reshape( QsqNum_good, 1 )
 
-        F_tsf_avg[ iflav ] = F_tsf_avg[ iflav ][ F_tsf_avg[ iflav ] != 0. ]
+        F_tsf_avg[ iflav ] = F_tsf_avg[ iflav ][ F_nonzero_where ]
+        F_tsf_avg[ iflav ] \
+            = F_tsf_avg[ iflav ].reshape( QsqNum_good, 1 )
 
     # End BT10
 
+    # Set M_monopole guess
+
+    M0 = -1.0 if formFactor == "BT10" else None
+    F0=None
+
     # Loop over number of parameters
-    for paramNum_dipole in 1, 2:
+    for paramNum_monopole in 1, 2:
         # Loop over tsink
         for ts, its in fncs.zipXandIndex( tsink ):
             # Loop over form factors
             for ff, iff in fncs.zipXandIndex( F_str ):
             
-                # Fit form factors to dipole
-                # fitParams_dipole_loc[ b_loc, param ]
+                # Fit form factors to monopole
+                # fitParams_monopole_loc[ b_loc, param ]
 
-                fitParams_dipole_loc, chiSq_dipole_loc \
-                    =fit.fitFormFactor_dipole(F_good_loc[iflav][:,its,:,iff],
+                fitParams_monopole_loc, chiSq_monopole_loc \
+                    =fit.fitFormFactor_monopole(F_good_loc[iflav][:,its,:,iff],
                                               F_err[ iflav ][ its, :, iff ],
                                               Qsq_GeV_loc[ iflav ],
-                                              paramNum_dipole,
-                                              mpi_confs_info )
+                                              paramNum_monopole,
+                                              mpi_confs_info,
+                                              Qsq_last=Qsq_last_monopole,
+                                              M0=M0, F0=F0 )
                                
-                # Gather dipole fit parameters to first rank
-                # fitParams_dipole[ b, param ]
+                # Gather monopole fit parameters to first rank
+                # fitParams_monopole[ b, param ]
 
                 if rank == 0:
 
-                    fitParams_dipole = np.zeros( ( binNum, 2 ) )
+                    fitParams_monopole = np.zeros( ( binNum, 2 ) )
                 
                 else:
 
-                    fitParams_dipole = []
+                    fitParams_monopole = []
 
-                comm.Gatherv( fitParams_dipole_loc,
-                              [ fitParams_dipole,
+                comm.Gatherv( fitParams_monopole_loc,
+                              [ fitParams_monopole,
                                 recvCount
-                                * np.prod( fitParams_dipole_loc.shape[1:] ),
+                                * np.prod( fitParams_monopole_loc.shape[1:] ),
                                 recvOffset
-                                * np.prod( fitParams_dipole_loc.shape[1:] ),
+                                * np.prod( fitParams_monopole_loc.shape[1:] ),
                                 MPI.DOUBLE ],
                               root=0 )
 
                 if rank == 0:
 
-                    M_dipole = fitParams_dipole[ :, 0 ]
-                    F0_dipole = fitParams_dipole[ :, 1 ]
+                    M_monopole = fitParams_monopole[ :, 0 ]
+                    F0_monopole = fitParams_monopole[ :, 1 ]
 
                     # Calculate r^2
 
-                    rSq = 6. / M_dipole ** 2
+                    rSq = pq.rSq_fm( M_monopole )
 
-                    # Calculate dipole curve
-                    # curve_dipole[ b ]
+                    # Set last Q^2 in curve
 
-                    curve_dipole, Qsq_curve \
-                        = fit.calcDipoleCurve( M_dipole, F0_dipole,
-                                               Qsq_GeV_avg[ iflav ][ -1 ] )
+                    if Qsq_last_monopole:
+
+                        Qsq_last_monopole_curve = Qsq_last_monopole
+        
+                    else:
+
+                        Qsq_last_monopole_curve = Qsq_GeV_avg[ iflav ][ -1 ]
+
+                    # Calculate monopole curve
+                    # curve_monopole[ b ]
+
+                    curve_monopole, Qsq_curve \
+                        = fit.calcMonopoleCurve( M_monopole, F0_monopole,
+                                               Qsq_last_monopole_curve )
 
                     # Average over bins
                     
-                    fitParams_dipole_avg \
-                        = np.average( fitParams_dipole, axis=0 )
-                    fitParams_dipole_err = fncs.calcError( fitParams_dipole,
+                    fitParams_monopole_avg \
+                        = np.average( fitParams_monopole, axis=0 )
+                    fitParams_monopole_err = fncs.calcError( fitParams_monopole,
                                                            binNum )
                     
                     rSq_avg = np.average( rSq, axis=0 )
                     rSq_err = fncs.calcError( rSq, binNum )
 
-                    curve_dipole_avg = np.average( curve_dipole, axis=0 )
-                    curve_dipole_err = fncs.calcError( curve_dipole, binNum )
+                    curve_monopole_avg = np.average( curve_monopole, axis=0 )
+                    curve_monopole_err = fncs.calcError( curve_monopole, binNum )
 
-                    # Write dipole fit parameter file for each bin
+                    # Write monopole fit parameter file for each bin
                     
                     output_filename \
                         = rw.makeFilename( output_template,
-                                           "{}_dipoleFitParams_per_bin"
+                                           "{}_monopoleFitParams_per_bin"
                                            + "_{}_{}_{}params_tsink{}_psq{}"
                                            + "_{}configs_binSize{}",
                                            ff, particle, flav_str[ iflav ],
-                                           paramNum_dipole,
+                                           paramNum_monopole,
                                            ts, pSq_fin,
                                            configNum, binSize )
 
                     rw.write2ValueDataFile( output_filename,
-                                            fitParams_dipole[ :, 0 ],
-                                            fitParams_dipole[ :, 1 ] )
+                                            fitParams_monopole[ :, 0 ],
+                                            fitParams_monopole[ :, 1 ] )
                     
                     # Write average fit parameter file and r^2
                     
                     output_filename \
                         = rw.makeFilename( output_template,
-                                           "{}_dipoleFitParams"
+                                           "{}_monopoleFitParams"
                                            + "_{}_{}_{}params_tsink{}_psq{}"
                                            + "_{}configs_binSize{}",
                                            ff, particle, flav_str[ iflav ],
-                                           paramNum_dipole,
+                                           paramNum_monopole,
                                            ts, pSq_fin,
                                            configNum, binSize )
 
-                    rw.writeDipoleFitParamsFile( output_filename,
-                                                 fitParams_dipole_avg,
-                                                 fitParams_dipole_err,
+                    rw.writeMonopoleFitParamsFile( output_filename,
+                                                 fitParams_monopole_avg,
+                                                 fitParams_monopole_err,
                                                  rSq_avg, rSq_err )
                 
-                    # Write dipole fit curve
+                    # Write monopole fit curve
                     
                     output_filename \
                         = rw.makeFilename( output_template,
-                                           "{}_dipole_curve_{}_{}"
+                                           "{}_monopole_curve_{}_{}"
                                            + "_{}params_tsink{}_psq{}"
                                            + "_{}configs_binSize{}",
                                            ff, particle, flav_str[ iflav ],
-                                           paramNum_dipole, ts, pSq_fin,
+                                           paramNum_monopole, ts, pSq_fin,
                                            configNum, binSize )
 
                     rw.writeAvgDataFile_wX( output_filename,
                                             Qsq_curve,
-                                            curve_dipole_avg,
-                                            curve_dipole_err )
+                                            curve_monopole_avg,
+                                            curve_monopole_err )
 
                 # End first process
             # End loop over form factor
@@ -2239,113 +2279,115 @@ for iflav in range( flavNum ):
 
         for ff, iff in fncs.zipXandIndex( F_str ):
             
-            # Fit form factors to dipole
-            # fitParams_dipole_loc[ b_loc, param ]
+            # Fit form factors to monopole
+            # fitParams_monopole_loc[ b_loc, param ]
             
-            fitParams_dipole_loc, chiSq_dipole_loc \
-                = fit.fitFormFactor_dipole( F_good_tsf_loc[iflav][...,iff],
+            fitParams_monopole_loc, chiSq_monopole_loc \
+                = fit.fitFormFactor_monopole( F_good_tsf_loc[iflav][...,iff],
                                             F_tsf_err[ iflav ][ :, iff ],
                                             Qsq_GeV_loc[ iflav ],
-                                            paramNum_dipole,
-                                            mpi_confs_info )
-                               
-            # Gather dipole fit parameters to first rank
-            # fitParams_dipole[ b, param ]
+                                            paramNum_monopole,
+                                            mpi_confs_info,
+                                            Qsq_last=Qsq_last_monopole,
+                                            M0=M0 )
+            
+            # Gather monopole fit parameters to first rank
+            # fitParams_monopole[ b, param ]
                 
             if rank == 0:
 
-                fitParams_dipole = np.zeros( ( binNum, 2 ) )
+                fitParams_monopole = np.zeros( ( binNum, 2 ) )
 
             else:
 
-                fitParams_dipole = []
+                fitParams_monopole = []
                 
-            comm.Gatherv( fitParams_dipole_loc,
-                          [ fitParams_dipole,
+            comm.Gatherv( fitParams_monopole_loc,
+                          [ fitParams_monopole,
                             recvCount \
-                            * np.prod( fitParams_dipole_loc.shape[ 1: ] ),
+                            * np.prod( fitParams_monopole_loc.shape[ 1: ] ),
                             recvOffset \
-                            * np.prod( fitParams_dipole_loc.shape[ 1: ] ),
+                            * np.prod( fitParams_monopole_loc.shape[ 1: ] ),
                             MPI.DOUBLE ],
                           root=0 )
 
             if rank == 0:
 
-                M_dipole = fitParams_dipole[ :, 0 ]
-                F0_dipole = fitParams_dipole[ :, 1 ]
+                M_monopole = fitParams_monopole[ :, 0 ]
+                F0_monopole = fitParams_monopole[ :, 1 ]
 
                 # Calculate r^2
 
-                rSq = 6. / M_dipole ** 2
+                rSq = pq.rSq_fm( M_monopole )
 
-                # Calculate dipole curve
-                # curve_dipole[ b ]
+                # Calculate monopole curve
+                # curve_monopole[ b ]
 
-                curve_dipole, Qsq_curve \
-                    = fit.calcDipoleCurve( M_dipole, F0_dipole,
-                                           Qsq_GeV_avg[ iflav ][ -1 ] )
+                curve_monopole, Qsq_curve \
+                    = fit.calcMonopoleCurve( M_monopole, F0_monopole,
+                                           Qsq_last_monopole_curve )
 
                 # Average over bins
                     
-                fitParams_dipole_avg = np.average( fitParams_dipole, axis=0 )
-                fitParams_dipole_err = fncs.calcError( fitParams_dipole,
+                fitParams_monopole_avg = np.average( fitParams_monopole, axis=0 )
+                fitParams_monopole_err = fncs.calcError( fitParams_monopole,
                                                        binNum )
 
                 rSq_avg = np.average( rSq, axis=0 )
                 rSq_err = fncs.calcError( rSq, binNum )
 
-                curve_dipole_avg = np.average( curve_dipole, axis=0 )
-                curve_dipole_err = fncs.calcError( curve_dipole, binNum )
+                curve_monopole_avg = np.average( curve_monopole, axis=0 )
+                curve_monopole_err = fncs.calcError( curve_monopole, binNum )
 
-                # Write dipole fit parameter file for each bin
+                # Write monopole fit parameter file for each bin
                 
                 output_filename \
                     = rw.makeFilename( output_template,
-                                       "{}_dipoleFitParams_per_bin_2sf"
+                                       "{}_monopoleFitParams_per_bin_2sf"
                                        + "_{}_{}_{}params_tsink{}_{}"
                                        + "_psq{}_{}configs_binSize{}",
                                        ff, particle, flav_str[ iflav ],
-                                       paramNum_dipole,
+                                       paramNum_monopole,
                                        tsink[ 0 ], tsink[ -1 ], pSq_fin,
                                        configNum, binSize )
 
                 rw.write2ValueDataFile( output_filename,
-                                        fitParams_dipole[ :, 0 ],
-                                        fitParams_dipole[ :, 1 ] )
+                                        fitParams_monopole[ :, 0 ],
+                                        fitParams_monopole[ :, 1 ] )
                     
                 # Write average fit parameter file and r^2
                     
                 output_filename \
                     = rw.makeFilename( output_template,
-                                       "{}_dipoleFitParams_2sf"
+                                       "{}_monopoleFitParams_2sf"
                                        + "_{}_{}_{}params_tsink{}_{}"
                                        + "_psq{}_{}configs_binSize{}",
                                        ff, particle, flav_str[ iflav ],
-                                       paramNum_dipole,
+                                       paramNum_monopole,
                                        tsink[ 0 ], tsink[ -1 ], pSq_fin,
                                        configNum, binSize )
 
-                rw.writeDipoleFitParamsFile( output_filename,
-                                             fitParams_dipole_avg,
-                                             fitParams_dipole_err,
+                rw.writeMonopoleFitParamsFile( output_filename,
+                                             fitParams_monopole_avg,
+                                             fitParams_monopole_err,
                                              rSq_avg, rSq_err )
 
-                # Write dipole fit curve
+                # Write monopole fit curve
                     
                 output_filename \
                     = rw.makeFilename( output_template,
-                                       "{}_dipole_curve_2sf"
+                                       "{}_monopole_curve_2sf"
                                        + "_{}_{}_{}params_tsink{}_{}"
                                        + "_psq{}_{}configs_binSize{}",
                                        ff, particle, flav_str[ iflav ],
-                                       paramNum_dipole,
+                                       paramNum_monopole,
                                        tsink[ 0 ], tsink[ -1 ], pSq_fin,
                                        configNum, binSize )
 
                 rw.writeAvgDataFile_wX( output_filename,
                                         Qsq_curve,
-                                        curve_dipole_avg,
-                                        curve_dipole_err )
+                                        curve_monopole_avg,
+                                        curve_monopole_err )
 
             # End first process
         # End loop over form factor
@@ -2381,120 +2423,131 @@ if formFactor == "GE_GM":
     # Flavor combination for F_H
 
     # Loop over number of parameters
-    for paramNum_dipole in 1, 2:
+    for paramNum_monopole in 1, 2:
         # Loop over tsink
         for ts, its in fncs.zipXandIndex( tsink ):
             # Loop over form factors
             for ff, iff in fncs.zipXandIndex( F_str ):
             
-                # Fit form factors to dipole
-                # fitParams_dipole_flavCombo[ b, param ]
+                # Fit form factors to monopole
+                # fitParams_monopole_flavCombo[ b, param ]
 
-                fitParams_dipole, chiSq_dipole \
-                    = fit.fitFormFactor_dipole(F_flavCombo_loc[:,its,:,iff],
+                fitParams_monopole_loc, chiSq_monopole \
+                    = fit.fitFormFactor_monopole(F_flavCombo_loc[:,its,:,iff],
                                                F_flavCombo_err[its,:,iff],
                                                Qsq_GeV_flavCombo_loc,
-                                               paramNum_dipole,
-                                               mpi_confs_info )
-
-                # Gather dipole fit parameters to first rank
-                # fitParams_dipole[ b, param ]
+                                               paramNum_monopole,
+                                               mpi_confs_info,
+                                               Qsq_last=Qsq_last_monopole )
+                
+                # Gather monopole fit parameters to first rank
+                # fitParams_monopole[ b, param ]
                 
                 if rank == 0:
 
-                    fitParams_dipole = np.zeros( ( binNum, 2 ) )
+                    fitParams_monopole = np.zeros( ( binNum, 2 ) )
 
                 else:
 
-                    fitParams_dipole = []
+                    fitParams_monopole = []
                 
-                comm.Gatherv( fitParams_dipole_loc,
-                              [ fitParams_dipole,
+                comm.Gatherv( fitParams_monopole_loc,
+                              [ fitParams_monopole,
                                 recvCount \
-                                * np.prod( fitParams_dipole_loc.shape[1:] ),
+                                * np.prod( fitParams_monopole_loc.shape[1:] ),
                                 recvOffset \
-                                * np.prod( fitParams_dipole_loc.shape[1:] ),
+                                * np.prod( fitParams_monopole_loc.shape[1:] ),
                                 MPI.DOUBLE ],
                               root=0 )
 
                 if rank == 0:
                 
-                    M_dipole = fitParams_dipole[ :, 0 ]
-                    F0_dipole = fitParams_dipole[ :, 1 ]
+                    M_monopole = fitParams_monopole[ :, 0 ]
+                    F0_monopole = fitParams_monopole[ :, 1 ]
 
-                    # Write dipole fit parameter file for each bin
+                    # Write monopole fit parameter file for each bin
                     
                     # Calculate r^2
 
-                    rSq = 6. / fitParams_dipole[ :, 0 ] ** 2
+                    rSq = pq.rSq_fm( M_monopole )
                     
-                    # Calculate dipole curve
-                    # curve_dipole[ b ]
+                    # Set last Q^2 in curve
 
-                    curve_dipole, Qsq_curve \
-                        = fit.calcDipoleCurve( M_dipole, F0_dipole,
-                                               Qsq_GeV_flavCombo_avg[ -1 ] )
+                    if Qsq_last_monopole:
+
+                        Qsq_last_monopole_curve = Qsq_last_monopole
+        
+                    else:
+
+                        Qsq_last_monopole_curve = Qsq_GeV_flavCombo_avg[ -1 ]
+
+                    # Calculate monopole curve
+                    # curve_monopole[ b ]
+
+                    curve_monopole, Qsq_curve \
+                        = fit.calcMonopoleCurve( M_monopole, F0_monopole,
+                                               Qsq_last_monopole_curve )
 
                     # Average over bins
                     
-                    fitParams_dipole_avg \
-                        = np.average( fitParams_dipole, axis=0 )
-                    fitParams_dipole_err \
-                        = fncs.calcError( fitParams_dipole, binNum )
+                    fitParams_monopole_avg \
+                        = np.average( fitParams_monopole, axis=0 )
+                    fitParams_monopole_err \
+                        = fncs.calcError( fitParams_monopole, binNum )
                 
                     rSq_avg = np.average( rSq, axis=0 )
                     rSq_err = fncs.calcError( rSq, binNum )
 
-                    curve_dipole_avg = np.average( curve_dipole, axis=0 )
-                    curve_dipole_err = fncs.calcError( curve_dipole, binNum )
+                    curve_monopole_avg = np.average( curve_monopole, axis=0 )
+                    curve_monopole_err = fncs.calcError( curve_monopole, binNum )
 
-                    # Write dipole fit parameter file for each bin                
+                    # Write monopole fit parameter file for each bin                
                     output_filename \
                         = rw.makeFilename( output_template,
-                                           "{}_dipoleFitParams_per_bin_{}"
+                                           "{}_monopoleFitParams_per_bin_{}"
                                            + "_{}params_tsink{}_psq{}"
                                            + "_{}configs_binSize{}",
                                            ff, particle,
-                                           paramNum_dipole, ts, pSq_fin,
+                                           paramNum_monopole, ts, pSq_fin,
                                            configNum, binSize )
 
                     rw.write2ValueDataFile( output_filename,
-                                            fitParams_dipole[ :, 0 ],
-                                            fitParams_dipole[ :, 1 ] )
+                                            fitParams_monopole[ :, 0 ],
+                                            fitParams_monopole[ :, 1 ] )
 
                     # Write average fit parameter file and r^2
                     
                     output_filename \
                         = rw.makeFilename( output_template,
-                                           "{}_dipoleFitParams"
+                                           "{}_monopoleFitParams"
                                            + "_{}_{}params_tsink{}_psq{}"
                                            + "_{}configs_binSize{}",
                                            ff, particle,
-                                           paramNum_dipole,
+                                           paramNum_monopole,
                                            ts, pSq_fin,
                                            configNum, binSize )
                     
-                    rw.writeDipoleFitParamsFile(output_filename,
-                                                fitParams_dipole_avg,
-                                                fitParams_dipole_err,
+                    rw.writeMonopoleFitParamsFile(output_filename,
+                                                fitParams_monopole_avg,
+                                                fitParams_monopole_err,
                                                 rSq_avg,
                                                 rSq_err)
                     
-                    # Write dipole fit curve
+                    # Write monopole fit curve
                     
                     output_filename \
                         = rw.makeFilename( output_template,
-                                           "{}_dipole_curve_{}"
+                                           "{}_monopole_curve_{}"
                                            + "_{}params_tsink{}_psq{}"
                                            + "_{}configs_binSize{}",
                                            ff, particle,
-                                           paramNum_dipole, ts, pSq_fin,
+                                           paramNum_monopole, ts, pSq_fin,
                                            configNum, binSize )
                     
                     rw.writeAvgDataFile_wX( output_filename,
                                             Qsq_curve,
-                                            curve_dipole_avg,
-                                            curve_dipole_err )
+                                            curve_monopole_avg,
+                                            curve_monopole_err )
 
                 # End first rank
             # End loop over form factor
@@ -2503,113 +2556,114 @@ if formFactor == "GE_GM":
         # Loop over form factors
         for ff, iff in fncs.zipXandIndex( F_str ):
             
-            # Fit form factors to dipole
-            # fitParams_dipole[ b, param ]
+            # Fit form factors to monopole
+            # fitParams_monopole[ b, param ]
 
-            fitParams_dipole, chiSq_dipole \
-                = fit.fitFormFactor_dipole( F_flavCombo_tsf_loc[ ..., iff ],
+            fitParams_monopole_loc, chiSq_monopole \
+                = fit.fitFormFactor_monopole( F_flavCombo_tsf_loc[ ..., iff ],
                                             F_flavCombo_tsf_err[ :, iff ],
                                             Qsq_GeV_flavCombo_loc,
-                                            paramNum_dipole,
-                                            mpi_confs_info )
-                
-            # Gather dipole fit parameters to first rank
-            # fitParams_dipole[ b, param ]
+                                            paramNum_monopole,
+                                            mpi_confs_info,
+                                            Qsq_last=Qsq_last_monopole )
+            
+            # Gather monopole fit parameters to first rank
+            # fitParams_monopole[ b, param ]
                 
             if rank == 0:
 
-                fitParams_dipole = np.zeros( ( binNum, 2 ) )
+                fitParams_monopole = np.zeros( ( binNum, 2 ) )
 
             else:
 
-                fitParams_dipole = []
+                fitParams_monopole = []
                 
-            comm.Gatherv( fitParams_dipole_loc,
-                          [ fitParams_dipole,
+            comm.Gatherv( fitParams_monopole_loc,
+                          [ fitParams_monopole,
                             recvCount \
-                            * np.prod( fitParams_dipole_loc.shape[ 1: ] ),
+                            * np.prod( fitParams_monopole_loc.shape[ 1: ] ),
                             recvOffset \
-                            * np.prod( fitParams_dipole_loc.shape[ 1: ] ),
+                            * np.prod( fitParams_monopole_loc.shape[ 1: ] ),
                             MPI.DOUBLE ],
                           root=0 )
 
             if rank == 0:
 
-                M_dipole = fitParams_dipole[ :, 0 ]
-                F0_dipole = fitParams_dipole[ :, 1 ]
+                M_monopole = fitParams_monopole[ :, 0 ]
+                F0_monopole = fitParams_monopole[ :, 1 ]
                                
                 # Calculate r^2
                 
-                rSq = 6. / M_dipole ** 2
+                rSq = pq.rSq_fm( M_monopole )
 
-                # Calculate dipole curve
-                # curve_dipole[ b ]
+                # Calculate monopole curve
+                # curve_monopole[ b ]
 
-                curve_dipole, Qsq_curve \
-                    = fit.calcDipoleCurve( M_dipole, F0_dipole,
-                                           Qsq_GeV_flavCombo_avg[ -1 ] )
+                curve_monopole, Qsq_curve \
+                    = fit.calcMonopoleCurve( M_monopole, F0_monopole,
+                                           Qsq_last_monopole_curve )
 
                 # Average over bins
                 
-                fitParams_dipole_avg \
-                    = np.average( fitParams_dipole, axis=0 )
-                fitParams_dipole_err \
-                    = fncs.calcError( fitParams_dipole, binNum )
+                fitParams_monopole_avg \
+                    = np.average( fitParams_monopole, axis=0 )
+                fitParams_monopole_err \
+                    = fncs.calcError( fitParams_monopole, binNum )
                 
                 rSq_avg = np.average( rSq, axis=0 )
                 rSq_err = fncs.calcError( rSq, binNum )
 
-                curve_dipole_avg = np.average( curve_dipole, axis=0 )
-                curve_dipole_err = fncs.calcError( curve_dipole, binNum )
+                curve_monopole_avg = np.average( curve_monopole, axis=0 )
+                curve_monopole_err = fncs.calcError( curve_monopole, binNum )
 
-                # Write dipole fit parameter file for each bin
+                # Write monopole fit parameter file for each bin
                     
                 output_filename \
                     = rw.makeFilename( output_template,
-                                       "{}_dipoleFitParams_per_bin_2sf"
+                                       "{}_monopoleFitParams_per_bin_2sf"
                                        + "_{}_{}params_tsink{}_{}_psq{}"
                                        + "_{}configs_binSize{}",
-                                       ff, particle, paramNum_dipole,
+                                       ff, particle, paramNum_monopole,
                                        tsink[ 0 ], tsink[ -1 ],
                                        pSq_fin, configNum, binSize )
 
                 rw.write2ValueDataFile( output_filename,
-                                        fitParams_dipole[ :, 0 ],
-                                        fitParams_dipole[ :, 1 ] )
+                                        fitParams_monopole[ :, 0 ],
+                                        fitParams_monopole[ :, 1 ] )
 
                 # Write average fit parameter file and r^2
                     
                 output_filename \
                     = rw.makeFilename( output_template,
-                                       "{}_dipoleFitParams_2sf"
+                                       "{}_monopoleFitParams_2sf"
                                        + "_{}_{}params_tsink{}_{}_psq{}"
                                        + "_{}configs_binSize{}",
                                        ff, particle,
-                                       paramNum_dipole,
+                                       paramNum_monopole,
                                        tsink[ 0 ], tsink[ -1 ],
                                        pSq_fin, configNum, binSize )
                 
-                rw.writeDipoleFitParamsFile(output_filename,
-                                            fitParams_dipole_avg,
-                                            fitParams_dipole_err,
+                rw.writeMonopoleFitParamsFile(output_filename,
+                                            fitParams_monopole_avg,
+                                            fitParams_monopole_err,
                                             rSq_avg,
                                             rSq_err)
                     
-                # Write dipole fit curve
+                # Write monopole fit curve
                     
                 output_filename \
                     = rw.makeFilename( output_template,
-                                       "{}_dipole_curve_{}_2sf"
-                                       + "_{}params_tsink{}_{}_psq{}"
-                                       + "_{}configs_binSize{}",
-                                       ff, particle, paramNum_dipole,
+                                       "{}_monopole_curve_2sf"
+                                       + "_{}_{}params_tsink{}_{}"
+                                       + "_psq{}_{}configs_binSize{}",
+                                       ff, particle, paramNum_monopole,
                                        tsink[ 0 ], tsink[ -1 ],
                                        pSq_fin, configNum, binSize )
 
                 rw.writeAvgDataFile_wX( output_filename,
                                         Qsq_curve,
-                                        curve_dipole_avg,
-                                        curve_dipole_err )
+                                        curve_monopole_avg,
+                                        curve_monopole_err )
 
             # End first process
         # End loop over form factor

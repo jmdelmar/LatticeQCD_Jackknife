@@ -66,19 +66,19 @@ def fitPlateau( data, err, start, end ):
 
 # Wrapper for numpy.polyfit to fit a plateau line to data in parallel
 
-def fitPlateau_parallel( data, start, end, mpi_confs_info ):
+def fitPlateau_parallel( data, start, end, mpi_info ):
 
     # data[ b, x ]
     # err[ b ]
     # start
     # end
 
-    comm = mpi_confs_info[ 'comm' ]
-    binNum = mpi_confs_info[ 'binNum_glob' ]
-    recvCount = mpi_confs_info[ 'recvCount' ]
-    recvOffset = mpi_confs_info[ 'recvOffset' ]
-    binList_loc = mpi_confs_info[ 'binList_loc' ]
-    binNum_loc = mpi_confs_info[ 'binNum_loc' ]
+    comm = mpi_info[ 'comm' ]
+    binNum = mpi_info[ 'binNum_glob' ]
+    recvCount = mpi_info[ 'recvCount' ]
+    recvOffset = mpi_info[ 'recvOffset' ]
+    binList_loc = mpi_info[ 'binList_loc' ]
+    binNum_loc = mpi_info[ 'binNum_loc' ]
 
     assert data.shape[ 0 ] == binNum, \
         "First dimension size of data " + str( data.shape[0] ) \
@@ -135,12 +135,12 @@ def fitPlateau_parallel( data, start, end, mpi_confs_info ):
 
 
 def testEffEnergyTwopFit( effEnergy, twop, rangeEnd, pSq, L, particle, 
-                          tsf, mpi_confs_info ):
+                          tsf, mpi_info ):
 
-    comm = mpi_confs_info[ 'comm' ]
-    rank = mpi_confs_info[ 'rank' ]
-    binNum = mpi_confs_info[ 'binNum_glob' ]
-    binNum_loc = mpi_confs_info[ 'binNum_loc' ]
+    comm = mpi_info[ 'comm' ]
+    rank = mpi_info[ 'rank' ]
+    binNum = mpi_info[ 'binNum_glob' ]
+    binNum_loc = mpi_info[ 'binNum_loc' ]
 
     assert effEnergy.shape[ 0 ] == binNum, \
         "First dimension size of effEnergy " + str( effEnergy.shape[0] ) \
@@ -166,7 +166,7 @@ def testEffEnergyTwopFit( effEnergy, twop, rangeEnd, pSq, L, particle,
         plat_fit, plat_chiSq, \
             = fitPlateau_parallel( effEnergy,
                                    plat_rangeStart, rangeEnd, 
-                                   mpi_confs_info )
+                                   mpi_info )
             
         if rank == 0:
 
@@ -197,13 +197,13 @@ def testEffEnergyTwopFit( effEnergy, twop, rangeEnd, pSq, L, particle,
                                                  twop_rangeStart,
                                                  rangeEnd_twop, 
                                                  E_guess, T,
-                                                 mpi_confs_info )
+                                                 mpi_info )
 
             effEnergy_tsf_fitParams, effEnergy_tsf_chiSq \
                     = twoStateFit_effEnergy( effEnergy, twop_rangeStart,
                                         rangeEnd_effEnergy, 
                                         E_guess, T,
-                                        mpi_confs_info )
+                                        mpi_info )
                 
         else: # One-state fit
         
@@ -290,12 +290,12 @@ def testEffEnergyTwopFit( effEnergy, twop, rangeEnd, pSq, L, particle,
 # tsf: Perform two-state fit if True, else perform one-state fit
 
 def effEnergyTwopFit( effEnergy, twop, rangeEnd, pSq, L, tsf, 
-                      mpi_confs_info, **kwargs ):
+                      mpi_info, **kwargs ):
 
-    comm = mpi_confs_info[ 'comm' ]
-    rank = mpi_confs_info[ 'rank' ]
-    binNum = mpi_confs_info[ 'binNum_glob' ]
-    binNum_loc = mpi_confs_info[ 'binNum_loc' ]
+    comm = mpi_info[ 'comm' ]
+    rank = mpi_info[ 'rank' ]
+    binNum = mpi_info[ 'binNum_glob' ]
+    binNum_loc = mpi_info[ 'binNum_loc' ]
 
     assert effEnergy.shape[ 0 ] == binNum, \
         "First dimension size of effEnergy " + str( effEnergy.shape[0] ) \
@@ -361,7 +361,7 @@ def effEnergyTwopFit( effEnergy, twop, rangeEnd, pSq, L, tsf,
 
         plat_fit, chiSq = fitPlateau_parallel( effEnergy,
                                                plat_t_low, rangeEnd, 
-                                               mpi_confs_info )
+                                               mpi_info )
 
         if rank == 0:
 
@@ -388,7 +388,7 @@ def effEnergyTwopFit( effEnergy, twop, rangeEnd, pSq, L, tsf,
                                                  twop_t_low,
                                                  rangeEnd, 
                                                  E_guess, T, 
-                                                 mpi_confs_info )
+                                                 mpi_info )
                     
                     if rank == 0:
 
@@ -401,7 +401,7 @@ def effEnergyTwopFit( effEnergy, twop, rangeEnd, pSq, L, tsf,
                                             twop_t_low,
                                             rangeEnd, 
                                             E_guess, T,
-                                            mpi_confs_info )
+                                            mpi_info )
 
                     if rank == 0:
 
@@ -489,15 +489,15 @@ def effEnergyTwopFit( effEnergy, twop, rangeEnd, pSq, L, tsf,
 # T: Time dimension length for ensemble
 
 def twoStateFit_twop( twop, rangeStart, rangeEnd, E_guess, T, 
-                      mpi_confs_info, **kwargs ):
+                      mpi_info, **kwargs ):
 
-    comm = mpi_confs_info[ 'comm' ]
-    rank = mpi_confs_info[ 'rank' ]
-    binNum = mpi_confs_info[ 'binNum_glob' ]
-    binNum_loc = mpi_confs_info[ 'binNum_loc' ]
-    binList_loc = mpi_confs_info[ 'binList_loc' ]
-    recvCount = mpi_confs_info[ 'recvCount' ]
-    recvOffset = mpi_confs_info[ 'recvOffset' ]
+    comm = mpi_info[ 'comm' ]
+    rank = mpi_info[ 'rank' ]
+    binNum = mpi_info[ 'binNum_glob' ]
+    binNum_loc = mpi_info[ 'binNum_loc' ]
+    binList_loc = mpi_info[ 'binList_loc' ]
+    recvCount = mpi_info[ 'recvCount' ]
+    recvOffset = mpi_info[ 'recvOffset' ]
 
     assert twop.shape[ 0 ] == binNum, \
         "First dimension size of two-point functions " \
@@ -647,15 +647,15 @@ def twoStateFit_twop_dispersionRelation( twop,
                                          rangeStart, rangeEnd,
                                          E_ground,
                                          pSq, L,
-                                         mpi_confs_info ):
+                                         mpi_info ):
 
-    comm = mpi_confs_info[ 'comm' ]
-    rank = mpi_confs_info[ 'rank' ]
-    binNum = mpi_confs_info[ 'binNum_glob' ]
-    binNum_loc = mpi_confs_info[ 'binNum_loc' ]
-    binList_loc = mpi_confs_info[ 'binList_loc' ]
-    recvCount = mpi_confs_info[ 'recvCount' ]
-    recvOffset = mpi_confs_info[ 'recvOffset' ]
+    comm = mpi_info[ 'comm' ]
+    rank = mpi_info[ 'rank' ]
+    binNum = mpi_info[ 'binNum_glob' ]
+    binNum_loc = mpi_info[ 'binNum_loc' ]
+    binList_loc = mpi_info[ 'binList_loc' ]
+    recvCount = mpi_info[ 'recvCount' ]
+    recvOffset = mpi_info[ 'recvOffset' ]
 
     assert twop.shape[ 0 ] == binNum, \
         "First dimension size of two-point functions " \
@@ -796,15 +796,15 @@ def twoStateFit_twop_dispersionRelation( twop,
 
 
 def twoStateFit_effEnergy( effEnergy, rangeStart, rangeEnd, E_guess, T, 
-                           mpi_confs_info ):
+                           mpi_info ):
 
-    comm = mpi_confs_info[ 'comm' ]
-    rank = mpi_confs_info[ 'rank' ]
-    binNum = mpi_confs_info[ 'binNum_glob' ]
-    binNum_loc = mpi_confs_info[ 'binNum_loc' ]
-    binList_loc = mpi_confs_info[ 'binList_loc' ]
-    recvCount = mpi_confs_info[ 'recvCount' ]
-    recvOffset = mpi_confs_info[ 'recvOffset' ]
+    comm = mpi_info[ 'comm' ]
+    rank = mpi_info[ 'rank' ]
+    binNum = mpi_info[ 'binNum_glob' ]
+    binNum_loc = mpi_info[ 'binNum_loc' ]
+    binList_loc = mpi_info[ 'binList_loc' ]
+    recvCount = mpi_info[ 'recvCount' ]
+    recvOffset = mpi_info[ 'recvOffset' ]
 
     assert effEnergy.shape[ 0 ] == binNum, \
         "First dimension size of effective mass " \
@@ -926,17 +926,17 @@ def twoStateFit_effEnergy( effEnergy, rangeStart, rangeEnd, E_guess, T,
 # T: Time dimension length for ensemble
 
 def twoStateFit_threep( threep, ti_to_fit, tsink, E0, E1,
-                        mpi_confs_info ):
+                        mpi_info ):
 
     # Set mpi info
 
-    comm = mpi_confs_info[ 'comm' ]
-    rank = mpi_confs_info[ 'rank' ]
-    binNum = mpi_confs_info[ 'binNum_glob' ]
-    binNum_loc = mpi_confs_info[ 'binNum_loc' ]
-    binList_loc = mpi_confs_info[ 'binList_loc' ]
-    recvCount = mpi_confs_info[ 'recvCount' ]
-    recvOffset = mpi_confs_info[ 'recvOffset' ]
+    comm = mpi_info[ 'comm' ]
+    rank = mpi_info[ 'rank' ]
+    binNum = mpi_info[ 'binNum_glob' ]
+    binNum_loc = mpi_info[ 'binNum_loc' ]
+    binList_loc = mpi_info[ 'binList_loc' ]
+    recvCount = mpi_info[ 'recvCount' ]
+    recvOffset = mpi_info[ 'recvOffset' ]
 
     # Set and check array dimensions
 
@@ -1537,20 +1537,23 @@ def twoStateFit_threep_momTransfer( threep_loc, tsink, m0E0, E1,
 
                 comm.Allgatherv( fit_loc, 
                                  [ results_buffer,
-                                   recvCount * np.prod( fit_loc.shape[ 1: ] ),
-                                   recvOffset * np.prod( fit_loc.shape[ 1: ] ),
+                                   recvCount
+                                   * np.prod( fit_loc.shape[ 1: ] ),
+                                   recvOffset
+                                   * np.prod( fit_loc.shape[ 1: ] ),
                                    MPI.DOUBLE ] )
 
                 results[ :, ip, iq, ir, : ] = results_buffer
 
-                #mpi_fncs.mpiPrint( "Fit two-point functions to two-state fit " \
-                    #                   + "at q=({:+},{:+},{:+})".format( q[ 0 ],
-                #                                                     q[ 1 ],
-                #                                                     q[ 2 ] ),
-                #                   mpi_info )
-            
             # End loop over ratio
         # End loop over q
+
+        mpi_fncs.mpiPrint( "Fit three-point functions at "
+                           + "p'=({:+},{:+},{:+})".format( p[ 0 ],
+                                                           p[ 1 ],
+                                                           p[ 2 ] ),
+                           mpi_info )
+
     # End loop over final momentum
 
     return results
@@ -2132,24 +2135,39 @@ def fitFormFactor( vals, vals_err, tsink, plusMinus ):
 # paramNum
 # mpi_info
 
-def fitFormFactor_dipole( F, F_err, Qsq, paramNum, mpi_info ):
+def fitFormFactor_monopole( F, F_err, Qsq, paramNum, mpi_info, **kwargs ):
+
+    binNum = F.shape[ 0 ]
+
+    if "Qsq_last" in kwargs and kwargs[ "Qsq_last" ]:
+
+        # Cut data at Qsq_last
+
+        Qsq_where = Qsq <= kwargs[ "Qsq_last" ]
+
+        F = F[ Qsq_where ]
+        F = F.reshape( binNum, F.size // binNum )
+
+        F_err = F_err[ Qsq_where[ 0 ] ]
+
+        Qsq = Qsq[ Qsq_where ]
+        Qsq = Qsq.reshape( binNum, Qsq.size // binNum )
 
     # Get dimension lengths
 
-    binNum = F.shape[ 0 ]
     QsqNum = F.shape[ 1 ]
 
     # Check dimension lengths
 
-    if QsqNum != len(F_err ) and QsqNum != Qsq.shape[ 1 ]:
+    if QsqNum != len( F_err ) and QsqNum != Qsq.shape[ 1 ]:
 
-        errorTemplate = "Error( lqcdjk_fitting.fitFormFactor_dipole: " \
+        errorTemplate = "Error( lqcdjk_fitting.fitFormFactor_monopole: " \
                         + "length of Qsq dimension in form factors {}, " \
                         + "form factor errors {}, and Qsq {} do not match."
         errorMessage = errorTemplate.format( QsqNum, len( F_err ),
                                              Qsq.shape[ 1 ] )
 
-        if mp_info:
+        if mpi_info:
 
             mpi_fncs.mpiError( errorMessage, mpi_info )
         
@@ -2162,14 +2180,20 @@ def fitFormFactor_dipole( F, F_err, Qsq, paramNum, mpi_info ):
 
     # Degrees of freedom
 
-    dof = QsqNum - paramNum + 1
+    dof = QsqNum - paramNum
 
-    # Initial guess for m
+    # Initial guess for M
 
-    m = 1.5
+    if "M0" in kwargs and kwargs[ "M0" ]:
+
+        M = kwargs[ "M0" ]
+
+    else:
+
+        M = 1.25
 
     # Initialize fit parameters
-    # fitParams[ b, [ m, F0 ] ]
+    # fitParams[ b, [ M, F0 ] ]
 
     fitParams = np.zeros( ( binNum, 2 ) )
     chiSq = np.zeros( binNum )
@@ -2181,32 +2205,38 @@ def fitFormFactor_dipole( F, F_err, Qsq, paramNum, mpi_info ):
 
             F0 = F[ ib, 0 ]
 
-            leastSq = minimize( dipoleCostFunction,
-                                [ m ],
+            leastSq = minimize( monopoleCostFunction,
+                                [ M ],
                                 args = ( F[ ib ],
                                          F_err,
                                          Qsq[ ib ],
                                          F0 ),
-                                method="CG" )
+                                method="BFGS" )
 
-            # m
+            # M
             fitParams[ ib, 0 ] = leastSq.x
             # F0
             fitParams[ ib, 1 ] = F0
 
         elif paramNum == 2:
 
-            F0 = 1.0
+            if "F0" in kwargs and kwargs[ "F0" ]:
 
-            leastSq = minimize( dipoleCostFunction,
-                                [ m, F0 ],
+                F0 = kwargs[ "F0" ]
+
+            else:
+
+                F0 = 1.0
+
+            leastSq = minimize( monopoleCostFunction,
+                                [ M, F0 ],
                                 args = ( F[ ib ],
                                          F_err,
                                          Qsq[ ib ],
                                          None ),
-                                method="CG" )
+                                method="BFGS" )
 
-            # [ m, F0 ]
+            # [ M, F0 ]
             fitParams[ ib ] = leastSq.x
 
         # End if 2 params
@@ -2216,7 +2246,7 @@ def fitFormFactor_dipole( F, F_err, Qsq, paramNum, mpi_info ):
     return fitParams, chiSq / dof
 
 
-def dipoleCostFunction( fitParams, F, F_err, Qsq, F0_const ):
+def monopoleCostFunction( fitParams, F, F_err, Qsq, F0_const ):
 
     m = fitParams[ 0 ]
 
@@ -2224,18 +2254,18 @@ def dipoleCostFunction( fitParams, F, F_err, Qsq, F0_const ):
 
     if paramNum == 1:
 
-        errorFunction = ( dipole( Qsq, m, F0_const ) - F ) / F_err
+        errorFunction = ( monopole( Qsq, m, F0_const ) - F ) / F_err
 
     elif paramNum == 2:
 
         F0 = fitParams[ 1 ]
 
-        errorFunction = ( dipole( Qsq, m, F0 ) - F ) / F_err
+        errorFunction = ( monopole( Qsq, m, F0 ) - F ) / F_err
     
     return np.sum( errorFunction ** 2 )
 
 
-def dipole( Qsq, m, F0 ):
+def monopole( Qsq, m, F0 ):
 
     return F0 / ( 1 + Qsq / m ** 2 )
 
@@ -2536,7 +2566,7 @@ def calcPDFcurve( a, b, c, xNum ):
     return curve, x
 
 
-def calcDipoleCurve( m, F0, Qsq_last ):
+def calcMonopoleCurve( m, F0, Qsq_last ):
 
     # m[ b ]
     # F0[ b ]
@@ -2552,7 +2582,7 @@ def calcDipoleCurve( m, F0, Qsq_last ):
     for ib in range( binNum ):
         for iq in range( QsqNum ):
             
-            curve[ ib, iq ] = dipole( Qsq[ iq ], m[ ib ], F0[ ib ] )
+            curve[ ib, iq ] = monopole( Qsq[ iq ], m[ ib ], F0[ ib ] )
 
         # End loop over Q^2
     # End loop over bins

@@ -19,12 +19,12 @@ parser = argp.ArgumentParser( description="Calculate the ratio "
 parser.add_argument( "data_dir", action='store', type=str )
 
 parser.add_argument( "numer_params_template", action='store',
-                     help="Filename template for dipole fit parameters "
+                     help="Filename template for monopole fit parameters "
                      + "for the form factor in the numerator",
                      type=str )
 
 parser.add_argument( "denom_params_template", action='store',
-                     help="Filename template for dipole fit parameters "
+                     help="Filename template for monopole fit parameters "
                      + "for the form factor in the denominator",
                      type=str )
 
@@ -40,7 +40,7 @@ parser.add_argument( 'particle_flavor', action='store',
                      type=lambda s: [str(item) for item in s.split(',')] )
 
 parser.add_argument( "Qsq_last", action='store',
-                     help="Last Q^2 to be included in dipole curve "
+                     help="Last Q^2 to be included in monopole curve "
                      + "calculation",
                      type=float )
 
@@ -103,13 +103,13 @@ F0_denom = rw.readNthDataCol( denom_params_filename, 1 )
 
 
 ###########################
-# Calculate dipole curves #
+# Calculate monopole curves #
 ###########################
 
 
-curve_numer, Qsq = fit.calcDipoleCurve( m_numer, F0_numer, Qsq_last )
+curve_numer, Qsq = fit.calcMonopoleCurve( m_numer, F0_numer, Qsq_last )
 
-curve_denom, Qsq = fit.calcDipoleCurve( m_denom, F0_denom, Qsq_last )
+curve_denom, Qsq = fit.calcMonopoleCurve( m_denom, F0_denom, Qsq_last )
 
 curve_numer_avg = np.average( curve_numer, axis=0 )
 curve_numer_err = fncs.calcError( curve_numer, binNum )
@@ -133,19 +133,19 @@ ratio_err = fncs.calcError( ratio, binNum )
 ######################
 
 
-# Numerator dipole curve
+# Numerator monopole curve
 
 output_filename = rw.makeFilename( output_template,
-                                   "{}_dipole_curve_{}",
+                                   "{}_monopole_curve_{}",
                                    formFactor, part_flav[ 0 ] )
 
 rw.writeAvgDataFile_wX( output_filename, Qsq,
                         curve_numer_avg, curve_numer_err )
 
-# Denominator dipole curve
+# Denominator monopole curve
 
 output_filename = rw.makeFilename( output_template,
-                                   "{}_dipole_curve_{}",
+                                   "{}_monopole_curve_{}",
                                    formFactor, part_flav[ 1 ] )
 
 rw.writeAvgDataFile_wX( output_filename, Qsq,
