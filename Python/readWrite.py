@@ -2908,6 +2908,7 @@ def readFormFactorFile_BT10( threepDir, threep_tokens, srcNum,
                               threep_loc[ :, :, :, 4, : ].real,
                               threep_loc[ :, :, :, 5, : ].real ],
                             axis=3 )
+    threep_loc = -threep_loc
 
     return threep_loc
 
@@ -4131,7 +4132,7 @@ def writeTSFParamsFile( filename, params, params_err ):
 
     print( "Wrote " + filename )
 
-def writeDipoleFitParamsFile( filename, params, params_err, rSq, rSq_err ):
+def writeMonopoleFitParamsFile( filename, params, params_err, rSq, rSq_err ):
 
     with open( filename, "w" ) as output:
 
