@@ -49,8 +49,8 @@ parser.add_argument( "formFactor_filename_template", action='store',
 
 parser.add_argument( "formFactor_tsf_filename_template", action='store',
                      type=lambda s: [str(item) for item in s.split(',')],
-                     help="Comma seperated list of the 2-state fit form factor "
-                     + "filename template for each momentum frame." )
+                     help="Comma seperated list of the 2-state fit form "
+                     + "factor filename template for each momentum frame." )
 
 parser.add_argument( "form_factor", action='store', type=str,
                      help="Form factor to calculate. Must be one of "
@@ -75,12 +75,12 @@ parser.add_argument( "binNum", action='store', type=int,
 
 parser.add_argument( "--Qsq_last_rest", action='store',
                      type=float, default=100.,
-                     help="Number of  Q^2 to include in the dipole fit "
+                     help="Number of  Q^2 to include in the monopole fit "
                      + "for the rest frame." )
 
 parser.add_argument( "--Qsq_last_boost", action='store',
                      type=float, default=100.,
-                     help="Number of  Q^2 to include in the dipole fit "
+                     help="Number of  Q^2 to include in the monopole fit "
                      + "for the boosted frame." )
 
 parser.add_argument( "-o", "--output_template", action='store',
@@ -157,6 +157,15 @@ elif formFactor == "A40_B40_C40":
 
     F_str = [ "A40", "B40", "C40" ]
 
+else:
+
+    errorMessage = "Error (formFactors.py): {} form factor " \
+    + "is not supported."
+
+    print( errorMessage.format( formFactor ) )
+
+    exit( -1 )    
+
 # Check inputs
 
 # Check that particle is valid
@@ -173,8 +182,9 @@ if formFactor in [ "A30_B30", "A40_B40_C40" ] and pSq_fin == 0:
     errorMessage = "Error (formFactors.py): {} form factors cannot be " \
                    + "calculated in the rest frame."
 
-    mpi_fncs.mpiPrintError( errorMessage.format( formFactor ),
-                            mpi_confs_info )
+    print( errorMessage.format( formFactor ) )
+
+    exit( -1 )
 
 # Set projectors and flavors based on particle
 
@@ -198,7 +208,7 @@ elif particle == "kaon":
     
 elif particle == "nucleon":
 
-    print( "Error (dipoleFit.py): nucleon not supported." )
+    print( "Error (monopoleFit.py): nucleon not supported." )
 
     exit()
 
@@ -302,48 +312,48 @@ for ff, iff in fncs.zipXandIndex( F_str ):
                 F_avg = F_avg[ F_avg != 0. ]
 
             #################################################
-            # Fit the form factors to a dipole distribution #
+            # Fit the form factors to a monopole distribution #
             #################################################
 
 
             # Loop over number of parameters
 
-            for paramNum_dipole in 1, 2:
+            for paramNum_monopole in 1, 2:
 
-                # Fit form factors to dipole
+                # Fit form factors to monopole
                 # fitParams[ b, param ]
 
-                fitParams_dipole, chiSq_dipole \
-                    = fit.fitFormFactor_dipole( F, F_err,
+                fitParams_monopole, chiSq_monopole \
+                    = fit.fitFormFactor_monopole( F, F_err,
                                                 Qsq,
-                                                paramNum_dipole,
+                                                paramNum_monopole,
                                                 None )
                                
-                m_dipole = fitParams_dipole[ :, 0 ]
-                F0_dipole = fitParams_dipole[ :, 1 ]
+                M_monopole = fitParams_monopole[ :, 0 ]
+                F0_monopole = fitParams_monopole[ :, 1 ]
 
                 # Calculate r^2
             
-                rSq = 6. / m_dipole ** 2
+                rSq = pq.rSq_fm ( M_monopole )
 
-                # Calculate dipole curve
-                # curve_dipole[ b ]
+                # Calculate monopole curve
+                # curve_monopole[ b ]
 
-                curve_dipole, Qsq_curve \
-                    = fit.calcDipoleCurve( m_dipole, F0_dipole,
+                curve_monopole, Qsq_curve \
+                    = fit.calcMonopoleCurve( M_monopole, F0_monopole,
                                            Qsq_avg[ -1 ] )
 
                 # Average over bins
 
-                fitParams_dipole_avg = np.average( fitParams_dipole, axis=0 )
-                fitParams_dipole_err = fncs.calcError( fitParams_dipole,
+                fitParams_monopole_avg = np.average( fitParams_monopole, axis=0 )
+                fitParams_monopole_err = fncs.calcError( fitParams_monopole,
                                                        binNum )
                 
                 rSq_avg = np.average( rSq, axis=0 )
                 rSq_err = fncs.calcError( rSq, binNum )
 
-                curve_dipole_avg = np.average( curve_dipole, axis=0 )
-                curve_dipole_err = fncs.calcError( curve_dipole, binNum )
+                curve_monopole_avg = np.average( curve_monopole, axis=0 )
+                curve_monopole_err = fncs.calcError( curve_monopole, binNum )
 
                 
                 ######################
@@ -351,46 +361,46 @@ for ff, iff in fncs.zipXandIndex( F_str ):
                 ######################
 
 
-                # Write dipole fit parameter file for each bin
+                # Write monopole fit parameter file for each bin
                     
                 output_filename \
                     = rw.makeFilename( output_template,
-                                       "{}_dipoleFitParams_per_bin_{}{}"
+                                       "{}_monopoleFitParams_per_bin_{}{}"
                                        + "_{}params_tsink{}",
                                        ff, particle, flav,
-                                       paramNum_dipole, ts )
+                                       paramNum_monopole, ts )
 
                 rw.write2ValueDataFile( output_filename,
-                                        fitParams_dipole[ :, 0 ],
-                                        fitParams_dipole[ :, 1 ] )
+                                        fitParams_monopole[ :, 0 ],
+                                        fitParams_monopole[ :, 1 ] )
 
                 # Write average fit parameter file and r^2
                     
                 output_filename \
                     = rw.makeFilename( output_template,
-                                       "{}_dipoleFitParams"
+                                       "{}_monopoleFitParams"
                                        + "_{}{}_{}params_tsink{}",
                                        ff, particle, flav,
-                                       paramNum_dipole, ts )
+                                       paramNum_monopole, ts )
 
-                rw.writeDipoleFitParamsFile( output_filename,
-                                             fitParams_dipole_avg,
-                                             fitParams_dipole_err,
+                rw.writeMonopoleFitParamsFile( output_filename,
+                                             fitParams_monopole_avg,
+                                             fitParams_monopole_err,
                                              rSq_avg, rSq_err )
 
-                # Write dipole fit curve
+                # Write monopole fit curve
                     
                 output_filename \
                     = rw.makeFilename( output_template,
-                                       "{}_dipole_curve_{}{}"
+                                       "{}_monopole_curve_{}{}"
                                        + "_{}params_tsink{}",
                                        ff, particle, flav,
-                                       paramNum_dipole, ts )
+                                       paramNum_monopole, ts )
 
                 rw.writeAvgDataFile_wX( output_filename,
                                         Qsq_curve,
-                                        curve_dipole_avg,
-                                        curve_dipole_err )
+                                        curve_monopole_avg,
+                                        curve_monopole_err )
 
             # End loop over parameter number
         # End loop over tsink
@@ -491,48 +501,48 @@ for ff, iff in fncs.zipXandIndex( F_str ):
 
 
         #################################################
-        # Fit the form factors to a dipole distribution #
+        # Fit the form factors to a monopole distribution #
         #################################################
 
 
         # Loop over number of parameters
 
-        for paramNum_dipole in 1, 2:
+        for paramNum_monopole in 1, 2:
 
-            # Fit form factors to dipole
+            # Fit form factors to monopole
             # fitParams[ b, param ]
             
-            fitParams_dipole, chiSq_dipole \
-                = fit.fitFormFactor_dipole( F, F_err,
+            fitParams_monopole, chiSq_monopole \
+                = fit.fitFormFactor_monopole( F, F_err,
                                             Qsq,
-                                            paramNum_dipole,
+                                            paramNum_monopole,
                                             None )
                                
-            m_dipole = fitParams_dipole[ :, 0 ]
-            F0_dipole = fitParams_dipole[ :, 1 ]
+            M_monopole = fitParams_monopole[ :, 0 ]
+            F0_monopole = fitParams_monopole[ :, 1 ]
             
             # Calculate r^2
 
-            rSq = 6. / m_dipole ** 2
+            rSq = pq.rSq_fm( M_monopole )
 
-            # Calculate dipole curve
-            # curve_dipole[ b ]
+            # Calculate monopole curve
+            # curve_monopole[ b ]
             
-            curve_dipole, Qsq_curve \
-                = fit.calcDipoleCurve( m_dipole, F0_dipole,
+            curve_monopole, Qsq_curve \
+                = fit.calcMonopoleCurve( M_monopole, F0_monopole,
                                        Qsq_avg[ -1 ] )
             
             # Average over bins
             
-            fitParams_dipole_avg = np.average( fitParams_dipole, axis=0 )
-            fitParams_dipole_err = fncs.calcError( fitParams_dipole,
+            fitParams_monopole_avg = np.average( fitParams_monopole, axis=0 )
+            fitParams_monopole_err = fncs.calcError( fitParams_monopole,
                                                    binNum )
             
             rSq_avg = np.average( rSq, axis=0 )
             rSq_err = fncs.calcError( rSq, binNum )
 
-            curve_dipole_avg = np.average( curve_dipole, axis=0 )
-            curve_dipole_err = fncs.calcError( curve_dipole, binNum )
+            curve_monopole_avg = np.average( curve_monopole, axis=0 )
+            curve_monopole_err = fncs.calcError( curve_monopole, binNum )
 
 
             ######################
@@ -540,46 +550,46 @@ for ff, iff in fncs.zipXandIndex( F_str ):
             ######################
 
 
-            # Write dipole fit parameter file for each bin
+            # Write monopole fit parameter file for each bin
 
             output_filename \
                 = rw.makeFilename( output_template,
-                                   "{}_dipoleFitParams_per_bin_2sf_{}{}"
+                                   "{}_monopoleFitParams_per_bin_2sf_{}{}"
                                    + "_{}params",
                                    ff, particle, flav,
-                                   paramNum_dipole )
+                                   paramNum_monopole )
 
             rw.write2ValueDataFile( output_filename,
-                                    fitParams_dipole[ :, 0 ],
-                                    fitParams_dipole[ :, 1 ] )
+                                    fitParams_monopole[ :, 0 ],
+                                    fitParams_monopole[ :, 1 ] )
             
             # Write average fit parameter file and r^2
                     
             output_filename \
                 = rw.makeFilename( output_template,
-                                   "{}_dipoleFitParams"
+                                   "{}_monopoleFitParams"
                                    + "_2sf_{}{}_{}params",
                                    ff, particle, flav,
-                                   paramNum_dipole )
+                                   paramNum_monopole )
 
-            rw.writeDipoleFitParamsFile( output_filename,
-                                         fitParams_dipole_avg,
-                                         fitParams_dipole_err,
+            rw.writeMonopoleFitParamsFile( output_filename,
+                                         fitParams_monopole_avg,
+                                         fitParams_monopole_err,
                                          rSq_avg, rSq_err )
 
-            # Write dipole fit curve
+            # Write monopole fit curve
                     
             output_filename \
                 = rw.makeFilename( output_template,
-                                   "{}_dipole_curve_2sf_{}{}"
+                                   "{}_monopole_curve_2sf_{}{}"
                                    + "_{}params",
                                    ff, particle, flav,
-                                   paramNum_dipole )
+                                   paramNum_monopole )
 
             rw.writeAvgDataFile_wX( output_filename,
                                     Qsq_curve,
-                                    curve_dipole_avg,
-                                    curve_dipole_err )
+                                    curve_monopole_avg,
+                                    curve_monopole_err )
 
             
 

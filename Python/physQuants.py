@@ -80,6 +80,10 @@ def calcQsq( p_fin, q_list, mEff, L, mpi_info ):
     return Qsq_list, QsqNum, Qsq_where
 
 
+def rSq_fm( M ):
+
+    return 6. / M ** 2 / 5.068 ** 2
+
 # KK = sqrt( 2E ( E + m ) )
 
 def KK_nucleon( mEff, Qsq, L ):
