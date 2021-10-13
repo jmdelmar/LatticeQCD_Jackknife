@@ -71,8 +71,6 @@ particle = args.particle
 
 flavor = args.flavor
 
-Qsq_last = args.Qsq_last
-
 pSq = [ 0, 3 ]
 pSqNum = len( pSq )
 
@@ -85,12 +83,12 @@ if len( F_template ) != pSqNum:
 
     exit()
 
-if len( Qsq_last ) != pSqNum:
+if len( args.Qsq_last ) != pSqNum:
 
-    error_template = "Error (vectorTensorFFRatio.py): length of Qsq_last {} " \
+    error_template = "Error (vectorTensorFFRatio.py): length of args.Qsq_last {} " \
                      "does not match length of form factor filename templates {}."
 
-    print( error_template.format( len( Qsq_last ), pSqNum ) )
+    print( error_template.format( len( args.Qsq_last ), pSqNum ) )
 
     exit()
 
@@ -316,10 +314,31 @@ for ps, ips in fncs.zipXandIndex( pSq ):
 
 # End loop over p^2
 
+# Cut ratio at args.Qsq_last
 
-###########################################
+# Loop over p^2
+for ps, ips in fncs.zipXandIndex( pSq ):
+
+    Qsq_where = Qsq_avg[ ips ] <= args.Qsq_last[ ips ]
+
+    Qsq_avg[ ips ] = Qsq_avg[ ips ][ Qsq_where ]
+
+    ratio_avg[ ips ] = ratio_avg[ ips ][ Qsq_where ]
+    ratio_err[ ips ] = ratio_err[ ips ][ Qsq_where ]
+
+    Qsq_flavor_where = Qsq_flavor_avg[ ips ] <= args.Qsq_last[ ips ]
+
+    Qsq_flavor_avg[ ips ] = Qsq_flavor_avg[ ips ][ Qsq_flavor_where ]
+
+    ratio_flavor_avg[ ips ] = ratio_flavor_avg[ ips ][ Qsq_flavor_where ]
+    ratio_flavor_err[ ips ] = ratio_flavor_err[ ips ][ Qsq_flavor_where ]
+
+# End loop over p^2
+
+
+#############################################
 # Calculate monopole curves and their ratio #
-###########################################
+#############################################
     
 
 # Find highest Q^2 for all frames which will
@@ -337,10 +356,10 @@ for ps, ips in fncs.zipXandIndex( pSq ):
 # End loop over p^2
 
 curve_tensor, Qsq_curve = fit.calcMonopoleCurve( M[ 0 ], F0[ 0 ],
-                                               Qsq_last )
+                                                 Qsq_last )
 
 curve_vector, Qsq_curve = fit.calcMonopoleCurve( M[ 1 ], F0[ 1 ],
-                                               Qsq_last )
+                                                 Qsq_last )
 
 curve_vector_flavor, Qsq_flavor_curve \
     = fit.calcMonopoleCurve( M[ 2 ], F0[ 2 ], Qsq_flavor_last )
@@ -389,13 +408,6 @@ for ps, ips in fncs.zipXandIndex( pSq ):
 # End loop over p^2
 
 # Write ratio curve
-
-output_filename = rw.makeFilename( output_template,
-                                   "tensor_vector_curve_ratio_{}_{}_{}",
-                                   particle, flavor, flavor )
-
-rw.writeAvgDataFile_wX( output_filename, Qsq_flavor_curve,
-                        curve_ratio_flavor_avg, curve_ratio_flavor_err )
 
 output_filename = rw.makeFilename( output_template,
                                    "tensor_vector_curve_ratio_{}_{}",
