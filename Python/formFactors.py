@@ -1331,17 +1331,6 @@ for ts, its in fncs.zipXandIndex( tsink ):
                                              Qsq_where[ iflav ], 1,
                                              mpi_confs_info )
 
-            #F_ti_loc = np.zeros( ( binNum_loc, len( F_str ), ts + 1 ) )
-
-            # Loop over bins
-            #for ib in range( binNum_loc ):
-            # Loop over form factors
-            #    for ff, iff in fncs.zipXandIndex( F_str ):
-                        
-            #        F_ti_loc[ ib, iff ] = Z * ratio_loc[ ib, ip, 0, 0, : ] \
-            #                              / kineFactor_loc[ ib, ip, 0, 0, iff ] \
-            #                              / ratio_fit_err[ ip, 0, 0 ] ** 2
-            
             # Gather F_ti
             # F_ti[ b, ff, t ]
 
@@ -1363,23 +1352,31 @@ for ts, its in fncs.zipXandIndex( tsink ):
                 F_ti_avg = np.average( F_ti, axis=0 )
                 F_ti_err = fncs.calcError( F_ti, binNum )
 
-                # Write form factor output files
-
                 # Loop over form factors
                 for ff, iff in fncs.zipXandIndex( F_str ):
                     
-                    output_filename \
-                        = rw.makeFilename( output_template,
-                                           "{}_ti_{}_{}_tsink{}"
-                                           + "_{:+}_{:+}_{:+}_Qsq{}"
-                                           + "_{}configs_binSize{}",
-                                           ff, particle, flav_str[ iflav ],
-                                           ts, p[ 0 ], p[ 1 ], p[ 2 ], 1,
-                                           configNum, binSize )
+                    F_ti_plat, dummy = fit.fitPlateau( F_ti[ :, iff, : ],
+                                                       F_ti_err[ iff ],
+                                                       ts // 2 - 2,
+                                                       ts // 2 + 2 )
 
-                    rw.writeAvgDataFile( output_filename,
-                                         F_ti_avg[ iff ],
-                                         F_ti_err[ iff ] )
+                    F_ti_plat_avg = np.average( F_ti_plat, axis=0 )
+                    F_ti_plat_err = fncs.calcError( F_ti_plat, binNum )
+
+                    # Write form factor output files
+
+                    #output_filename \
+                    #    = rw.makeFilename( output_template,
+                    #                       "{}_ti_{}_{}_tsink{}"
+                    #                       + "_{:+}_{:+}_{:+}_Qsq{}"
+                    #                       + "_{}configs_binSize{}",
+                    #                       ff, particle, flav_str[ iflav ],
+                    #                       ts, p[ 0 ], p[ 1 ], p[ 2 ], 1,
+                    #                       configNum, binSize )
+
+                    #rw.writeAvgDataFile( output_filename,
+                    #                     F_ti_avg[ iff ],
+                    #                     F_ti_err[ iff ] )
 
                     output_filename \
                         = rw.makeFilename( output_template,
@@ -1393,6 +1390,20 @@ for ts, its in fncs.zipXandIndex( tsink ):
                     rw.writeAvgDataFile( output_filename,
                                          F_ti_avg[ iff ],
                                          F_ti_err[ iff ] )
+
+                    output_filename \
+                        = rw.makeFilename( output_template,
+                                           "{}_{}_{}_tsink{}"
+                                           + "_psq{}_Qsq{}"
+                                           + "_{}configs_binSize{}",
+                                           ff, particle, flav_str[ iflav ],
+                                           ts, pSq_fin, 1,
+                                           configNum, binSize )
+
+                    rw.writeFitDataFile( output_filename,
+                                         F_ti_plat_avg,
+                                         F_ti_plat_err,
+                                         ts // 2 - 2, ts // 2 + 2 )
 
                 # End loop over form factors
             # End 1st process
