@@ -1322,14 +1322,26 @@ for ts, its in fncs.zipXandIndex( tsink ):
         #for p, ip in fncs.zipXandIndex( p_fin[ iflav ] ):
         #if False:
 
+            if formFactor == "A20_B20":
+
+                # Off-diagonal insertions have a different factor
+
+                ratio_loc[ ..., 0 ] = Z[ 0 ] * ratio_loc[ ..., 0 ]
+
+                ratio_loc[ ..., 1: ] = Z[ 1 ] * ratio_loc[ ..., 1: ]
+
+            else:
+
+                ratio_loc = Z * ratio_loc
+
             # Calculate F as a function of ti for Q^2=1
             # F_ti_loc[ b_loc, ff, t ]
 
             F_ti_loc \
-                = Z * pq.calcFormFactors_ti( kineFactor_loc,
-                                             ratio_loc, ratio_fit_err,
-                                             Qsq_where[ iflav ], 1,
-                                             mpi_confs_info )
+                = pq.calcFormFactors_ti( kineFactor_loc,
+                                         ratio_loc, ratio_fit_err,
+                                         Qsq_where[ iflav ], 1,
+                                         mpi_confs_info )
 
             # Gather F_ti
             # F_ti[ b, ff, t ]
