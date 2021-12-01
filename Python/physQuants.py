@@ -65,11 +65,6 @@ def calcQsq( p_fin, q_list, mEff, L, mpi_info ):
             error = "Error (physQuants.fourVectorQsq): " \
                     "Qsq_where[ {} ] != Qsq_where[ 0 ]" 
         
-            mpi_fncs.mpiPrint( Qsq_where[ ib ],
-                               mpi_info )
-            mpi_fncs.mpiPrint( Qsq_where[ 0 ],
-                               mpi_info )
-
             mpi_fncs.mpiPrintError( error.format( ib ),
                                     mpi_info )
 
@@ -286,7 +281,7 @@ def kineFactor_BT10( ratio_err, particle, flavor, mEff, p_fin, Q, L,
 
     if particle == "nucleon":
         
-        errorMessage = "Error (physQuants.kineFactor_A20_B20): " \
+        errorMessage = "Error (physQuants.kineFactor_BT10): " \
                        + "function not supported for nucleon"
         
         mpi_fncs.mpiPrintError( errorMessage,
@@ -294,7 +289,7 @@ def kineFactor_BT10( ratio_err, particle, flavor, mEff, p_fin, Q, L,
 
     if p_fin.shape[ 0 ] != finalMomentaNum:
 
-        error_template = "Error (kineFactor_A20_B20): " \
+        error_template = "Error (kineFactor_BT10): " \
                          + "final momentum dimension " \
                          + "of ratio errors {} and " \
                          + "number of final momenta {} " \
@@ -306,7 +301,7 @@ def kineFactor_BT10( ratio_err, particle, flavor, mEff, p_fin, Q, L,
         
     if Q.shape[ 0 ] != QNum:
 
-        error_template = "Error (kineFactor_A20_B20): " \
+        error_template = "Error (kineFactor_BT10): " \
                          + "momentum transfer dimension " \
                          + "of ratio errors {} and " \
                          + "number of momentum transfer {} " \
@@ -399,7 +394,7 @@ def kineFactor_FS( ratio_err, particle, flavor, mEff, p_fin, Q, L,
 
     if particle == "nucleon":
         
-        errorMessage = "Error (physQuants.kineFactor_A20_B20): " \
+        errorMessage = "Error (physQuants.kineFactor_FS): " \
                        + "function not supported for nucleon"
         
         mpi_fncs.mpiPrintError( errorMessage,
@@ -407,7 +402,7 @@ def kineFactor_FS( ratio_err, particle, flavor, mEff, p_fin, Q, L,
 
     if p_fin.shape[ 0 ] != finalMomentaNum:
 
-        error_template = "Error (kineFactor_A20_B20): " \
+        error_template = "Error (kineFactor_FS): " \
                          + "final momentum dimension " \
                          + "of ratio errors {} and " \
                          + "number of final momenta {} " \
@@ -419,7 +414,7 @@ def kineFactor_FS( ratio_err, particle, flavor, mEff, p_fin, Q, L,
         
     if Q.shape[ 0 ] != QNum:
 
-        error_template = "Error (kineFactor_A20_B20): " \
+        error_template = "Error (kineFactor_FS): " \
                          + "momentum transfer dimension " \
                          + "of ratio errors {} and " \
                          + "number of momentum transfer {} " \
@@ -543,13 +538,13 @@ def kineFactor_A20_B20( ratio_err, particle, flavor, mEff, p_fin, Q, L,
                                     * ( p[ 0 ] * p_ini[ 0 ]
                                         + p[ 1 ] * p_ini[ 1 ]
                                         + p[ 2 ] * p_ini[ 2 ] ) ),
-                          -( mEff[ b ] ** 2
+                          mEff[ b ] ** 2
                              - 2 * ( E_fin - E_ini ) ** 2
                              - E_fin * E_ini
                              + ( 2. * np.pi / L ) ** 2
                              * ( p[ 0 ] * p_ini[ 0 ]
                                  + p[ 1 ] * p_ini[ 1 ]
-                                 + p[ 2 ] * p_ini[ 2 ] ) ) ],
+                                 + p[ 2 ] * p_ini[ 2 ] ) ],
                         [ 1./2. * ( E_fin + E_ini )
                           * 2. * np.pi / L
                           * ( p[ 0 ] + p_ini[ 0 ] ),
@@ -719,6 +714,8 @@ def kineFactor_A30_B30( ratio_err, particle, flavor, mEff, p_fin, Q, L,
         # End loop over p_fin
     # End loop over bins
 
+    kineFactor = -kineFactor
+
     return kineFactor
 
 
@@ -832,7 +829,7 @@ def kineFactor_A40_B40_C40( ratio_err, particle, flavor,
                                           * p[ 2 ] * p_ini[ 1 ]
                                           + 1./2. * p[ 0 ]
                                           * p[ 1 ] * p_ini[ 2 ] )
-                              - E_ini * ( 1./2. * p[ 2 ]
+                              + E_ini * ( 1./2. * p[ 2 ]
                                           * p_ini[ 0 ] * p_ini[ 1 ]
                                           + 1./2. * p[ 0 ]
                                           * p_ini[ 1 ] * p_ini[ 2 ]
@@ -910,7 +907,9 @@ def calcFormFactors_SVD( kineFactor_loc, ratio, ratio_err, Qsq_where,
     # Initialize local form factors
     # F_loc[ b_loc, qs, [ F1, F2 ] ]
 
-    F_loc = np.zeros( ( binNum_loc, QsqNum, formFactorNum ), dtype=float )
+    F_loc = -1000 * np.ones( ( binNum_loc, QsqNum, formFactorNum ), dtype=float )
+
+    Qsq_where_good = np.full( ( QsqNum ), True, dtype=bool )
     
     # Loop over Q^2
     for iqs in range( QsqNum ):
@@ -999,7 +998,6 @@ def calcFormFactors_SVD( kineFactor_loc, ratio, ratio_err, Qsq_where,
                           axis=sum_axes )                
                               
         # End loop over form factors
-
     # End loop over Q^2
     
     return F_loc
