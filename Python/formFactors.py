@@ -371,6 +371,8 @@ elif formFactor == "A40_B40_C40":
     Z = 1.668
 
 # Momentum transfer list
+#q is transfer vec, qNum is number of transfer vecs, qSq is distinct transfers, qSqNum is number of distinct transfers
+#qSq_start is index at which sets of matching qSq begin, qSq_end is index at which sets of matching qSq end, qSq_where is qSq at each index
 
 q, qNum, qSq, qSqNum, qSq_start, qSq_end, qSq_where \
     = [ [ [] for smr in smear_str_list ] for qq in range( 7 ) ]
@@ -433,6 +435,7 @@ if rank == 0:
     rw.writeMomentumList( q_filename, q[ 0 ] )
 
 # Read final momentum list
+#p_fin are vectors that norm to pSq_fin
 
 p_fin = rw.readMomentaList( twopDir[ 0 ],
                             twop_template[ 0 ].format(smear_str_list[ 0 ]),
